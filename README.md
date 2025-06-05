@@ -1,6 +1,6 @@
 # `nmrstar-parser`: A Lightweight NMR-STAR Parser
 
-This repository provides a minimal, dependency-light parser for [NMR-STAR](https://bmrb.io/spec/) format files from the Biological Magnetic Resonance Bank ([BMRB](https://bmrb.io/)). It extracts key biological and NMR data into convenient Python dictionaries and pandas DataFrames.
+This repository provides a minimal, dependency-light parser for [NMR-STAR](https://bmrb.io/spec/) format files from the Biological Magnetic Resonance Bank ([BMRB](https://bmrb.io/)). It extracts sample metadata and measurements into Python dictionaries and pandas DataFrames.
 
 ## Features
 
