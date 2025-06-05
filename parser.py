@@ -62,7 +62,7 @@ def parse_nmr_star(file_path):
                         if len(values) == len(loop_tags):
                             base_prefix = loop_tags[0].split('.')[0] + '.'
                             row = {
-                                tag[len(base_prefix):] if tag.startswith(base_prefix) else tag: val.strip('"\'')
+                                tag[len(base_prefix):] if tag.startswith(base_prefix) else tag: val.strip('"')
                                 for tag, val in zip(loop_tags, values)
                             }
                             loop_category = base_prefix.rstrip('.')
