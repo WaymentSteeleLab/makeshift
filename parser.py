@@ -28,7 +28,7 @@ def parse_nmr_star(file_path):
                 current_saveframe.update(current_tags)
                 current_saveframe.update(dict(current_loops))
                 if saveframe_name:
-                    data[saveframe_name] = current_saveframe
+                    data[saveframe_name] = current_saveframe #
 
             saveframe_name = line[5:].strip() or None
             current_saveframe = {}
@@ -76,7 +76,7 @@ def parse_nmr_star(file_path):
                 current_saveframe.update(current_tags)
                 current_saveframe.update(dict(current_loops))
                 if saveframe_name:
-                    data[saveframe_name] = current_saveframe
+                    data[saveframe_name] = current_saveframe #
 
                 current_saveframe, current_tags = {}, {}
                 current_loops = defaultdict(list)
@@ -118,9 +118,21 @@ def parse_nmr_star(file_path):
     if in_saveframe and saveframe_name:
         current_saveframe.update(current_tags)
         current_saveframe.update(dict(current_loops))
-        data[saveframe_name] = current_saveframe
+        data[saveframe_name] = current_saveframe #
 
-    return data
+    # restructure
+
+    data_2 = {}
+
+    for k, v in data.items():
+      Sf_category = v['Sf_category']
+      Sf_framecode = v['Sf_framecode']
+      if Sf_category not in data_2.keys():
+        data_2[Sf_category] = {}
+
+      data_2[Sf_category][Sf_framecode] = v
+        
+    return data_2
 
 def convert_loop_to_dataframe(loop):
     dct = {k:[] for k in loop[0].keys()}
@@ -137,38 +149,40 @@ def clean_cs_dataframe(df):
                 'Atom_ID','Atom_type','Val']]
 
 def get_sequences(parsed):
-    out={}
+    outs=[]
     tags=['ID', 'Polymer_type', 'Polymer_seq_one_letter_code']
+    for k, entry in parsed['entity'].items():
+      out = {'entity': k}
+      out.update({i: entry[i] for i in tags})
+      outs.append(out)
 
-    for k in parsed.keys():
-        if parsed[k]['Sf_category'] == 'entity':
-            out[k] = {i: parsed[k][i] for i in tags}
-
-    return pd.DataFrame.from_records(out)
+    return pd.DataFrame.from_records(outs)
 
 def get_sample_info(parsed):
-    out = {}
+    outs = []
     tags=['ID', 'Mol_common_name','Entity_ID','Isotopic_labeling','Concentration_val','Concentration_val_units']
-    for k in parsed.keys():
-        if parsed[k]['Sf_category'] == 'sample':
-            for x in parsed[k]['_Sample_component']:
-                out[k] = {i: x[i] for i in tags}
 
-    return pd.DataFrame.from_records(out)
+    for k, entry in parsed['sample'].items():
+      for j, x in enumerate(entry['_Sample_component']):
+        out = {'sample': k}
+        out.update({i: x[i] for i in tags})
+        outs.append(out)
+
+    return pd.DataFrame.from_records(outs)
 
 def get_chem_shifts(parsed):
-    out_dfs=[]
-    for k in parsed.keys():
-        if parsed[k]['Sf_category'] == 'assigned_chemical_shifts':
-            cs = convert_loop_to_dataframe(parsed[k]['_Atom_chem_shift'])
-            cs = clean_cs_dataframe(cs)
-            try:
-                cs['name'] = parsed[k]['Name']
-            except:
-                cs['name'] = '.'
 
-            cs['cs_saveframe_id'] = k
-            out_dfs.append(cs)
+    out_dfs=[]
+    for k, entry in parsed['assigned_chemical_shifts'].items():
+      cs = convert_loop_to_dataframe(entry['_Atom_chem_shift'])
+      cs = clean_cs_dataframe(cs)
+      try:
+          cs['name'] = parsed[k]['Name']
+      except:
+          cs['name'] = '.'
+
+      cs['cs_saveframe_id'] = k
+      out_dfs.append(cs)
     out = pd.concat(out_dfs)
     out = out.reset_index()
     return out
