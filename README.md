@@ -67,6 +67,8 @@ tight_layout()
 ```
 ![Image showing distributions](https://github.com/WaymentSteeleLab/NMRstar_parser/blob/c9726af327b8dc4fef08c0c25711448342b0fe7f/static/example_rereferencing_ed.png)
 
+Entry 4527 is an example entry that is correctly referenced. Entries 6586 and 4150 are both entries described previously in literature as needing re-referencing.
+
 ---
 
 ## 🔎 Crash course on BMRB Attributes
