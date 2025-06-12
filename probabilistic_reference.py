@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-ref = pd.read_csv('jardetsky_distns_2009.csv')
+ref = pd.read_csv('wang_jardetsky_distns.csv')
 REFERENCE_TABLE = {}
 
 for idx, row in ref.iterrows():
