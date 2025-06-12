@@ -43,7 +43,7 @@ This code implements the core idea described in [Wang & Wishart 2005](https://pu
 from ReRef import *
 inds=[4527,6586,4150]
 
-figure(figsize=(10,2))
+figure(figsize=(6,2))
 colors = sns.color_palette()
 
 for j, ind in enumerate(inds):
@@ -51,12 +51,12 @@ for j, ind in enumerate(inds):
     fetch_nmrstar_file(ind) # if nmrstar file from bmrb is not downloaded
 
     df = get_chem_shifts(parse_nmr_star(f'bmr{ind}_3.str'))
-    df = df.loc[df.Atom_ID.isin(['H','HA','N','CA','CB'])]
+    df = df.loc[df.Atom_ID.isin(['H','HA','N','CA','CB'])] # keep backbone atoms and HA
     df = rereference(df)
 
     #compare distributions before and after
-    for i,atom_id in enumerate(['HA','H','N','CA','CB']):
-        subplot(1,5,i+1)
+    for i,atom_id in enumerate(['N','CA','CB']):
+        subplot(1,3,i+1)
         sns.kdeplot(df.loc[df.Atom_ID==atom_id]['Val'],color=colors[j],label=ind)
         sns.kdeplot(df.loc[df.Atom_ID==atom_id]['orig'],color=colors[j],linestyle=':')
         xlabel(f'omega {atom_id[0]} (ppm)')
