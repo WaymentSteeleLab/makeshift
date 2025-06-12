@@ -32,6 +32,40 @@ seq = get_sequences(entry)
 samples = get_sample_info(entry)
 cs = get_chem_shifts(entry)
 ```
+---
+
+## Probabilistic Assignment
+
+This code is based on idea from Wishart. The idea is to use HA atoms, hydrogens being rarely mis-referenced, to estimate secondary structure from curated shift distributions from Jardetsky lab (2009). The method then minimizes the difference in distribution for N, CA, CB atoms between the current distribution and the curated shift distribution.
+
+```python
+%pylab inline
+from probabilistic_reference import *
+inds=[4527,6586,4150]
+
+figure(figsize=(10,2))
+colors = sns.color_palette()
+
+for j, ind in enumerate(inds):
+
+    fetch_nmrstar_file(ind) # if nmrstar file from bmrb is not downloaded
+
+    df = get_chem_shifts(parse_nmr_star(f'bmr{ind}_3.str'))
+    df = df.loc[df.Atom_ID.isin(['H','HA','N','CA','CB'])]
+    df = rereference(df)
+
+    #compare distributions before and after
+    for i,atom_id in enumerate(['HA','H','N','CA','CB']):
+        subplot(1,5,i+1)
+        sns.kdeplot(df.loc[df.Atom_ID==atom_id]['Val'],color=colors[j],label=ind)
+        sns.kdeplot(df.loc[df.Atom_ID==atom_id]['orig'],color=colors[j],linestyle=':')
+        xlabel(f'omega {atom_id[0]} (ppm)')
+        title(atom_id)
+        if i==0:
+            legend()
+tight_layout()
+```
+![Image showing distributions](URL_or_path_to_image)
 
 ---
 
@@ -119,6 +153,4 @@ MIT License
 
 ## Acknowledgments
 
-- [BMRB](https://bmrb.io/) for maintaining and sharing the NMR-STAR specification
-- This parser was developed to support rapid exploration and integration of biomolecular NMR data in lightweight workflows.
-
+- [BMRB](https://bmrb.io/) for maintaining and sharing NMR data
