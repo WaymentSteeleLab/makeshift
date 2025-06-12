@@ -34,13 +34,13 @@ cs = get_chem_shifts(entry)
 ```
 ---
 
-## Probabilistic Assignment
+## Probabilistic Re-Referencing
 
 This code implements the core idea described in [Wang & Wishart 2005](https://pubmed.ncbi.nlm.nih.gov/15772753/). The idea is to use HA atoms, hydrogens being rarely mis-referenced, to estimate secondary structure from curated shift distributions from [Wang & Jardetsky 2002](https://onlinelibrary.wiley.com/doi/10.1110/ps.3180102). The method then minimizes the difference in distribution for N, CA, CB atoms between the current distribution and the curated shift distribution.
 
 ```python
 %pylab inline
-from probabilistic_reference import *
+from ReRef import *
 inds=[4527,6586,4150]
 
 figure(figsize=(10,2))
@@ -65,7 +65,7 @@ for j, ind in enumerate(inds):
             legend()
 tight_layout()
 ```
-![Image showing distributions]([URL_or_path_to_image](https://github.com/WaymentSteeleLab/NMRstar_parser/blob/c9726af327b8dc4fef08c0c25711448342b0fe7f/static/example_rereferencing_ed.png))
+![Image showing distributions](https://github.com/WaymentSteeleLab/NMRstar_parser/blob/c9726af327b8dc4fef08c0c25711448342b0fe7f/static/example_rereferencing_ed.png)
 
 ---
 
