@@ -185,4 +185,5 @@ def get_chem_shifts(parsed):
       out_dfs.append(cs)
     out = pd.concat(out_dfs)
     out = out.reset_index()
+    out['Seq_ID'] = out['Seq_ID'].astype(int)
     return out
