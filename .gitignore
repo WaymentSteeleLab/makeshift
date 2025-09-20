@@ -1,0 +1,7 @@
+*.str
+.ipynb_checkpoints
+*.nbconvert.ipynb
+.DS_Store
+*.log
+*.tmp
+*.swp
