@@ -170,7 +170,7 @@ def get_sample_info(parsed):
 
     return pd.DataFrame.from_records(outs)
 
-def get_chem_shifts(parsed):
+def get_chem_shifts(parsed, calc_CSI=False):
 
     out_dfs=[]
     for k, entry in parsed['assigned_chemical_shifts'].items():
@@ -186,4 +186,53 @@ def get_chem_shifts(parsed):
     out = pd.concat(out_dfs)
     out = out.reset_index()
     out['Seq_ID'] = out['Seq_ID'].astype(int)
+    
+    if calc_CSI:
+        if 'CA' and 'CB' not in out['Atom_ID'].unique():
+            raise RuntimeError('Cannot find CA and CB in Atom_ID, cannot calc CSI')
+            
+        def get_secondary_shift(row):
+            """Calculate secondary shift (observed - random coil)"""
+            return row['Val'] - RANDOM_COIL[row['Comp_ID']][row['Atom_ID']]
+        
+        def get_csi(row, df):
+            data = df.loc[df.Seq_ID==row['Seq_ID']]
+            ca = data[data['Atom_ID'] == 'CA']
+            cb = data[data['Atom_ID'] == 'CB']
+            if len(ca) >= 1 and len(cb) >= 1:
+                ca_sec = get_secondary_shift(ca.iloc[0])
+                cb_sec = get_secondary_shift(cb.iloc[0])
+
+                if not (np.isnan(ca_sec) or np.isnan(cb_sec)):
+                    return ca_sec - cb_sec
+                else:
+                    return np.nan
+            else:
+                return np.nan
+            
+        out['csi'] = out.apply(lambda row: get_csi(row, out), axis=1)
+        
     return out
+
+RANDOM_COIL = {
+    'ALA': {'CA': 52.5, 'CB': 19.1, 'N': 123.8, 'H': 8.24},
+    'ARG': {'CA': 56.0, 'CB': 30.2, 'N': 120.5, 'H': 8.27},
+    'ASN': {'CA': 53.1, 'CB': 38.9, 'N': 118.7, 'H': 8.40},
+    'ASP': {'CA': 54.2, 'CB': 41.1, 'N': 120.4, 'H': 8.34},
+    'CYS': {'CA': 58.2, 'CB': 28.0, 'N': 118.6, 'H': 8.31},
+    'GLU': {'CA': 56.6, 'CB': 29.9, 'N': 120.2, 'H': 8.37},
+    'GLN': {'CA': 55.7, 'CB': 29.4, 'N': 119.8, 'H': 8.32},
+    'GLY': {'CA': 45.1, 'CB': np.nan, 'N': 108.8, 'H': 8.33},
+    'HIS': {'CA': 55.0, 'CB': 29.9, 'N': 118.2, 'H': 8.42},
+    'ILE': {'CA': 61.1, 'CB': 38.8, 'N': 119.9, 'H': 8.00},
+    'LEU': {'CA': 55.1, 'CB': 42.4, 'N': 121.8, 'H': 8.16},
+    'LYS': {'CA': 56.2, 'CB': 32.7, 'N': 120.4, 'H': 8.29},
+    'MET': {'CA': 55.4, 'CB': 32.9, 'N': 119.6, 'H': 8.28},
+    'PHE': {'CA': 57.7, 'CB': 39.6, 'N': 120.3, 'H': 8.30},
+    'PRO': {'CA': 63.3, 'CB': 31.7, 'N': np.nan, 'H': np.nan},
+    'SER': {'CA': 58.3, 'CB': 63.8, 'N': 115.7, 'H': 8.31},
+    'THR': {'CA': 61.8, 'CB': 69.6, 'N': 113.6, 'H': 8.15},
+    'TRP': {'CA': 57.5, 'CB': 29.6, 'N': 121.3, 'H': 8.25},
+    'TYR': {'CA': 57.9, 'CB': 38.8, 'N': 120.3, 'H': 8.12},
+    'VAL': {'CA': 62.2, 'CB': 32.9, 'N': 119.2, 'H': 8.03}
+}
