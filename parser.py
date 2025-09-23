@@ -236,3 +236,15 @@ RANDOM_COIL = {
     'TYR': {'CA': 57.9, 'CB': 38.8, 'N': 120.3, 'H': 8.12},
     'VAL': {'CA': 62.2, 'CB': 32.9, 'N': 119.2, 'H': 8.03}
 }
+
+def get_assembly_info(parsed):
+    outs = []
+    tags=['Entity_assembly_name']
+
+    for k, entry in parsed['assembly'].items():
+      for j, x in enumerate(entry['_Entity_assembly']):
+        out = {'sample': k}
+        out.update({i: x[i] for i in tags})
+        outs.append(out)
+
+    return pd.DataFrame.from_records(outs)
