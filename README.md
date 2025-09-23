@@ -1,10 +1,11 @@
-# `nmr_parsing`: Lightweight NMR tools
+# `makeshift`: Lightweight NMR tools
 
-This repository provides a minimal, dependency-light tools to handle NMR data. nmr_star_parser reads [NMR-STAR](https://bmrb.io/spec/) format files from the Biological Magnetic Resonance Bank ([BMRB](https://bmrb.io/)). It extracts sample metadata and measurements into Python dictionaries and pandas DataFrames.
+This repository provides a minimal, dependency-light tools to handle NMR data. Makeshift reads [NMR-STAR](https://bmrb.io/spec/) format files from the Biological Magnetic Resonance Bank ([BMRB](https://bmrb.io/)). It extracts sample metadata and measurements into Python dictionaries and pandas DataFrames.
 
 ## Features
 
 - Parse `.str` files into nested Python dictionaries
+- Re-reference, calculate CSI, and more in `python`
 - Extract polymer sequences, sample compositions, and chemical shifts
 - Built using Python standard library + `pandas`
 
@@ -16,54 +17,54 @@ Clone this repo or copy `parser.py` into your project.
 
 ## Quickstart
 
-See in Google colab [demo!](https://github.com/hkws-lab/NMRstar_parser/blob/main/nmrstar_parser_demo.ipynb)
-
 ```python
-from parser import *
+import makeshift as ms
 
 # Download an NMR-STAR file from BMRB
-fetch_nmrstar_file(5363)  # saves as bmr5363_3.str
+ms.fetch_nmrstar_file(5363)  # saves as bmr5363_3.str
 
 # Parse the file
-entry = parse_nmr_star('bmr5363_3.str')
+entry = ms.parse_nmr_star('bmr5363_3.str')
 
 # Extract useful information
-seq = get_sequences(entry)
-samples = get_sample_info(entry)
-cs = get_chem_shifts(entry)
+seq = ms.get_sequences(entry)
+samples = ms.get_sample_info(entry)
+cs = ms.get_chem_shifts(entry)
 ```
 ---
 
 ## Probabilistic Re-Referencing
 
-This code implements the core idea described in [Wang & Wishart 2005](https://pubmed.ncbi.nlm.nih.gov/15772753/). The idea is to use HA atoms, hydrogens being rarely mis-referenced, to estimate secondary structure from curated shift distributions from [Wang & Jardetsky 2002](https://onlinelibrary.wiley.com/doi/10.1110/ps.3180102). The method then minimizes the difference in distribution for N, CA, CB atoms between the current distribution and the curated shift distribution.
+Two lightweight re-referencing implementations are available:
+
+`panav`: This code implements the core idea described in [Wang & Wishart 2005](https://pubmed.ncbi.nlm.nih.gov/15772753/). The idea is to use HA atoms, hydrogens being rarely mis-referenced, to estimate secondary structure from curated shift distributions from [Wang & Jardetsky 2002](https://onlinelibrary.wiley.com/doi/10.1110/ps.3180102). The method then minimizes the difference in distribution for N, CA, CB atoms between the current distribution and the curated shift distribution.
+
+`lacs`: This code implements the core idea described in [Wang & Markley 2009](https://pmc.ncbi.nlm.nih.gov/articles/PMC2782637/). The idea is to enforce that the chemical shift index (CSI) of the i-1 Carbon and the i Nitrogen intercepts at (0,0), essentially setting the "random coil" regime of each protein to be there.
+
+Note: these two methods have not yet been extensively compared.
 
 ```python
-%pylab inline
-from ReRef import *
 inds=[4527,6586,4150]
-
-figure(figsize=(6,2))
+plt.figure(figsize=(10,2))
 colors = sns.color_palette()
-
 for j, ind in enumerate(inds):
 
-    fetch_nmrstar_file(ind) # if nmrstar file from bmrb is not downloaded
+    # if nmrstar file from bmrb is not downloaded
+    ms.fetch_nmrstar_file(ind) 
 
-    df = get_chem_shifts(parse_nmr_star(f'bmr{ind}_3.str'))
-    df = df.loc[df.Atom_ID.isin(['H','HA','N','CA','CB'])] # keep backbone atoms and HA
-    df = rereference(df)
+    df = ms.get_chem_shifts(ms.parse_nmr_star(f'bmr{ind}_3.str'), reref = 'panav') # or reref='lacs'
+    print(df.attrs['PANAV offsets']) # or print(df.attrs['LACS offsets'])
 
     #compare distributions before and after
     for i,atom_id in enumerate(['N','CA','CB']):
-        subplot(1,3,i+1)
+        plt.subplot(1,3,i+1)
         sns.kdeplot(df.loc[df.Atom_ID==atom_id]['Val'],color=colors[j],label=ind)
         sns.kdeplot(df.loc[df.Atom_ID==atom_id]['orig'],color=colors[j],linestyle=':')
-        xlabel(f'omega {atom_id[0]} (ppm)')
-        title(atom_id)
+        plt.xlabel(f'omega {atom_id[0]} (ppm)')
+        plt.title(atom_id)
         if i==0:
-            legend()
-tight_layout()
+            plt.legend()
+plt.tight_layout()
 ```
 ![Image showing distributions](https://github.com/WaymentSteeleLab/NMRstar_parser/blob/c9726af327b8dc4fef08c0c25711448342b0fe7f/static/example_rereferencing_ed.png)
 
@@ -123,8 +124,8 @@ Returns a DataFrame summarizing polymer types and sequences from the parsed entr
 ### `get_sample_info(parsed)`
 Returns sample metadata including labeling and concentration info as a DataFrame.
 
-### `get_chem_shifts(parsed)`
-Extracts assigned chemical shifts into a DataFrame, including atom type, chemical shift, and associated metadata.
+### `get_chem_shifts(parsed, calc_csi=True, reref='lacs')`
+Extracts assigned chemical shifts into a DataFrame, including atom type, chemical shift, and associated metadata. Optionally: re-reference, calculate CSI.
 
 ---
 
@@ -155,4 +156,4 @@ MIT License
 
 ## Acknowledgments
 
-- [BMRB](https://bmrb.io/) for maintaining and sharing NMR data
+- [BMRB](https://bmrb.io/) for maintaining and sharing NMR data.
