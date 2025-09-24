@@ -4,9 +4,10 @@ import pandas as pd
 import numpy as np
 import urllib.request
 
-def fetch_nmrstar_file(bmrb_id):
+def fetch_nmrstar_file(bmrb_id, output_dir=''):
     path=f"https://bmrb.io/ftp/pub/bmrb/entry_directories/bmr{bmrb_id}/bmr{bmrb_id}_3.str"
-    return urllib.request.urlretrieve(path, f"bmr{bmrb_id}_3.str")
+    output_file = os.path.join(output_dir, f"bmr{bmrb_id}_3.str")
+    return urllib.request.urlretrieve(path, output_file)
 
 def parse_nmr_star(file_path):
     with open(file_path, 'r') as f:
