@@ -25,7 +25,7 @@ def get_chem_shifts(parsed, calc_CSI=False, reref=None):
       cs['cs_saveframe_id'] = k
       out_dfs.append(cs)
     out = pd.concat(out_dfs)
-    out = out.reset_index()
+    
     out['Seq_ID'] = out['Seq_ID'].astype(int)
     
     if calc_CSI:
