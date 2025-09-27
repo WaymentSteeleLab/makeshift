@@ -12,7 +12,7 @@ def get_sequences(parsed):
 
 def get_sample_info(parsed):
     outs = []
-    tags=['ID', 'Mol_common_name','Entity_ID','Isotopic_labeling','Concentration_val','Concentration_val_units']
+    tags=['ID', 'Sample_ID', 'Mol_common_name','Entity_ID','Isotopic_labeling','Concentration_val','Concentration_val_units']
 
     for k, entry in parsed['sample'].items():
       for j, x in enumerate(entry['_Sample_component']):
