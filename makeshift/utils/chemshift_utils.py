@@ -34,7 +34,7 @@ def get_csi(row, df):
     return np.nan
 
 
-def csi_index(row, helix=1.0, strand=-1.0, gly=0.7):
+def csi_index(row, helix=0.7, strand=-0.7, gly=0.7):
     """ Map raw value to {-1,0,+1}. """
 
     value, residue = row["csi_raw"], row['Seq_ID']
