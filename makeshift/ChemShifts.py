@@ -33,7 +33,8 @@ def get_chem_shifts(parsed, calc_CSI=False, reref=None):
         if 'CA' and 'CB' not in out['Atom_ID'].unique():
             raise RuntimeError('Cannot find CA and CB in Atom_ID, cannot calc CSI')
         
-        out['csi'] = out.apply(lambda row: get_csi(row, out), axis=1)
+        out['csi_raw'] = out.apply(lambda row: get_csi(row, out), axis=1)
+        out["csi"] = out.apply(lambda row: csi_index(row), axis=1).astype(float)
 
     if reref=='panav':
         out = reref_panav_(out)
