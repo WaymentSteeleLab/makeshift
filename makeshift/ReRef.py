@@ -261,29 +261,19 @@ def _panav_judge_outlier(row):
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def reref_panav_(df_0):
-    """
-    Probabilistic re-referencing (Wishart lab 2005, 2010).
+_LACS_ATOMS  = ('CA', 'CB', 'C', 'N', 'H')
+_PANAV_ATOMS = ('N', 'CA', 'CB', 'C')
 
-    Two rounds of fitting with progressive outlier rejection.
 
-    Returns
-    -------
-    df            : DataFrame with corrected Val and orig columns
-    check         : dict {atom: bool} — False if referencing failed for that atom
-    offset_collect: dict {"1": {atom: offset}, "2": {atom: offset}} per-round offsets
-    """
+def _reref_panav(df_0):
     df = df_0.copy()
     df["Atom_ID"] = df["Atom_ID"].replace("HA2", "HA")
     df['orig'] = df['Val'].copy()
     df['outlier_1'] = False
     df['outlier_2'] = False
 
-    check = {atom: True for atom in ['N', 'CA', 'CB', 'C']}
-    offset_collect = {
-        '1': {atom: None for atom in ['N', 'CA', 'CB', 'C']},
-        '2': {atom: None for atom in ['N', 'CA', 'CB', 'C']},
-    }
+    check = {atom: True for atom in _PANAV_ATOMS}
+    last_offsets = {atom: None for atom in _PANAV_ATOMS}
 
     for round_i in range(2):
         df[['ss_probs', 'ss_max']] = df.apply(
@@ -299,7 +289,7 @@ def reref_panav_(df_0):
         df[outlier_col] = df.apply(lambda row: _panav_judge_outlier(row), axis=1)
 
         offsets = {}
-        for atom in ['N', 'CA', 'CB', 'C']:
+        for atom in _PANAV_ATOMS:
             mask = (df.Atom_ID == atom) & (~df['outlier_1'])
             if round_i == 1:
                 mask &= ~df['outlier_2']
@@ -322,8 +312,7 @@ def reref_panav_(df_0):
 
             offsets[atom] = float(np.nanmean(vals))
 
-        for atom in ['N', 'CA', 'CB', 'C']:
-            offset_collect[str(round_i + 1)][atom] = offsets[atom]
+        last_offsets = {atom: offsets.get(atom) for atom in _PANAV_ATOMS}
 
         offsets_apply = {k: (0 if v is None else v) for k, v in offsets.items()}
         df['Val'] = df.apply(lambda row: apply_offset(row, offsets_apply), axis=1)
@@ -332,33 +321,14 @@ def reref_panav_(df_0):
         df.loc[df['Atom_ID'].isin(failed), outlier_col] = True
         df.loc[df['Comp_ID'] == 'PRO', outlier_col] = True
 
-    return df, check, offset_collect
+    return df, check, last_offsets
 
 
-def reref_lacs_(df_0, n_std=_N_STD_OUTLIER):
-    """
-    LACS re-referencing for backbone CA, CB, C', N, and H (v1).
-
-    Before fitting, each observed shift is checked against BMRB full-database
-    statistics (mean ± n_std * std). Outlier rows receive reref_mask=False and
-    are excluded from the regression.
-
-    reref_mask semantics
-    --------------------
-    True  — shift is within expected range AND offset was successfully applied.
-    False — shift is a statistical outlier OR atom offset could not be computed.
-            Val is unchanged; exclude from downstream training.
-
-    Parameters
-    ----------
-    df_0   : DataFrame with columns Seq_ID, Comp_ID, Atom_ID, Val
-    n_std  : outlier threshold in units of BMRB std (default 4)
-    """
+def _reref_lacs(df_0, n_std=_N_STD_OUTLIER):
     df = df_0.copy()
     df = df.loc[:, ~df.columns.duplicated()]
 
     df['orig'] = df['Val'].copy()
-
     df['reref_mask'] = True
     _tag_outliers(df, n_std=n_std)
 
@@ -371,38 +341,32 @@ def reref_lacs_(df_0, n_std=_N_STD_OUTLIER):
     df['csi']      = df.apply(lambda row: _get_csi(row, df), axis=1)
     df['csi_prev'] = df.apply(lambda row: get_other_csi(row, df, -1), axis=1)
 
-    offsets     = {}
-    net_offsets = {}
+    raw_offsets = {}
 
     for atom in ('CA', 'CB'):
         x, y = _prepare_fit_data(df[df['Atom_ID'] == atom], 'csi')
-        offset = _piecewise_offset(x, y)
-        offsets[atom]     = offset
-        net_offsets[atom] = offset
+        raw_offsets[atom] = _piecewise_offset(x, y)
 
     x, y = _prepare_fit_data(df[df['Atom_ID'] == 'C'], 'csi')
-    offset = _single_line_offset(x, y)
-    offsets['C']     = offset
-    net_offsets['C'] = offset
+    raw_offsets['C'] = _single_line_offset(x, y)
 
     for atom in ('N', 'H'):
         expected_slope, slope_tight, threshold = _ATOM_PARAMS[atom]
         x, y = _prepare_fit_data(df[df['Atom_ID'] == atom], 'csi_prev')
-        offset = _lacs_offset_linear(
+        raw_offsets[atom] = _lacs_offset_linear(
             x, y, expected_slope, slope_tight, threshold, _SLOPE_TOL[atom]
         )
-        offsets[atom]     = offset
-        net_offsets[atom] = offset
 
-    valid_offsets = {
-        atom: v for atom, v in offsets.items()
-        if v is not None and not (isinstance(v, float) and np.isnan(v))
-    }
+    def _fitted(v):
+        return v is not None and not (isinstance(v, float) and np.isnan(v))
 
-    skip = not bool(valid_offsets)
+    valid_offsets = {atom: v for atom, v in raw_offsets.items() if _fitted(v)}
+    check   = {atom: _fitted(raw_offsets.get(atom)) for atom in _LACS_ATOMS}
+    offsets = {atom: raw_offsets.get(atom) if _fitted(raw_offsets.get(atom)) else None
+               for atom in _LACS_ATOMS}
 
-    for atom, v in offsets.items():
-        if atom not in valid_offsets:
+    for atom in _LACS_ATOMS:
+        if not check[atom]:
             df.loc[df['Atom_ID'] == atom, 'reref_mask'] = False
 
     df['Val'] = df.apply(
@@ -410,6 +374,62 @@ def reref_lacs_(df_0, n_std=_N_STD_OUTLIER):
         axis=1,
     )
 
-    net_offsets['method'] = 'LACS_v1'
+    return df, check, offsets
 
-    return df, skip, valid_offsets
+
+def reref(df, method, n_std=_N_STD_OUTLIER):
+    """
+    Re-reference backbone chemical shifts using LACS or PANAV.
+
+    Filters the input to relevant atoms, averages GLY HA2/HA pairs, then
+    runs the requested re-referencing algorithm.
+
+    Parameters
+    ----------
+    df     : DataFrame returned by get_chem_shifts()
+    method : 'lacs' or 'panav'
+    n_std  : (LACS only) outlier threshold in units of BMRB std (default 4)
+
+    Returns
+    -------
+    df      : DataFrame with corrected Val column. Also adds:
+                - 'orig'       : original Val before correction
+                - 'reref_mask' : (LACS) True if shift is an inlier and was corrected;
+                                 False if it was a statistical outlier or fitting failed
+                - 'outlier_1',
+                  'outlier_2'  : (PANAV) per-round outlier flags
+    check   : dict {atom: bool} — True if re-referencing succeeded for that atom.
+              LACS atoms: CA, CB, C, N, H
+              PANAV atoms: N, CA, CB, C
+    offsets : dict {atom: float | None} — offset applied to each atom in the final
+              fitting round; None if referencing failed for that atom.
+              For LACS this is the single fitted offset.
+              For PANAV this is the round-2 offset (the residual correction after
+              round 1 has already been applied).
+    """
+    if method not in ('lacs', 'panav'):
+        raise ValueError(f"method must be 'lacs' or 'panav', got {method!r}")
+
+    df_i = df.copy()
+    df_i = df_i.loc[
+        df_i.Atom_ID.isin(['H', 'HA', 'N', 'CA', 'CB', 'C']) |
+        df_i.Atom_ID.str.contains('^HA', na=False)
+    ]
+
+    # Average GLY HA/HA2 pairs into a single HA per residue
+    gly_mask = (df_i['Comp_ID'] == 'GLY') & df_i['Atom_ID'].str.contains('HA')
+    for seq_id, group in df_i[gly_mask].groupby('Seq_ID'):
+        mean_val = group['Val'].mean()
+        mask = (df_i['Seq_ID'] == seq_id) & gly_mask
+        df_i.loc[mask, 'Val'] = mean_val
+        indices = df_i.loc[mask].index
+        df_i.loc[indices[0], 'Atom_ID'] = 'HA'
+        if len(indices) > 1:
+            df_i.loc[indices[1:], 'Atom_ID'] = 'HA2'
+
+    df_i = df_i.loc[df_i.Atom_ID.isin(['H', 'HA', 'N', 'CA', 'CB', 'C'])].copy()
+
+    if method == 'lacs':
+        return _reref_lacs(df_i, n_std=n_std)
+    else:
+        return _reref_panav(df_i)

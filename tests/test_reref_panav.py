@@ -7,9 +7,12 @@ import makeshift as ms
 BMRB_ID = 5363
 ASSIGN_NAME = 'chemical_shifts_1'
 
+# Round-2 (final) offsets from demo_panav.ipynb
 EXPECTED_OFFSETS = {
-    '1': {'N': 0.3684269662921341,  'CA': -2.1587977528089892, 'CB': -1.4187142857142856, 'C': None},
-    '2': {'N': 3.193450497798203e-16, 'CA': -0.0020528219036572803, 'CB': 0.009519163763066838, 'C': None},
+    'N':  3.193450497798203e-16,
+    'CA': -0.0020528219036572803,
+    'CB': 0.009519163763066838,
+    'C':  None,
 }
 
 EXPECTED_CHECK = {'N': True, 'CA': True, 'CB': True, 'C': False}
@@ -24,49 +27,27 @@ def _fetch_and_run():
     df_i = df[df['cs_saveframe_id'] == ASSIGN_NAME].copy()
     df_i['Seq_ID'] = df_i['Seq_ID'].astype(int)
     df_i = df_i.sort_values('Seq_ID').reset_index(drop=True)
-
-    df_i = df_i.loc[
-        df_i.Atom_ID.isin(['H', 'HA', 'N', 'CA', 'CB', 'C']) |
-        df_i.Atom_ID.str.contains('^HA', na=False)
-    ]
-
-    # Average GLY HA/HA2, keep one as HA
-    gly_df = df_i[(df_i['Comp_ID'] == 'GLY') & (df_i['Atom_ID'].str.contains('HA'))]
-    for seq_id, group in gly_df.groupby('Seq_ID'):
-        mean_val = group['Val'].mean()
-        mask = (
-            (df_i['Seq_ID'] == seq_id) &
-            (df_i['Comp_ID'] == 'GLY') &
-            df_i['Atom_ID'].str.contains('HA')
-        )
-        df_i.loc[mask, 'Val'] = mean_val
-        indices = df_i.loc[mask].index
-        df_i.loc[indices[0], 'Atom_ID'] = 'HA'
-        if len(indices) > 1:
-            df_i.loc[indices[1:], 'Atom_ID'] = 'HA2'
-
-    df_i = df_i.loc[df_i.Atom_ID.isin(['H', 'HA', 'N', 'CA', 'CB', 'C'])].copy()
-    return ms.reref_panav_(df_i)
+    return ms.reref(df_i, method='panav')
 
 
 class TestRerefPanav(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.df, cls.check, cls.offset_collect = _fetch_and_run()
+        cls.df, cls.check, cls.offsets = _fetch_and_run()
 
     def test_check_flags(self):
         self.assertEqual(self.check, EXPECTED_CHECK)
 
     def test_offsets_match(self):
-        for rnd in ('1', '2'):
-            for atom, expected in EXPECTED_OFFSETS[rnd].items():
-                with self.subTest(round=rnd, atom=atom):
-                    got = self.offset_collect[rnd][atom]
-                    if expected is None:
-                        self.assertIsNone(got)
-                    else:
-                        self.assertAlmostEqual(got, expected, places=6)
+        for atom, expected in EXPECTED_OFFSETS.items():
+            with self.subTest(atom=atom):
+                self.assertIn(atom, self.offsets)
+                got = self.offsets[atom]
+                if expected is None:
+                    self.assertIsNone(got)
+                else:
+                    self.assertAlmostEqual(got, expected, places=6)
 
     def test_outlier_columns_present(self):
         self.assertIn('outlier_1', self.df.columns)

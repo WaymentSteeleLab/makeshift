@@ -11,8 +11,11 @@ EXPECTED_OFFSETS = {
     'N':  1.0884181598620282,
     'CA': -2.121216467191502,
     'CB': -2.1212146555686777,
+    'C':  None,
     'H':  0.17819534303635887,
 }
+
+EXPECTED_CHECK = {'CA': True, 'CB': True, 'C': False, 'N': True, 'H': True}
 
 
 def _fetch_and_run():
@@ -24,48 +27,27 @@ def _fetch_and_run():
     df_i = df[df['cs_saveframe_id'] == ASSIGN_NAME].copy()
     df_i['Seq_ID'] = df_i['Seq_ID'].astype(int)
     df_i = df_i.sort_values('Seq_ID').reset_index(drop=True)
-
-    df_i = df_i.loc[
-        df_i.Atom_ID.isin(['H', 'HA', 'N', 'CA', 'CB', 'C']) |
-        df_i.Atom_ID.str.contains('^HA', na=False)
-    ]
-
-    # Average GLY HA/HA2, keep one as HA
-    gly_df = df_i[(df_i['Comp_ID'] == 'GLY') & (df_i['Atom_ID'].str.contains('HA'))]
-    for seq_id, group in gly_df.groupby('Seq_ID'):
-        mean_val = group['Val'].mean()
-        mask = (
-            (df_i['Seq_ID'] == seq_id) &
-            (df_i['Comp_ID'] == 'GLY') &
-            df_i['Atom_ID'].str.contains('HA')
-        )
-        df_i.loc[mask, 'Val'] = mean_val
-        indices = df_i.loc[mask].index
-        df_i.loc[indices[0], 'Atom_ID'] = 'HA'
-        if len(indices) > 1:
-            df_i.loc[indices[1:], 'Atom_ID'] = 'HA2'
-
-    df_i = df_i.loc[df_i.Atom_ID.isin(['H', 'HA', 'N', 'CA', 'CB', 'C'])].copy()
-    return ms.reref_lacs_(df_i)
+    return ms.reref(df_i, method='lacs')
 
 
 class TestRerefLacs(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.df, cls.skip, cls.offsets = _fetch_and_run()
+        cls.df, cls.check, cls.offsets = _fetch_and_run()
 
-    def test_not_skipped(self):
-        self.assertFalse(self.skip)
+    def test_check_flags(self):
+        self.assertEqual(self.check, EXPECTED_CHECK)
 
     def test_offsets_match(self):
         for atom, expected in EXPECTED_OFFSETS.items():
             with self.subTest(atom=atom):
                 self.assertIn(atom, self.offsets)
-                self.assertAlmostEqual(self.offsets[atom], expected, places=6)
-
-    def test_c_not_fitted(self):
-        self.assertNotIn('C', self.offsets)
+                got = self.offsets[atom]
+                if expected is None:
+                    self.assertIsNone(got)
+                else:
+                    self.assertAlmostEqual(got, expected, places=6)
 
     def test_reref_mask_column_present(self):
         self.assertIn('reref_mask', self.df.columns)
