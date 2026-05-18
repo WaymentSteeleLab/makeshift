@@ -10,8 +10,11 @@ import numpy as np
 from scipy.optimize import minimize_scalar
 from sklearn.linear_model import HuberRegressor
 
-from .utils.reref_utils import apply_offset, get_ss_probs, get_offset_panav
+from .utils.reref_utils import apply_offset
 from .utils.chemshift_utils import get_secondary_shift, get_other_csi
+from .utils.tables import get_panav_distns
+
+_PANAV_REF = get_panav_distns()
 
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -211,46 +214,125 @@ def _prepare_fit_data(df_atom, x_col):
     return df_fit[x_col].values, df_fit['secondary_shift'].values
 
 
+# ── PANAV local helpers ───────────────────────────────────────────────────────
+
+def _gaussian(x, mu, sigma):
+    if sigma == 0:
+        return 0.0
+    return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
+
+
+def _panav_ss_probs(row):
+    scores = []
+    for ss in ['C', 'H', 'E']:
+        mean, std = _PANAV_REF[row['Comp_ID']][ss][row['Atom_ID']]
+        scores.append(_gaussian(row['Val'], mean, std))
+    if scores == [0.0, 0.0, 0.0]:
+        return np.nan, np.nan
+    probs = np.array(scores) / np.sum(scores)
+    selected = ['C', 'H', 'E'][np.argmax(scores)]
+    if row['Atom_ID'] == 'HA':
+        mean, std = _PANAV_REF[row['Comp_ID']][selected][row['Atom_ID']]
+        if abs(row['Val'] - mean) > 4 * std:
+            return np.nan, np.nan
+    return probs, selected
+
+
+def _panav_get_offset(row, corresponding_ha):
+    if len(corresponding_ha) == 0:
+        return np.nan, np.nan
+    ss = corresponding_ha.iloc[0]['ss_max']
+    if pd.isna(ss):
+        return np.nan, np.nan
+    mean, _ = _PANAV_REF[row['Comp_ID']][ss][row['Atom_ID']]
+    return row['Val'] - mean, ss
+
+
+def _panav_judge_outlier(row):
+    if pd.isna(row['offset']):
+        return all(
+            abs(row['Val'] - _PANAV_REF[row['Comp_ID']][ss][row['Atom_ID']][0])
+            > 4 * _PANAV_REF[row['Comp_ID']][ss][row['Atom_ID']][1]
+            for ss in ['C', 'H', 'E']
+        )
+    mean, std = _PANAV_REF[row['Comp_ID']][row['ss_max']][row['Atom_ID']]
+    return abs(row['offset']) > 4 * std
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def reref_panav_(df_0, n_iters=2):
+def reref_panav_(df_0):
     """
     Probabilistic re-referencing (Wishart lab 2005, 2010).
-    Original values are copied to `orig` column. Corrected values in `Val`.
+
+    Two rounds of fitting with progressive outlier rejection.
+
+    Returns
+    -------
+    df            : DataFrame with corrected Val and orig columns
+    check         : dict {atom: bool} — False if referencing failed for that atom
+    offset_collect: dict {"1": {atom: offset}, "2": {atom: offset}} per-round offsets
     """
     df = df_0.copy()
-    rest = df.loc[~df.Atom_ID.isin(['N', 'CA', 'CB'])]
-    df = df.loc[df.Atom_ID.isin(['HA', 'HA2', 'H', 'N', 'CA', 'CB'])]
     df["Atom_ID"] = df["Atom_ID"].replace("HA2", "HA")
     df['orig'] = df['Val'].copy()
-    net_offsets = {}
-    for j in range(n_iters):
+    df['outlier_1'] = False
+    df['outlier_2'] = False
+
+    check = {atom: True for atom in ['N', 'CA', 'CB', 'C']}
+    offset_collect = {
+        '1': {atom: None for atom in ['N', 'CA', 'CB', 'C']},
+        '2': {atom: None for atom in ['N', 'CA', 'CB', 'C']},
+    }
+
+    for round_i in range(2):
         df[['ss_probs', 'ss_max']] = df.apply(
-            lambda row: get_ss_probs(row), axis=1, result_type='expand'
+            lambda row: _panav_ss_probs(row), axis=1, result_type='expand'
         )
         ha = df.loc[df.Atom_ID == 'HA']
-        df['offset'] = df.apply(
-            lambda row: get_offset_panav(row, ha.loc[ha.Seq_ID == row['Seq_ID']]), axis=1
+        df[['offset', 'ss_max']] = df.apply(
+            lambda row: _panav_get_offset(row, ha.loc[ha.Seq_ID == row['Seq_ID']]),
+            axis=1, result_type='expand',
         )
+
+        outlier_col = f'outlier_{round_i + 1}'
+        df[outlier_col] = df.apply(lambda row: _panav_judge_outlier(row), axis=1)
+
         offsets = {}
-        for atom in ['N', 'CA', 'CB']:
-            vals = np.array(df.loc[df.Atom_ID == atom]['offset'])
+        for atom in ['N', 'CA', 'CB', 'C']:
+            mask = (df.Atom_ID == atom) & (~df['outlier_1'])
+            if round_i == 1:
+                mask &= ~df['outlier_2']
+            vals = np.array(df.loc[mask, 'offset'])
+
+            if np.isnan(vals).all():
+                offsets[atom] = None
+                check[atom] = False
+                continue
+
             s = np.nanstd(vals)
-            m = np.nanmedian(vals)
-            vals[np.where(vals > m + 3 * s)] = np.nan
-            vals[np.where(vals < m - 3 * s)] = np.nan
-            offsets[atom] = np.nanmedian(vals)
-            if j == 0:
-                net_offsets[atom] = np.nanmedian(vals)
-            else:
-                net_offsets[atom] += np.nanmedian(vals)
-        df['Val'] = df.apply(lambda row: apply_offset(row, offsets), axis=1)
-    df = pd.concat([df, rest])
-    if df.attrs is None:
-        df.attrs = {'PANAV offsets': net_offsets}
-    else:
-        df.attrs.update({'PANAV offsets': net_offsets})
-    return df
+            m = np.nanmean(vals)
+            vals[vals > m + 3 * s] = np.nan
+            vals[vals < m - 3 * s] = np.nan
+
+            if (~np.isnan(vals)).sum() < 25:
+                offsets[atom] = None
+                check[atom] = False
+                continue
+
+            offsets[atom] = float(np.nanmean(vals))
+
+        for atom in ['N', 'CA', 'CB', 'C']:
+            offset_collect[str(round_i + 1)][atom] = offsets[atom]
+
+        offsets_apply = {k: (0 if v is None else v) for k, v in offsets.items()}
+        df['Val'] = df.apply(lambda row: apply_offset(row, offsets_apply), axis=1)
+
+        failed = [atom for atom, ok in check.items() if not ok]
+        df.loc[df['Atom_ID'].isin(failed), outlier_col] = True
+        df.loc[df['Comp_ID'] == 'PRO', outlier_col] = True
+
+    return df, check, offset_collect
 
 
 def reref_lacs_(df_0, n_std=_N_STD_OUTLIER):
