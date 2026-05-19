@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from .utils.chemshift_utils import *
-from .ReRef import reref_panav_, reref_lacs_
+from .ReRef import reref as _reref
 from .parsing import convert_loop_to_dataframe
 
 def clean_cs_dataframe(df):
@@ -30,10 +30,8 @@ def get_chem_shifts(parsed, calc_CSI=False, reref=None):
 
     out['Seq_ID'] = out['Seq_ID'].astype(int)
     
-    if reref =='panav':
-        out = reref_panav_(out)
-    elif reref =='lacs':
-        out = reref_lacs_(out)    
+    if reref in ('panav', 'lacs'):
+        out, _, _ = _reref(out, method=reref)
 
     if calc_CSI:
         if 'CA' and 'CB' not in out['Atom_ID'].unique():
