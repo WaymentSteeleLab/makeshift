@@ -11,7 +11,7 @@ from scipy.optimize import minimize_scalar
 from sklearn.linear_model import HuberRegressor
 
 from .utils.reref_utils import apply_offset
-from .utils.chemshift_utils import get_secondary_shift, get_other_csi
+from .utils.chemshift_utils import get_secondary_shift, get_csi
 from .utils.tables import get_panav_distns, get_bmrb_stats, get_c_prime_rc
 
 _PANAV_REF  = get_panav_distns()
@@ -59,16 +59,6 @@ def _tag_outliers(df, n_std=_N_STD_OUTLIER):
     )
     df.loc[outlier_mask, 'reref_mask'] = False
 
-
-def _get_csi(row, df):
-    data = df.loc[df.Seq_ID == row['Seq_ID']]
-    ca_rows = data[data['Atom_ID'] == 'CA']
-    cb_rows = data[data['Atom_ID'] == 'CB']
-    ca_sec = get_secondary_shift(ca_rows.iloc[0]) if len(ca_rows) else np.nan
-    cb_sec = get_secondary_shift(cb_rows.iloc[0]) if len(cb_rows) else np.nan
-    if np.isfinite(ca_sec) and np.isfinite(cb_sec):
-        return ca_sec - cb_sec
-    return np.nan
 
 
 def _huber_fit(x, y):
@@ -291,8 +281,8 @@ def _reref_lacs(df_0, n_std=_N_STD_OUTLIER):
         _c_prime_secondary_shift, axis=1
     )
 
-    df['csi']      = df.apply(lambda row: _get_csi(row, df), axis=1)
-    df['csi_prev'] = df.apply(lambda row: get_other_csi(row, df, -1), axis=1)
+    df['csi']      = df.apply(lambda row: get_csi(row, df, strict=True), axis=1)
+    df['csi_prev'] = df.apply(lambda row: get_csi(row, df, offset=-1), axis=1)
 
     raw_offsets = {}
 
