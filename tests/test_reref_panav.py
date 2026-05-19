@@ -7,11 +7,11 @@ import makeshift as ms
 BMRB_ID = 5363
 ASSIGN_NAME = 'chemical_shifts_1'
 
-# Round-2 (final) offsets from demo_panav.ipynb
+# Cumulative (round-1 + round-2) offsets for BMRB 5363
 EXPECTED_OFFSETS = {
-    'N':  3.193450497798203e-16,
-    'CA': -0.0020528219036572803,
-    'CB': 0.009519163763066838,
+    'N':  0.36842696629213445,
+    'CA': -2.1608505747126463,
+    'CB': -1.4091951219512187,
     'C':  None,
 }
 

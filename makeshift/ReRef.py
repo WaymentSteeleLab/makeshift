@@ -216,7 +216,7 @@ def _reref_panav(df_0):
     df['outlier_2'] = False
 
     check = {atom: True for atom in _PANAV_ATOMS}
-    last_offsets = {atom: None for atom in _PANAV_ATOMS}
+    cumulative_offsets = {atom: 0.0 for atom in _PANAV_ATOMS}
 
     for round_i in range(2):
         df[['ss_probs', 'ss_max']] = df.apply(
@@ -255,16 +255,20 @@ def _reref_panav(df_0):
 
             offsets[atom] = float(np.nanmean(vals))
 
-        last_offsets = {atom: offsets.get(atom) for atom in _PANAV_ATOMS}
-
         offsets_apply = {k: (0 if v is None else v) for k, v in offsets.items()}
         df['Val'] = df.apply(lambda row: apply_offset(row, offsets_apply), axis=1)
+
+        for atom in _PANAV_ATOMS:
+            if offsets.get(atom) is not None:
+                cumulative_offsets[atom] += offsets[atom]
 
         failed = [atom for atom, ok in check.items() if not ok]
         df.loc[df['Atom_ID'].isin(failed), outlier_col] = True
         df.loc[df['Comp_ID'] == 'PRO', outlier_col] = True
 
-    return df, check, last_offsets
+    total_offsets = {atom: (cumulative_offsets[atom] if check[atom] else None)
+                    for atom in _PANAV_ATOMS}
+    return df, check, total_offsets
 
 
 def _reref_lacs(df_0, n_std=_N_STD_OUTLIER):
