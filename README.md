@@ -11,7 +11,23 @@ This repository provides a minimal, dependency-light tools to handle NMR data. M
 
 ## Installation
 
-Clone this repo or copy `parser.py` into your project.
+```bash
+pip install git+https://github.com/WaymentSteeleLab/makeshift.git
+```
+
+Or clone and install in editable mode (useful if you want to modify the code):
+
+```bash
+git clone https://github.com/WaymentSteeleLab/makeshift.git
+cd makeshift
+pip install -e .
+```
+
+To also install dependencies for running the demo notebooks (seaborn, matplotlib, jupyter):
+
+```bash
+pip install -e ".[demos]"
+```
 
 ---
 
@@ -44,27 +60,11 @@ Two lightweight re-referencing implementations are available:
 Note: these two methods have not yet been extensively compared.
 
 ```python
-inds=[4527,6586,4150]
-plt.figure(figsize=(10,2))
-colors = sns.color_palette()
-for j, ind in enumerate(inds):
+ms.fetch_nmrstar_file(4527)
+cs = ms.get_chem_shifts(ms.parse_nmr_star('bmr4527_3.str'))
 
-    # if nmrstar file from bmrb is not downloaded
-    ms.fetch_nmrstar_file(ind) 
-
-    df = ms.get_chem_shifts(ms.parse_nmr_star(f'bmr{ind}_3.str'), reref = 'panav') # or reref='lacs'
-    print(df.attrs['PANAV offsets']) # or print(df.attrs['LACS offsets'])
-
-    #compare distributions before and after
-    for i,atom_id in enumerate(['N','CA','CB']):
-        plt.subplot(1,3,i+1)
-        sns.kdeplot(df.loc[df.Atom_ID==atom_id]['Val'],color=colors[j],label=ind)
-        sns.kdeplot(df.loc[df.Atom_ID==atom_id]['orig'],color=colors[j],linestyle=':')
-        plt.xlabel(f'omega {atom_id[0]} (ppm)')
-        plt.title(atom_id)
-        if i==0:
-            plt.legend()
-plt.tight_layout()
+df, check, offsets = ms.reref(cs, method='panav')  # or method='lacs'
+print(offsets)  # {'N': ..., 'CA': ..., 'CB': ..., 'C': ...}
 ```
 ![Image showing distributions](https://github.com/WaymentSteeleLab/NMRstar_parser/blob/c9726af327b8dc4fef08c0c25711448342b0fe7f/static/example_rereferencing_ed.png)
 
@@ -124,8 +124,11 @@ Returns a DataFrame summarizing polymer types and sequences from the parsed entr
 ### `get_sample_info(parsed)`
 Returns sample metadata including labeling and concentration info as a DataFrame.
 
-### `get_chem_shifts(parsed, calc_csi=True, reref='lacs')`
-Extracts assigned chemical shifts into a DataFrame, including atom type, chemical shift, and associated metadata. Optionally: re-reference, calculate CSI.
+### `get_chem_shifts(parsed, calc_CSI=False)`
+Extracts assigned chemical shifts into a DataFrame. Pass `calc_CSI=True` to add `csi_raw` and `csi` columns.
+
+### `reref(df, method)`
+Re-references backbone chemical shifts. `method` is `'panav'` or `'lacs'`. Returns `(df, check, offsets)` where `df` has corrected `Val` values, `check` is a `{atom: bool}` dict indicating which atom types converged, and `offsets` is a `{atom: float | None}` dict of the applied corrections.
 
 ---
 
