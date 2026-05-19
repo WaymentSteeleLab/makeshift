@@ -376,6 +376,9 @@ def reref(df, method, n_std=_N_STD_OUTLIER):
 
     df_i = df_i.loc[df_i.Atom_ID.isin(['H', 'HA', 'N', 'CA', 'CB', 'C'])].copy()
 
+    if df_i.empty:
+        return None, None, None
+
     if method == 'lacs':
         return _reref_lacs(df_i, n_std=n_std)
     else:
