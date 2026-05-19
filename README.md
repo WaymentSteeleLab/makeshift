@@ -72,82 +72,47 @@ Entry 4527 is an example entry that is correctly referenced. Entries 6586 and 41
 
 ---
 
-## 🔎 Crash course on BMRB Attributes
+## NMR-STAR concepts
 
-To make sense of the structured data in NMR-STAR files, here are key categories you’ll encounter when parsing BMRB entries:
+NMR-STAR files are organised around **saveframes**. Each saveframe belongs to a category (e.g. `assigned_chemical_shifts`, `entity`, `sample`) and contains key-value pairs plus data loops.
 
-### 🗂️ Entry
-The top-level object in a BMRB deposition. Each `.str` file represents one **entry**, corresponding to a single experiment or dataset deposited to the BMRB.
+The three concepts you’ll interact with most:
 
-- Typically contains many **saveframes** describing samples, sequences, chemical shifts, and experimental conditions.
+**Entry** — a single BMRB deposition. One `.str` file, one entry.
 
-### 🔬 Entity
-An **entity** refers to a distinct molecular species (e.g. a polypeptide, DNA, RNA, ligand, etc.) in the sample.
+**Entity** — a distinct molecular species (protein, DNA strand, ligand, etc.). Multi-component complexes have multiple entities, each with its own `Entity_ID`.
 
-- Attributes often include:
-  - `Polymer_type`: e.g. `polypeptide(L)`
-  - `Polymer_seq_one_letter_code`: the primary sequence of the entity
-  - `ID`: a numeric identifier used to cross-reference with samples and assignments
-
-### 🧪 Sample
-A **sample** is the physical material used in an NMR experiment, typically consisting of one or more entities in solution.
-
-- The `sample` saveframe includes:
-  - `Mol_common_name`: e.g. "Ubiquitin"
-  - `Isotopic_labeling`: labeling strategy (e.g., `15N`, `13C`)
-  - `Concentration_val`: numeric concentration
-  - `_Sample_component`: a loop describing the components and their entity associations
-
-### 📈 Chemical Shift List
-This is typically found in `assigned_chemical_shifts` saveframes and includes experimental chemical shift data.
-
-- The `_Atom_chem_shift` loop contains:
-  - `Entity_ID`, `Seq_ID`, `Comp_ID`, `Atom_ID`
-  - `Val`: chemical shift value (in ppm)
-  - `Val_err`: uncertainty (in ppm)
-  - Often accompanied by a `Name` for the dataset
+**Chemical shift list** — the `_Atom_chem_shift` loop inside an `assigned_chemical_shifts` saveframe. One row per observed shift, keyed by `Entity_ID`, `Seq_ID`, `Comp_ID`, and `Atom_ID`.
 
 ---
 
+## API
 
-## API Overview
+### Fetching and parsing
 
-### `fetch_nmrstar_file(bmrb_id)`
-Downloads the version 3 NMR-STAR `.str` file from BMRB given a numeric ID.
+| Function | Description |
+|---|---|
+| `fetch_nmrstar_file(bmrb_id)` | Download the NMR-STAR v3 file for a BMRB entry and save it locally. |
+| `parse_nmr_star(file_path)` | Parse a `.str` file into a nested dict keyed by saveframe category. |
 
-### `parse_nmr_star(file_path)`
-Parses the `.str` file into a nested dictionary organized by saveframe.
+### Extracting data
 
-### `get_sequences(parsed)`
-Returns a DataFrame summarizing polymer types and sequences from the parsed entry.
+| Function | Description |
+|---|---|
+| `get_sequences(parsed)` | DataFrame of entities: ID, polymer type, one-letter sequence. |
+| `get_sample_info(parsed)` | DataFrame of sample components: name, labeling, concentration. |
+| `get_chem_shifts(parsed, calc_CSI=False)` | Tidy DataFrame of assigned shifts — one row per observation. Pass `calc_CSI=True` to add `csi_raw` and `csi` columns. |
 
-### `get_sample_info(parsed)`
-Returns sample metadata including labeling and concentration info as a DataFrame.
+### Re-referencing
 
-### `get_chem_shifts(parsed, calc_CSI=False)`
-Extracts assigned chemical shifts into a DataFrame. Pass `calc_CSI=True` to add `csi_raw` and `csi` columns.
+| Function | Description |
+|---|---|
+| `reref(df, method)` | Correct backbone referencing errors. `method` is `’panav’` or `’lacs’`. Returns `(df, check, offsets)`. |
 
-### `reref(df, method)`
-Re-references backbone chemical shifts. `method` is `'panav'` or `'lacs'`. Returns `(df, check, offsets)` where `df` has corrected `Val` values, `check` is a `{atom: bool}` dict indicating which atom types converged, and `offsets` is a `{atom: float | None}` dict of the applied corrections.
-
----
-
-## Example Output
-
-### `get_sequences`
-| ID | Polymer_type | Polymer_seq_one_letter_code |
-|----|---------------|-----------------------------|
-| 1  | polypeptide(L) | MKTAYIAKQRQISFVKSHFSRQLE... |
-
-### `get_sample_info`
-| ID | Mol_common_name | Isotopic_labeling | Concentration_val | ... |
-|----|------------------|--------------------|-------------------|-----|
-| 1  | Ubiquitin        | 15N,13C            | 1.0               |     |
-
-### `get_chem_shifts`
-| Entity_ID | Seq_ID | Atom_ID | Val  | Val_err | name | cs_saveframe_id |
-|-----------|--------|---------|------|---------|------|------------------|
-| 1         | 23     | HN      | 8.23 | 0.01    | .    | sf_chemshift_1   |
+`reref` return values:
+- `df` — corrected shifts; `orig` column holds the pre-correction values
+- `check` — `{atom: bool}` indicating which atom types converged
+- `offsets` — `{atom: float | None}` total offset applied per atom type
 
 ---
 
