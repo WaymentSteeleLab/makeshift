@@ -16,6 +16,9 @@ dependencies = [
 [tool.setuptools.packages.find]
 include = ["makeshift*"]
 
+[tool.setuptools.package-data]
+makeshift = ["data/*.csv"]
+
 [project.optional-dependencies]
 demos = [
     "seaborn",
