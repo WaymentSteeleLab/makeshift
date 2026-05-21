@@ -18,7 +18,6 @@ _PANAV_REF  = get_panav_distns()
 _BMRB_STATS = get_bmrb_stats()
 _RC_C_PRIME = get_c_prime_rc()
 
-
 # ── Algorithm constants ───────────────────────────────────────────────────────
 
 _EXCLUDE = {'GLY', 'CYS', 'PRO'}
@@ -37,9 +36,20 @@ _ATOM_PARAMS = {
 }
 
 _N_STD_OUTLIER = 4
-
+_NO_REF = {('PRO', 'N'), ('PRO', 'H'), ('GLY', 'CB')}
 
 # ── Local helpers ─────────────────────────────────────────────────────────────
+def _has_ref(comp_id, atom_id):
+    if (comp_id, atom_id) in _NO_REF:
+        return False
+    try:
+        for ss in ['C', 'H', 'E']:
+            mean, std = _PANAV_REF[comp_id][ss][atom_id]
+            if pd.isna(mean) or pd.isna(std):
+                return False
+        return True
+    except KeyError:
+        return False
 
 def _is_outlier(comp_id, atom_id, val, n_std=_N_STD_OUTLIER):
     if pd.isna(val):
@@ -166,6 +176,8 @@ def _gaussian(x, mu, sigma):
 
 
 def _panav_ss_probs(row):
+    if not _has_ref(row['Comp_ID'], row['Atom_ID']):
+        return np.nan, np.nan
     scores = []
     for ss in ['C', 'H', 'E']:
         mean, std = _PANAV_REF[row['Comp_ID']][ss][row['Atom_ID']]
@@ -182,6 +194,8 @@ def _panav_ss_probs(row):
 
 
 def _panav_get_offset(row, corresponding_ha):
+    if not _has_ref(row['Comp_ID'], row['Atom_ID']):
+        return np.nan, np.nan
     if len(corresponding_ha) == 0:
         return np.nan, np.nan
     ss = corresponding_ha.iloc[0]['ss_max']
@@ -192,6 +206,8 @@ def _panav_get_offset(row, corresponding_ha):
 
 
 def _panav_judge_outlier(row):
+    if not _has_ref(row['Comp_ID'], row['Atom_ID']):
+        return True
     if pd.isna(row['offset']):
         return all(
             abs(row['Val'] - _PANAV_REF[row['Comp_ID']][ss][row['Atom_ID']][0])
@@ -264,7 +280,6 @@ def _reref_panav(df_0):
 
         failed = [atom for atom, ok in check.items() if not ok]
         df.loc[df['Atom_ID'].isin(failed), outlier_col] = True
-        df.loc[df['Comp_ID'] == 'PRO', outlier_col] = True
 
     total_offsets = {atom: (cumulative_offsets[atom] if check[atom] else None)
                     for atom in _PANAV_ATOMS}
