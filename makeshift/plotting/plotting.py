@@ -120,6 +120,9 @@ def plot_peaklist(ax=None, peaks_df=None, marker="x", peaks_xcol="H_ppm", peaks_
     if peaks_df is None or peaks_xcol not in peaks_df.columns or peaks_ycol not in peaks_df.columns:
         return (fig, ax) if standalone else ax
 
+    if not standalone:
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
         x_lo, x_hi = min(xlim), max(xlim)
         y_lo, y_hi = min(ylim), max(ylim)
         in_view = (peaks_df[peaks_xcol].between(x_lo, x_hi)
