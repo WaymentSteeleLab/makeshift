@@ -202,7 +202,7 @@ def classify_peaks(all_r2eff, ref_df, config, max_r2err_threshold=100.0):
 
     df["Rex_val"] = df["R2first"] - df["R2last"]
     df["Rex_err"] = df["std_first"] + df["std_last"]
-    df["Rex"] = ((df["Rex_val"] - df["Rex_err"]) > 0)
+    df["Rex"] = ((df["Rex_val"] - df["Rex_err"]) > base_uncertainty)
     df["label"] = np.where(df["Rex"], "Rex", "flat")
 
     rigid_rmse = float(df["rigid_rmse"].iloc[0])
