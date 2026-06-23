@@ -54,13 +54,6 @@ def pick_peaks(ref_data, baseline=10, algorithm="downward",
 # BMRB / peaklist loading
 # ---------------------------------------------------------------------------
 
-_AA_3TO1 = {
-    'ALA': 'A', 'ARG': 'R', 'ASN': 'N', 'ASP': 'D', 'CYS': 'C',
-    'GLN': 'Q', 'GLU': 'E', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I',
-    'LEU': 'L', 'LYS': 'K', 'MET': 'M', 'PHE': 'F', 'PRO': 'P',
-    'SER': 'S', 'THR': 'T', 'TRP': 'W', 'TYR': 'Y', 'VAL': 'V',
-}
-
 def load_peaklist(peaklist, seq_offset=0):
     """
     Load backbone amide ¹H/¹⁵N chemical shift assignments, from either a
