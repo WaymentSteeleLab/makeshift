@@ -122,12 +122,24 @@ class NMRStarEntry:
             "Polymer_type": "string",
             "Polymer_seq_one_letter_code": "string",
         })
+
         if entity_id is not None:
             try:
-                return seq_df.loc[seq_df["ID"] == int(entity_id), "Polymer_seq_one_letter_code"][0]
+                return seq_df.loc[seq_df["ID"] == int(entity_id), "Polymer_seq_one_letter_code"].item()
             except:
                 warnings.warn(f"Could not find entity: {entity_id}. Returning all sequences", UserWarning)
         return pd.DataFrame.from_records(rows)
+
+    def polymer_type(self, entity_id=None):
+        """One row per entity: ID, polymer type, one-letter sequence."""
+        
+        seq_df = self.sequences()
+        if entity_id is not None:
+            try:
+                return seq_df.loc[seq_df["ID"] == int(entity_id), "Polymer_type"].item()
+            except:
+                warnings.warn(f"Could not find entity: {entity_id}. Returning all information", UserWarning)
+        return seq_df
 
     def sample_info(self):
         """One row per sample component (flattens the _Sample_component loop)."""
@@ -246,3 +258,79 @@ class NMRStarEntry:
     def __repr__(self):
         return (f"NMRStarEntry(entry_id={self.entry_id!r}, "
                 f"categories=[{', '.join(self.data)}])")
+
+    def get_pdb_ids(self):
+        pdbs = []
+        for sf in self.saveframe("entry_information").values():
+            for row in sf.get("_Related_entries", []):
+                if row.get("Database_name") == "PDB":
+                    code = (row.get("Database_accession_code") or "").strip()
+                    if code and code not in (".", "?"):
+                        pdbs.append(code)
+        return list(dict.fromkeys(pdbs))
+
+    def _entry_citation(self):
+            """The saveframe marked as the entry citation, else the first citation."""
+            cites = self.saveframe("citations")
+            for sf in cites.values():
+                if sf.get("Class") == "entry citation":
+                    return sf
+            return next(iter(cites.values()), None)
+
+    @staticmethod
+    def _clean(val):
+        val = (val or "").strip().strip("'\"")
+        return val if val and val not in (".", "?", "N/A") else None
+
+    def get_entry_title(self):
+        """Entry title: from entry_information, falling back to the entry citation."""
+        for sf in self.saveframe("entry_information").values():
+            try:
+                title = self._clean(sf.get("Title"))
+                return title
+            except:
+                continue
+        return None
+
+    def get_title(self):
+        """Entry title: from entry_information, falling back to the entry citation."""
+        for sf in self.saveframe("entry_information").values():
+            title = self._clean(sf.get("Title"))
+            if title:
+                return title
+        cites = self.saveframe("citations")
+        for sf in cites.values():
+            if sf.get("Class") == "entry citation":
+                title = self._clean(sf.get("Title"))
+                if title:
+                    return title
+        for sf in cites.values():
+            title = self._clean(sf.get("Title"))
+            if title:
+                return title
+        return None
+
+    def get_title(self):
+        """Citation title: entry_information first, then the entry citation."""
+        for sf in self.saveframe("entry_information").values():
+            title = self._clean(sf.get("Title"))
+            if title:
+                return title
+        cite = self._entry_citation()
+        return self._clean(cite.get("Title")) if cite else None
+
+    def citation_info(self):
+        """Title, journal, year, DOI, PubMed ID, and authors of the entry citation."""
+        cite = self._entry_citation() or {}
+        authors = [
+            f"{self._clean(a.get('Given_name')) or ''} {self._clean(a.get('Family_name')) or ''}".strip()
+            for a in cite.get("_Citation_author", [])
+        ]
+        return {
+            "citation_title": self.get_title(),
+            "journal": self._clean(cite.get("Journal_name_full"))
+                       or self._clean(cite.get("Journal_abbrev")),
+            "year": self._clean(cite.get("Year")),
+            "pubmed_id": self._clean(cite.get("PubMed_ID")),
+            "authors": authors,
+        }

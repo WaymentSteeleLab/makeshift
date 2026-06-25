@@ -2,6 +2,7 @@
 Backbone amide 1H/15N assignments as an object.
 """
 import pandas as pd
+import warnings
 
 from .entry import NMRStarEntry
 from .chemshift import ChemicalShifts
@@ -12,28 +13,41 @@ _OUT_COLS = ["Seq_ID", "Auth_seq_ID", "Comp_ID", "H_ppm", "N_ppm", "assn_label"]
 
 
 class PeakList:
-    """One row per assigned residue: Seq_ID, Auth_seq_ID, Comp_ID, H_ppm, N_ppm."""
 
-    def __init__(self, df, source=None):
-        self.df = df
+    def __init__(self, data, source=None):
+        self.data = data
         self.source = source
 
-    # BMRB / NMR-STAR source (via chemical shifts)
-
     @classmethod
-    def from_chemshifts(cls, cs, saveframe=None):
+    def from_chemshifts(cls, cs, cs_saveframe=None, entity_id=None):
         df = cs.data
  
         ids = df["ChemShift_ID"].unique()
-        chosen = saveframe or ids[0]
-        if saveframe is None and len(ids) > 1:
+        chosen = cs_saveframe or ids[0]
+        if cs_saveframe is None and len(ids) > 1:
             print(f"  Note: {len(ids)} chemical shift saveframes — using first "
                   f"({chosen}). Others: {list(ids[1:])}")
-        sub = df[df["ChemShift_ID"] == chosen]
  
+        entities = df["Entity_ID"].dropna().unique()
+        if cs_saveframe is not None:
+            df = df[df["ChemShift_ID"] == cs_saveframe]
+            if df.empty:
+                raise ValueError(f"no chemical shifts for ChemShift_ID={cs_saveframe} in chemical shifts present: {list(ids)}")
+       
+        if entity_id is not None:
+            sub = df[df["Entity_ID"] == int(entity_id)]
+            if sub.empty:
+                raise ValueError(f"no chemical shifts for Entity_ID={entity_id!r} "
+                                 f"in saveframe {chosen!r}; entities present: {list(entities)}")
+        elif len(entities) > 1:
+            chosen_entity = entities[0]
+            print(f"  Note: {len(entities)} entities in this saveframe — using "
+                  f"first (Entity_ID={chosen_entity}). Others: {list(entities[1:])}")
+            sub = df[df["Entity_ID"] == chosen_entity]
+        else:
+            raise ValueError("No entities in entry.")
         eid = cs.entry.entry_id if cs.entry is not None else None
-        source = f"entry:{eid}"
- 
+        source = f"bmrb:{eid}"
         atoms = set(sub["Atom_ID"].unique())
         has_n = "N" in atoms
         has_h = bool({"H", "HN"} & atoms)
@@ -68,18 +82,19 @@ class PeakList:
  
         obj = cls(out[_OUT_COLS], source=source)
         obj.entry = cs.entry
+        obj.entity_id = int(entity_id)
+        obj.cs_saveframe = chosen
         return obj
 
     @classmethod
-    def from_entry(cls, entry, saveframe=None):
+    def from_entry(cls, entry, cs_saveframe=None):
         cs = ChemicalShifts.from_entry(entry)
-        print(cs)
-        return cls.from_chemshifts(cs, saveframe=saveframe)
+        return cls.from_chemshifts(cs, cs_saveframe=cs_saveframe)
 
     @classmethod
-    def from_bmrb(cls, bmrb_id, saveframe=None, **fetch_kw):
+    def from_bmrb(cls, bmrb_id, cs_saveframe=None, **fetch_kw):
         entry = NMRStarEntry.from_bmrb(bmrb_id, **fetch_kw)
-        return cls.from_entry(entry, saveframe=saveframe)
+        return cls.from_entry(entry, cs_saveframe=cs_saveframe)
 
     # local CSV source  (res / shift / atom)
 
@@ -105,7 +120,6 @@ class PeakList:
         print(f"  {len(out)} backbone amide assignments from {path}")
         return cls(out[_OUT_COLS], source=str(path))
 
-    # ------------------------------------------------------------------
     @staticmethod
     def _label(out):
         out["assn_label"] = (out["Comp_ID"].map(_AA_3TO1).fillna("?")
@@ -113,4 +127,30 @@ class PeakList:
         return out
 
     def __repr__(self):
-        return f"PeakList(residues={len(self.df)}, source={self.source!r})"
+        return f"PeakList(residues={len(self.data)}, source={self.source!r})"
+
+    def assignment_string(self, sequence=None, entity_id=None):
+        """
+        Per-residue label string: 'A' assigned, '.' missing, 'P' proline.
+
+        """
+        if sequence is None:
+            if self.entry is None:
+                raise ValueError("no sequence given and this PeakList has no "
+                                 "entry attached (e.g. it came from from_csv)")
+
+            sequence = self.entry.sequences(entity_id=entity_id)
+        assigned = set(self.data["Seq_ID"])
+        chars = []
+        for i, aa in enumerate(sequence):
+            seqpos = i + 1
+            if aa == "P":
+                chars.append("P")
+            elif seqpos in assigned:
+                chars.append("A")
+            else:
+                chars.append(".")
+        return "".join(chars)
+ 
+    def __repr__(self):
+        return f"PeakList(residues={len(self.data)}, source={self.source!r})"

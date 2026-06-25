@@ -134,11 +134,11 @@ class ChemicalShifts:
         n = self.data["Seq_ID"].nunique() if len(self.data) else 0
         return f"ChemicalShifts(atoms={len(self.data)}, residues={n})"
 
-    def peaklist(self, saveframe=None):
+    def peaklist(self, cs_saveframe=None, entity_id=None):
         from .peaklist import PeakList
 
         """Project these shifts to a backbone-amide PeakList (one H/N per residue)."""
-        return PeakList.from_chemshifts(self, saveframe=saveframe)
+        return PeakList.from_chemshifts(self, cs_saveframe=cs_saveframe, entity_id=entity_id)
 
     def get_entry(self):
         return self.entry.get_entry()
