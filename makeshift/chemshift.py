@@ -17,17 +17,27 @@ class ChemicalShifts:
 
     def __init__(self, data):
         self.data = data
+        self.entry = None
 
     @classmethod
     def from_entry(cls, entry, reref=None, calc_csi=False):
         """Build from an NMRStarEntry's assigned_chemical_shifts saveframes."""
         frames = []
         for framecode, sf in entry.saveframe("assigned_chemical_shifts").items():
-            cs = NMRStarEntry.loop_to_dataframe(sf["_Atom_chem_shift"])
+            loop = sf.get("_Atom_chem_shift")
+            if not loop:
+                continue
+            cs = NMRStarEntry.loop_to_dataframe(loop)
             cs["name"] = sf.get("Name", ".")
             cs["ChemShift_ID"] = framecode
             cs = cls._clean(cs)
             frames.append(cs)
+
+        if not frames:
+            raise ValueError(
+                f"entry {entry.entry_id!r} has no assigned chemical shifts "
+                "to build a ChemicalShifts from."
+            )
 
         df = pd.concat(frames, ignore_index=True)
         df["Seq_ID"] = df["Seq_ID"].astype(int)
@@ -65,9 +75,26 @@ class ChemicalShifts:
 
     def reref(self, method):
         """
-        Re-reference shifts in place via the LACS/PANAV routine.
+        Re-reference shifts in place via the LACS or PANAV routine.
         """
-        raise NotImplementedError()
+        from .reref import compute_offsets, apply_offsets
+
+        offsets, check = compute_offsets(self.data, method)
+        self.reref_method = method
+        self.reref_offsets = offsets
+        self.reref_check = check
+
+        if not offsets or not any(v is not None for v in offsets.values()):
+            warnings.warn(
+                f"{method} re-referencing produced no offsets "
+                "(insufficient backbone shifts or all fits failed); "
+                "shifts left unchanged.",
+                UserWarning,
+            )
+            return self
+
+        self.data = apply_offsets(self.data, offsets)
+        return self
 
     # chemical shift index
 
@@ -85,7 +112,7 @@ class ChemicalShifts:
     @classmethod
     def _secondary_shift(cls, row):
         rc, val = cls._rc(row["Comp_ID"], row["Atom_ID"]), row["Val"]
-        if rc is None or np.isnan(rc) or np.isnan(val):
+        if np.isnan(rc) or np.isnan(val):
             return np.nan
         return val - rc
 
