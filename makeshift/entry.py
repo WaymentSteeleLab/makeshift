@@ -10,7 +10,6 @@ import pandas as pd
 _BMRB_URL = "https://bmrb.io/ftp/pub/bmrb/entry_directories/bmr{id}/bmr{id}_3.str"
 _VALUE_RE = re.compile(r'(?:"[^"]*"|\'[^\']*\'|[^\s]+)')
 
-
 class _CategoryView(dict):
     """A {category: {framecode: saveframe}} mapping with attribute access."""
 
@@ -116,6 +115,15 @@ class NMRStarEntry:
         val = (val or "").strip().strip("'\"")
         return val if val and val not in (".", "?", "N/A") else None
    
+    @staticmethod
+    def _num(val):
+        val = (val or "").strip().strip("'\"")
+        if not val or val in (".", "?", "N/A"):
+            return np.nan
+        try:
+            return float(val)
+        except ValueError:
+            return val
     # access 
     
     def sequences(self, entity_id=None):
@@ -173,6 +181,23 @@ class NMRStarEntry:
         return self._loop_records("chem_shift_reference", "_Chem_shift_ref",
                                   tags, id_key="reference")
  
+    def sample_conditions(self):
+        """One row per sample-condition set, with each condition Type as a
+        column (e.g. pH, temperature, pressure, ionic_strength) plus its units."""
+        rows = []
+        for framecode, sf in self.saveframe("sample_conditions").items():
+            row = {"sample_conditions": framecode}
+            for var in sf.get("_Sample_condition_variable", []):
+                ctype = var.get("Type")
+                if not ctype or ctype in (".", "?"):
+                    continue
+                row[ctype] = self._num(var.get("Val"))
+                units = self._clean(var.get("Val_units"))
+                if units and units.lower() != "na":
+                    row[f"{ctype}_units"] = units
+            rows.append(row)
+        return pd.DataFrame.from_records(rows)
+
     # parser
     @staticmethod
     def _parse(file_path):
