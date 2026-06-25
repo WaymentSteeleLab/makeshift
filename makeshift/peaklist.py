@@ -17,6 +17,9 @@ class PeakList:
     def __init__(self, data, source=None):
         self.data = data
         self.source = source
+        self.entry = None
+        self.entity_id = None
+        self.cs_saveframe = None
 
     @classmethod
     def from_chemshifts(cls, cs, cs_saveframe=None, entity_id=None):
@@ -28,24 +31,26 @@ class PeakList:
             print(f"  Note: {len(ids)} chemical shift saveframes — using first "
                   f"({chosen}). Others: {list(ids[1:])}")
  
-        entities = df["Entity_ID"].dropna().unique()
         if cs_saveframe is not None:
             df = df[df["ChemShift_ID"] == cs_saveframe]
             if df.empty:
                 raise ValueError(f"no chemical shifts for ChemShift_ID={cs_saveframe} in chemical shifts present: {list(ids)}")
-       
+
+        entities = df["Entity_ID"].dropna().unique()
         if entity_id is not None:
-            sub = df[df["Entity_ID"] == int(entity_id)]
+            chosen_entity = int(entity_id)
+            sub = df[df["Entity_ID"] == chosen_entity]
             if sub.empty:
                 raise ValueError(f"no chemical shifts for Entity_ID={entity_id!r} "
                                  f"in saveframe {chosen!r}; entities present: {list(entities)}")
-        elif len(entities) > 1:
-            chosen_entity = entities[0]
-            print(f"  Note: {len(entities)} entities in this saveframe — using "
-                  f"first (Entity_ID={chosen_entity}). Others: {list(entities[1:])}")
-            sub = df[df["Entity_ID"] == chosen_entity]
-        else:
+        elif len(entities) == 0:
             raise ValueError("No entities in entry.")
+        else:
+            chosen_entity = int(entities[0])
+            if len(entities) > 1:
+                print(f"  Note: {len(entities)} entities in this saveframe — using "
+                      f"first (Entity_ID={chosen_entity}). Others: {list(entities[1:])}")
+            sub = df[df["Entity_ID"] == chosen_entity]
         
         eid = cs.entry.entry_id if cs.entry is not None else None
         source = f"bmrb:{eid}"
@@ -62,6 +67,8 @@ class PeakList:
             )
             obj = cls(pd.DataFrame(columns=_OUT_COLS), source=source)
             obj.entry = cs.entry
+            obj.entity_id = chosen_entity
+            obj.cs_saveframe = chosen
             return obj
  
         n_df = (sub[sub["Atom_ID"] == "N"]
@@ -84,7 +91,7 @@ class PeakList:
  
         obj = cls(out[_OUT_COLS], source=source)
         obj.entry = cs.entry
-        obj.entity_id = int(entity_id)
+        obj.entity_id = chosen_entity
         obj.cs_saveframe = chosen
         return obj
 
@@ -138,11 +145,11 @@ class PeakList:
         """
         if sequence is None:
             if self.entry is None:
-                raise ValueError("No sequence found.")
+                raise ValueError("No entry attached; pass an explicit sequence.")
             if entity_id is None:
                 entity_id = self.entity_id
-            else:
-                raise ValueError("No Entity ID found.") 
+            if entity_id is None:
+                raise ValueError("No entity_id available; pass entity_id or sequence.")
             sequence = self.entry.sequences(entity_id=entity_id)
         assigned = set(self.data["Seq_ID"])
         chars = []
@@ -155,6 +162,3 @@ class PeakList:
             else:
                 chars.append(".")
         return "".join(chars)
- 
-    def __repr__(self):
-        return f"PeakList(residues={len(self.data)}, source={self.source!r})"

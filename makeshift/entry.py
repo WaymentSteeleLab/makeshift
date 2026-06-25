@@ -48,6 +48,7 @@ class NMRStarEntry:
 
     def get_entry(self):
         return self.entry_id
+
     @classmethod
     def from_file(cls, file_path, entry_id=None):
         return cls(data=cls._parse(file_path), entry_id=entry_id, source_file=file_path)
@@ -93,6 +94,8 @@ class NMRStarEntry:
     @staticmethod
     def loop_to_dataframe(loop):
         """Turn a loop (list of row dicts) into a DataFrame."""
+        if not loop:
+            return pd.DataFrame()
         cols = {k: [] for k in loop[0].keys()}
         for row in loop:
             for k, v in row.items():
@@ -108,6 +111,11 @@ class NMRStarEntry:
                 frames.append(df)
         return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
+    @staticmethod
+    def _clean(val):
+        val = (val or "").strip().strip("'\"")
+        return val if val and val not in (".", "?", "N/A") else None
+   
     # access 
     
     def sequences(self, entity_id=None):
@@ -126,9 +134,9 @@ class NMRStarEntry:
         if entity_id is not None:
             try:
                 return seq_df.loc[seq_df["ID"] == int(entity_id), "Polymer_seq_one_letter_code"].item()
-            except:
+            except Exception:
                 warnings.warn(f"Could not find entity: {entity_id}. Returning all sequences", UserWarning)
-        return pd.DataFrame.from_records(rows)
+        return seq_df
 
     def polymer_type(self, entity_id=None):
         """One row per entity: ID, polymer type, one-letter sequence."""
@@ -277,11 +285,6 @@ class NMRStarEntry:
                     return sf
             return next(iter(cites.values()), None)
 
-    @staticmethod
-    def _clean(val):
-        val = (val or "").strip().strip("'\"")
-        return val if val and val not in (".", "?", "N/A") else None
-
     def get_entry_title(self):
         """Entry title: from entry_information, falling back to the entry citation."""
         for sf in self.saveframe("entry_information").values():
@@ -292,25 +295,7 @@ class NMRStarEntry:
                 continue
         return None
 
-    def get_title(self):
-        """Entry title: from entry_information, falling back to the entry citation."""
-        for sf in self.saveframe("entry_information").values():
-            title = self._clean(sf.get("Title"))
-            if title:
-                return title
-        cites = self.saveframe("citations")
-        for sf in cites.values():
-            if sf.get("Class") == "entry citation":
-                title = self._clean(sf.get("Title"))
-                if title:
-                    return title
-        for sf in cites.values():
-            title = self._clean(sf.get("Title"))
-            if title:
-                return title
-        return None
-
-    def get_title(self):
+    def get_citation_title(self):
         """Citation title: entry_information first, then the entry citation."""
         for sf in self.saveframe("entry_information").values():
             title = self._clean(sf.get("Title"))
@@ -327,7 +312,7 @@ class NMRStarEntry:
             for a in cite.get("_Citation_author", [])
         ]
         return {
-            "citation_title": self.get_title(),
+            "citation_title": self.get_citation_title(),
             "journal": self._clean(cite.get("Journal_name_full"))
                        or self._clean(cite.get("Journal_abbrev")),
             "year": self._clean(cite.get("Year")),
