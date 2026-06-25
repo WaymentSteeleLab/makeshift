@@ -75,129 +75,6 @@ class NMRStarEntry:
             os.remove(path)
         return cls(data=data, entry_id=bmrb_id)
 
-    @property
-    def categories(self):
-        """Saveframe categories as an attribute-accessible mapping.
-
-            entry.categories                           -> <categories: entity, ...>
-            list(entry.categories)                     -> ['entity', ...]
-            entry.categories.assigned_chemical_shifts  -> {framecode: saveframe}
-        """
-        return _CategoryView(self.data)
-
-    def saveframe(self, category, framecode=None):
-        """Return one saveframe dict, or all framecodes for a category."""
-        cat = self.data.get(category, {})
-        return cat if framecode is None else cat[framecode]
-
-    @staticmethod
-    def loop_to_dataframe(loop):
-        """Turn a loop (list of row dicts) into a DataFrame."""
-        if not loop:
-            return pd.DataFrame()
-        cols = {k: [] for k in loop[0].keys()}
-        for row in loop:
-            for k, v in row.items():
-                cols[k].append(v)
-        return pd.DataFrame.from_records(cols)
-
-    def _loop_records(self, category, loop_name, tags, id_key):
-        frames = []
-        for framecode, sf in self.saveframe(category).items():
-            if loop_name in sf:
-                df = self.loop_to_dataframe(sf[loop_name]).reindex(columns=tags)
-                df.insert(0, id_key, framecode)
-                frames.append(df)
-        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-
-    @staticmethod
-    def _clean(val):
-        val = (val or "").strip().strip("'\"")
-        return val if val and val not in (".", "?", "N/A") else None
-   
-    @staticmethod
-    def _num(val):
-        val = (val or "").strip().strip("'\"")
-        if not val or val in (".", "?", "N/A"):
-            return np.nan
-        try:
-            return float(val)
-        except ValueError:
-            return val
-    # access 
-    
-    def sequences(self, entity_id=None):
-        """One row per entity: ID, polymer type, one-letter sequence."""
-        tags = ["ID", "Polymer_type", "Polymer_seq_one_letter_code"]
-        rows = []
-        for framecode, sf in self.saveframe("entity").items():
-            rows.append({"entity": framecode, **{t: sf.get(t) for t in tags}})
-        seq_df = pd.DataFrame.from_records(rows)
-        seq_df = seq_df.astype({
-            "ID": "Int64",  # nullable integer dtype
-            "Polymer_type": "string",
-            "Polymer_seq_one_letter_code": "string",
-        })
-
-        if entity_id is not None:
-            try:
-                return seq_df.loc[seq_df["ID"] == int(entity_id), "Polymer_seq_one_letter_code"].item()
-            except Exception:
-                warnings.warn(f"Could not find entity: {entity_id}. Returning all sequences", UserWarning)
-        return seq_df
-
-    def polymer_type(self, entity_id=None):
-        """One row per entity: ID, polymer type, one-letter sequence."""
-        
-        seq_df = self.sequences()
-        if entity_id is not None:
-            try:
-                return seq_df.loc[seq_df["ID"] == int(entity_id), "Polymer_type"].item()
-            except:
-                warnings.warn(f"Could not find entity: {entity_id}. Returning all information", UserWarning)
-        return seq_df
-
-    def sample_info(self):
-        """One row per sample component (flattens the _Sample_component loop)."""
-        tags = ["ID", "Sample_ID", "Mol_common_name", "Entity_ID",
-                "Isotopic_labeling", "Concentration_val", "Concentration_val_units"]
-        return self._loop_records("sample", "_Sample_component", tags, id_key="sample")
-
-    def assembly_info(self):
-        """One row per entity assembly (flattens the _Entity_assembly loop)."""
-        return self._loop_records("assembly", "_Entity_assembly",
-                                  ["Entity_assembly_name"], id_key="assembly")
-
-    def spectrometers(self):
-        """One row per spectrometer: name, manufacturer, model, field strength."""
-        tags = ["ID", "Name", "Manufacturer", "Model", "Field_strength"]
-        return self._loop_records("NMR_spectrometer_list", "_NMR_spectrometer_view",
-                                  tags, id_key="spectrometer_list")
- 
-    def shift_reference(self):
-        """One row per referenced nucleus (how the depositor referenced shifts)."""
-        tags = ["Atom_type", "Atom_isotope_number", "Mol_common_name",
-                "Chem_shift_val", "Indirect_shift_ratio", "Ref_method", "Ref_type"]
-        return self._loop_records("chem_shift_reference", "_Chem_shift_ref",
-                                  tags, id_key="reference")
- 
-    def sample_conditions(self):
-        """One row per sample-condition set, with each condition Type as a
-        column (e.g. pH, temperature, pressure, ionic_strength) plus its units."""
-        rows = []
-        for framecode, sf in self.saveframe("sample_conditions").items():
-            row = {"sample_conditions": framecode}
-            for var in sf.get("_Sample_condition_variable", []):
-                ctype = var.get("Type")
-                if not ctype or ctype in (".", "?"):
-                    continue
-                row[ctype] = self._num(var.get("Val"))
-                units = self._clean(var.get("Val_units"))
-                if units and units.lower() != "na":
-                    row[f"{ctype}_units"] = units
-            rows.append(row)
-        return pd.DataFrame.from_records(rows)
-
     # parser
     @staticmethod
     def _parse(file_path):
@@ -279,6 +156,130 @@ class NMRStarEntry:
 
         flush()
         return NMRStarEntry._restructure(data)
+
+    @property
+    def categories(self):
+        """Saveframe categories as an attribute-accessible mapping.
+
+            entry.categories                           -> <categories: entity, ...>
+            list(entry.categories)                     -> ['entity', ...]
+            entry.categories.assigned_chemical_shifts  -> {framecode: saveframe}
+        """
+        return _CategoryView(self.data)
+
+    def saveframe(self, category, framecode=None):
+        """Return one saveframe dict, or all framecodes for a category."""
+        cat = self.data.get(category, {})
+        return cat if framecode is None else cat[framecode]
+
+    @staticmethod
+    def loop_to_dataframe(loop):
+        """Turn a loop (list of row dicts) into a DataFrame."""
+        if not loop:
+            return pd.DataFrame()
+        cols = {k: [] for k in loop[0].keys()}
+        for row in loop:
+            for k, v in row.items():
+                cols[k].append(v)
+        return pd.DataFrame.from_records(cols)
+
+    def _loop_records(self, category, loop_name, tags, id_key):
+        frames = []
+        for framecode, sf in self.saveframe(category).items():
+            if loop_name in sf:
+                df = self.loop_to_dataframe(sf[loop_name]).reindex(columns=tags)
+                df.insert(0, id_key, framecode)
+                frames.append(df)
+        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+    @staticmethod
+    def _clean(val):
+        val = (val or "").strip().strip("'\"")
+        return val if val and val not in (".", "?", "N/A") else None
+   
+    @staticmethod
+    def _num(val):
+        val = (val or "").strip().strip("'\"")
+        if not val or val in (".", "?", "N/A"):
+            return np.nan
+        try:
+            return float(val)
+        except ValueError:
+            return val
+
+    # access 
+    
+    def sequences(self, entity_id=None):
+        """One row per entity: ID, polymer type, one-letter sequence."""
+        tags = ["ID", "Polymer_type", "Polymer_seq_one_letter_code"]
+        rows = []
+        for framecode, sf in self.saveframe("entity").items():
+            rows.append({"entity": framecode, **{t: sf.get(t) for t in tags}})
+        seq_df = pd.DataFrame.from_records(rows)
+        seq_df = seq_df.astype({
+            "ID": "Int64",  # nullable integer dtype
+            "Polymer_type": "string",
+            "Polymer_seq_one_letter_code": "string",
+        })
+
+        if entity_id is not None:
+            try:
+                return seq_df.loc[seq_df["ID"] == int(entity_id), "Polymer_seq_one_letter_code"].item()
+            except Exception:
+                warnings.warn(f"Could not find entity: {entity_id}. Returning all sequences", UserWarning)
+        return seq_df
+
+    def polymer_type(self, entity_id=None):
+        """One row per entity: ID, polymer type, one-letter sequence."""
+        
+        seq_df = self.sequences()
+        if entity_id is not None:
+            try:
+                return seq_df.loc[seq_df["ID"] == int(entity_id), "Polymer_type"].item()
+            except:
+                warnings.warn(f"Could not find entity: {entity_id}. Returning all information", UserWarning)
+        return seq_df
+
+    def sample_info(self):
+        """One row per sample component (flattens the _Sample_component loop)."""
+        tags = ["ID", "Sample_ID", "Mol_common_name", "Entity_ID",
+                "Isotopic_labeling", "Concentration_val", "Concentration_val_units"]
+        return self._loop_records("sample", "_Sample_component", tags, id_key="sample")
+
+    def assembly_info(self):
+        """One row per entity assembly (flattens the _Entity_assembly loop)."""
+        return self._loop_records("assembly", "_Entity_assembly",
+                                  ["Entity_assembly_name"], id_key="assembly")
+
+    def spectrometers(self):
+        """One row per spectrometer: name, manufacturer, model, field strength."""
+        tags = ["ID", "Name", "Manufacturer", "Model", "Field_strength"]
+        return self._loop_records("NMR_spectrometer_list", "_NMR_spectrometer_view",
+                                  tags, id_key="spectrometer_list")
+ 
+    def shift_reference(self):
+        """One row per referenced nucleus (how the depositor referenced shifts)."""
+        tags = ["Atom_type", "Atom_isotope_number", "Mol_common_name",
+                "Chem_shift_val", "Indirect_shift_ratio", "Ref_method", "Ref_type"]
+        return self._loop_records("chem_shift_reference", "_Chem_shift_ref",
+                                  tags, id_key="reference")
+ 
+    def sample_conditions(self):
+        """One row per sample-condition set, with each condition Type as a
+        column (e.g. pH, temperature, pressure, ionic_strength) plus its units."""
+        rows = []
+        for framecode, sf in self.saveframe("sample_conditions").items():
+            row = {"sample_conditions": framecode}
+            for var in sf.get("_Sample_condition_variable", []):
+                ctype = var.get("Type")
+                if not ctype or ctype in (".", "?"):
+                    continue
+                row[ctype] = self._num(var.get("Val"))
+                units = self._clean(var.get("Val_units"))
+                if units and units.lower() != "na":
+                    row[f"{ctype}_units"] = units
+            rows.append(row)
+        return pd.DataFrame.from_records(rows)
 
     @staticmethod
     def _restructure(data):
