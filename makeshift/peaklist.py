@@ -46,11 +46,13 @@ class PeakList:
             sub = df[df["Entity_ID"] == chosen_entity]
         else:
             raise ValueError("No entities in entry.")
+        
         eid = cs.entry.entry_id if cs.entry is not None else None
         source = f"bmrb:{eid}"
         atoms = set(sub["Atom_ID"].unique())
         has_n = "N" in atoms
         has_h = bool({"H", "HN"} & atoms)
+        
         if not (has_n and has_h):
             missing = [a for a, present in (("N", has_n), ("H/HN", has_h)) if not present]
             warnings.warn(
@@ -136,9 +138,11 @@ class PeakList:
         """
         if sequence is None:
             if self.entry is None:
-                raise ValueError("no sequence given and this PeakList has no "
-                                 "entry attached (e.g. it came from from_csv)")
-
+                raise ValueError("No sequence found.")
+            if entity_id is None:
+                entity_id = self.entity_id
+            else:
+                raise ValueError("No Entity ID found.") 
             sequence = self.entry.sequences(entity_id=entity_id)
         assigned = set(self.data["Seq_ID"])
         chars = []
