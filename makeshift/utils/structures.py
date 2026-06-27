@@ -43,7 +43,7 @@ def detect_source(identifier):
     )
 
 
-def fetch_structure(identifier, source="auto", version="v4", frag=1,
+def fetch_structure(identifier, source="auto", version="v6", frag=1,
                     cache_dir=None, overwrite=False):
     """
     Return a local path to a PDB structure, downloading it if needed.

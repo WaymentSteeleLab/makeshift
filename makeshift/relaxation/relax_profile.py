@@ -25,9 +25,11 @@ import numpy as np
 import pandas as pd
 
 from ..entry import NMRStarEntry
+from ..utils.structures import detect_source
 
 ORDERED, REX, PSNS, BOTH = "A", "^", "v", "b"
 MISSING, TERMINUS, PROLINE = ".", "t", "p"
+
 
 
 def _to_rate(values, units, kind):
@@ -52,13 +54,13 @@ def _to_rate(values, units, kind):
         UserWarning,
     )
     return v if looks_like_rate else 1.0 / v
-
-
+ 
+ 
 class RelaxationProfile:
     """
     Per-residue R1/R2/hetNOE for one entity, aligned to its sequence, with
     RelaxDB motional labels.
-
+ 
     Attributes
     ----------
     table : DataFrame
@@ -69,7 +71,7 @@ class RelaxationProfile:
         One-letter sequence the data is aligned to.
     entry_id, entity_id : identifiers carried for reference.
     """
-
+ 
     def __init__(self, table, sequence, entry_id=None, entity_id=None, entry=None):
         self.table = table
         self.sequence = sequence
@@ -77,15 +79,15 @@ class RelaxationProfile:
         self.entity_id = entity_id
         self.entry = entry
         self.scale_factor = None
-
+ 
     # construction
-
+ 
     @classmethod
     def from_bmrb(cls, bmrb_id, entity_id=None, sequence=None, **fetch_kw):
         """Fetch a BMRB entry and build a profile from its deposited relaxation."""
         entry = NMRStarEntry.from_bmrb(bmrb_id, **fetch_kw)
         return cls.from_entry(entry, entity_id=entity_id, sequence=sequence)
-
+ 
     @classmethod
     def from_entry(cls, entry, entity_id=None, sequence=None):
         """
@@ -101,38 +103,38 @@ class RelaxationProfile:
                 entity_id = seqs["ID"].iloc[0]
             if not isinstance(sequence, str) or not sequence:
                 raise ValueError(
-
+ 
                 )
-
+ 
         n = len(sequence)
         table = pd.DataFrame({
             "Seq_ID": np.arange(1, n + 1),
             "residue": list(sequence),
         })
-
+ 
         # R1 and R2 come from the T1 / T2 lists (converted to rates)
         for kind, col in (("T1", "R1"), ("T2", "R2")):
             df = entry.relaxation(kind)
             units = cls._list_units(entry, kind)
             table[col], table[f"{col}_err"] = cls._align_rate(
                 df, n, units, kind)
-
+ 
         # hetNOE is already a ratio
         noe = entry.relaxation("NOE")
         table["NOE"], table["NOE_err"] = cls._align_plain(noe, n)
-
+ 
         table["R2_R1"] = table["R2"] / table["R1"]
         table["R2_R1_err"] = table["R2_R1"] * np.sqrt(
             (table["R2_err"] / table["R2"]) ** 2
             + (table["R1_err"] / table["R1"]) ** 2)
         table["has_data"] = table[["R1", "R2"]].notna().all(axis=1)
-
+ 
         return cls(table, sequence,
                    entry_id=getattr(entry, "entry_id", None),
                    entity_id=entity_id, entry=entry)
-
+ 
     # alignment helpers
-
+ 
     @staticmethod
     def _list_units(entry, kind):
         for sf in entry.saveframe(f"heteronucl_{kind}_relaxation").values():
@@ -140,7 +142,7 @@ class RelaxationProfile:
             if u and u not in (".", "?"):
                 return u
         return None
-
+ 
     @staticmethod
     def _series_by_seqid(df, n, value_col="Val", err_col="Val_err"):
         """Index a relaxation DataFrame's value/err onto 1..n by Seq_ID."""
@@ -155,7 +157,7 @@ class RelaxationProfile:
                 val.loc[s] = row.get(value_col, np.nan)
                 err.loc[s] = row.get(err_col, np.nan)
         return val, err
-
+ 
     @classmethod
     def _align_rate(cls, df, n, units, kind):
         val, err = cls._series_by_seqid(df, n)
@@ -164,27 +166,27 @@ class RelaxationProfile:
         is_time = not (rate.size and np.allclose(rate, val.values, equal_nan=True))
         rate_err = (err.values / val.values ** 2) if is_time else err.values
         return rate, rate_err
-
+ 
     @classmethod
     def _align_plain(cls, df, n):
         val, err = cls._series_by_seqid(df, n)
         return val.values, err.values
-
+ 
     # rigid-body prediction
-
+ 
     def add_rigid_prediction(self, pdb=None, source="auto", config=None,
                              chain=None, noe_cut=0.65, **fetch_kw):
         """
         Run HYDRONMR on a structure and scale its rigid R2/R1 (T1_over_T2) to the
         observed data, so elevated R2/R1 stands out as exchange.
-
+ 
         `pdb` may be a local file, a 4-character PDB id (fetched from RCSB), or a
         UniProt accession (fetched from AlphaFold DB) — pass `source=` to force
         one. 
         
         If `pdb` is None, the entry's own deposited PDB code is used when it
         cites one; otherwise this raises (makeshift does not predict structure).
-
+ 
         The scale factor is fit by least squares on ordered residues (hetNOE
         above `noe_cut` where available), mirroring classify.fit_R2_rigid. Adds
         `scaled_R2_R1_pred` and `NOE_pred`; residues outside the modeled region
@@ -192,16 +194,23 @@ class RelaxationProfile:
         """
         from ..hydronmr import run as run_hydronmr
         from ..utils.structures import fetch_structure
-
+ 
         if pdb is None:
             pdb_ids = self.entry.get_pdb_ids() if self.entry is not None else []
             af_ids = self.entry.get_alphafold_ids() if self.entry is not None else []
-            if pdb_ids:
+            if source == "rcsb":
+                if not pdb_ids:
+                    raise ValueError("entry cites no PDB; pass pdb=<PDB id | path>")
+                pdb = pdb_ids[0]
+            elif source == "afdb":
+                if not af_ids:
+                    raise ValueError("entry cites no AlphaFold/UniProt accession; "
+                                     "pass pdb=<UniProt accession | path>")
+                pdb = af_ids[0]
+            elif pdb_ids:                    # source == "auto": prefer deposited PDB
                 pdb, source = pdb_ids[0], "rcsb"
-                print(f"Using PDB; using {source} deposition {pdb}")
-            elif af_ids:
+            elif af_ids:                     # else fall back to AlphaFold
                 pdb, source = af_ids[0], "afdb"
-                print(f"  no deposited PDB; using AlphaFold model for {pdb}")
             else:
                 raise ValueError(
                     "no structure given and the entry cites no PDB or "
@@ -209,7 +218,8 @@ class RelaxationProfile:
                     "UniProt accession> (experimental or predicted) to enable "
                     "exchange labeling"
                 )
-
+            print(f"  no pdb given; using {source} structure {pdb}")
+ 
         pdb_path = fetch_structure(pdb, source=source, **fetch_kw)
         result = run_hydronmr(pdb_path, config_path=config) if config \
             else run_hydronmr(pdb_path)
@@ -217,19 +227,19 @@ class RelaxationProfile:
         if chain is not None:
             hydro = hydro[hydro["chain"] == chain]
         hydro = hydro.rename(columns={"seqpos": "Seq_ID"})
-
+ 
         t = self.table.merge(
             hydro[["Seq_ID", "T1_over_T2", "NOE"]].rename(
                 columns={"T1_over_T2": "_pred_ratio", "NOE": "NOE_pred"}),
             on="Seq_ID", how="left")
-
+ 
         ordered = (t["_pred_ratio"].notna() & t["R2_R1"].notna()
                    & ((t["NOE"] > noe_cut) | t["NOE"].isna()))
         n_match = int((t["_pred_ratio"].notna() & t["R2_R1"].notna()).sum())
         pred = t.loc[ordered, "_pred_ratio"]
         obs = t.loc[ordered, "R2_R1"]
         self.scale_factor = float((obs * pred).sum() / (pred ** 2).sum())
-
+ 
         t["scaled_R2_R1_pred"] = self.scale_factor * t["_pred_ratio"]
         t = t.drop(columns="_pred_ratio")
         self.table = t
@@ -237,13 +247,13 @@ class RelaxationProfile:
               f"scale factor {self.scale_factor:.3f} "
               f"({int(ordered.sum())} ordered residues used)")
         return self
-
+ 
     # labeling
-
+ 
     def label(self, rex_n_std=1.0, noe_cut=0.65):
         """
         Assign a label token to every residue and return the label string.
-
+ 
         Requires `add_rigid_prediction` first for the exchange (`^`) call, which
         flags residues whose R2/R1 exceeds the rigid prediction by more than
         `rex_n_std` standard deviations of that excess across modeled residues.
@@ -251,7 +261,7 @@ class RelaxationProfile:
         """
         t = self.table
         have_pred = "scaled_R2_R1_pred" in t.columns
-
+ 
         excess = pd.Series(np.nan, index=t.index)
         rex_mask = pd.Series(False, index=t.index)
         if have_pred:
@@ -264,9 +274,9 @@ class RelaxationProfile:
                 "no rigid prediction set; exchange (^) cannot be called. "
                 "trying to run add_rigid_prediction(pdb) first with default "
                 "parameters .", UserWarning)
-
+ 
         psns_mask = t["NOE"] <= noe_cut
-
+ 
         labels = []
         for i, row in t.iterrows():
             if row["residue"] == "P":
@@ -283,19 +293,19 @@ class RelaxationProfile:
                 labels.append(BOTH if (rex and psns) else
                               REX if rex else
                               PSNS if psns else ORDERED)
-
+ 
         t["label"] = labels
         self.table = t
         return "".join(labels)
-
+ 
     @property
     def label_string(self):
         if "label" not in self.table.columns:
             return None
         return "".join(self.table["label"])
-
+ 
     # plotting
-
+ 
     def plot(self, data_type="R2_R1", ax=None, figsize=(6, 1.5)):
         """
         Plot a relaxation observable along the sequence with 
@@ -309,27 +319,27 @@ class RelaxationProfile:
         Requires `label()` first.
         """
         import matplotlib.pyplot as plt
-
+ 
         t = self.table
         if "label" not in t.columns:
             raise ValueError("call label() before plot()")
         if data_type not in t.columns:
             raise ValueError(f"no column {data_type!r} in table")
-
+ 
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)
         x = t["Seq_ID"].values
         y = t[data_type].values
         ax.plot(x, y, color="black", lw=0.5, zorder=5)
-
+ 
         if data_type == "R2_R1" and "scaled_R2_R1_pred" in t.columns:
             ax.plot(x, t["scaled_R2_R1_pred"].values, color="grey", zorder=5)
-
+ 
         ymin, ymax = ax.get_ylim()
         p_pos = ymin + 0.05 * (ymax - ymin)
         star_pos = ymin + 0.9 * (ymax - ymin)
         err = t.get(f"{data_type}_err")
-
+ 
         colors = {REX: "tab:orange", BOTH: "tab:orange",
                   PSNS: "tab:blue", ORDERED: "black", TERMINUS: "grey"}
         for _, row in t.iterrows():
@@ -348,7 +358,7 @@ class RelaxationProfile:
         ax.set_xlim(0, len(self.sequence) + 1)
         ax.set_xlabel("Residue")
         return ax
-
+ 
     def __repr__(self):
         n = int(self.table["has_data"].sum()) if "has_data" in self.table else 0
         return (f"RelaxationProfile(entry_id={self.entry_id!r}, "

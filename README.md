@@ -9,15 +9,7 @@ for per-residue dynamics.
 ## Installation
 
 ```bash
-pip install git+https://github.com/gelnesr/makeshift.git
-```
-
-Editable install (for development):
-
-```bash
-git clone https://github.com/gelnesr/makeshift.git
-cd makeshift
-pip install -e .
+pip install git+https://github.com/WaymentSteeleLab/makeshift.git
 ```
 
 The demo notebooks need a few extras:
