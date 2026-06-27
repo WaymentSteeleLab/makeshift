@@ -1,7 +1,7 @@
 # `makeshift`: lightweight NMR tools
 
 A dependency-light Python toolkit for working with protein NMR data: parsing
-[NMR-STAR](https://bmrb.io/spec/) files from the [BMRB](https://bmrb.io/),
+[NMR-STAR](https://pynmrstar.readthedocs.io/en/latest/) files from the [BMRB](https://bmrb.io/),
 re-referencing chemical shifts, building peak lists, running a full CPMG
 relaxation-dispersion pipeline, and analysing deposited backbone relaxation data
 for per-residue dynamics.
