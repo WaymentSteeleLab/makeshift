@@ -9,15 +9,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 def plot_r2eff_per_peak(all_r2eff, classifications, pdf_path, ref_df=None):
     """
-    Write a multi-page PDF with one page per peak showing R2eff vs νCPMG.
-
-    Each page mirrors the plot_peak style from process_CPMG_err.py:
-      - Errorbars from whichever source won (duplicates or noise), read from
-        the `larger_err` column added by apply_duplicate_errors (falls back to
-        R2eff_err if the column is absent).
-      - Dotted horizontal line at R2last with a grey shaded ±std_last band.
-      - Title: BMRB label (if ref_df has assn_label), peak index, (N, H) ppm,
-        Rex ± Rex_err, label, error method.
+    Write a multi-page PDF with one page per peak showing R2eff vs CPMG.
 
     Parameters
     ----------
@@ -226,9 +218,8 @@ def plot_r2eff_grid(all_r2eff, classifications, ref_df=None,
 
 def plot_waterfall(all_r2eff, classifications, ref_df, color_map=None, sequence=None, missing_df=None):
     """
-    Plot R2eff vs sequence position for every νCPMG point (rainbow-coloured
-    by νCPMG), with vertical bands marking peak classification, prolines,
-    and missing residues.
+    Plot R2eff vs sequence position for every CPMG point, with vertical bands 
+    marking peak classification, prolines, and missing residues.
 
     Parameters
     ----------

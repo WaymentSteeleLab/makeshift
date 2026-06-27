@@ -7,7 +7,7 @@ from scipy.optimize import least_squares
 from collections import defaultdict
 from tqdm import tqdm
 
-from ..io.io import estimate_background
+from ..spectra.spectrum import estimate_background
 from .config import _yaml_set_cache
 
 
