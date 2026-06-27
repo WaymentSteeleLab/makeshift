@@ -96,14 +96,14 @@ class PeakList:
         return obj
 
     @classmethod
-    def from_entry(cls, entry, cs_saveframe=None):
+    def from_entry(cls, entry, cs_saveframe=None, entity_id=None):
         cs = ChemicalShifts.from_entry(entry)
-        return cls.from_chemshifts(cs, cs_saveframe=cs_saveframe)
+        return cls.from_chemshifts(cs, cs_saveframe=cs_saveframe, entity_id=entity_id)
 
     @classmethod
-    def from_bmrb(cls, bmrb_id, cs_saveframe=None, **fetch_kw):
+    def from_bmrb(cls, bmrb_id, cs_saveframe=None, entity_id=None, **fetch_kw):
         entry = NMRStarEntry.from_bmrb(bmrb_id, **fetch_kw)
-        return cls.from_entry(entry, cs_saveframe=cs_saveframe)
+        return cls.from_entry(entry, cs_saveframe=cs_saveframe, entity_id=entity_id)
 
     # local CSV source  (res / shift / atom)
 

@@ -12,9 +12,11 @@ Per-residue label tokens:
     ^  us-ms exchange  (R2/R1 elevated above the rigid prediction)
     v  ps-ns motion    (hetNOE <= cutoff)
     b  both ^ and v
-    .  peak missing     (in sequence but no relaxation data)
-    t  disordered terminus (outside the HYDRONMR-modeled region)
+    .  peak missing     (no amide peak assigned for this residue — i.e. the
+                         peak is absent from the spectrum)
     p  proline          (no amide H)
+    x  no data          (an amide peak is assigned, but no relaxation data was
+                         measured/reported for it)
 
 The R2/R1 observable cancels the overall tumbling rate, so a single scaled
 rigid prediction (HYDRONMR ``T1_over_T2``) is comparable across residues.
@@ -28,7 +30,7 @@ from ..entry import NMRStarEntry
 from ..utils.structures import detect_source
 
 ORDERED, REX, PSNS, BOTH = "A", "^", "v", "b"
-MISSING, TERMINUS, PROLINE = ".", "t", "p"
+MISSING, TERMINUS, PROLINE, NODATA = ".", "t", "p", "x"
 
 
 
@@ -83,16 +85,25 @@ class RelaxationProfile:
     # construction
  
     @classmethod
-    def from_bmrb(cls, bmrb_id, entity_id=None, sequence=None, **fetch_kw):
+    def from_bmrb(cls, bmrb_id, entity_id=None, sequence=None, peaklist=None,
+                  **fetch_kw):
         """Fetch a BMRB entry and build a profile from its deposited relaxation."""
         entry = NMRStarEntry.from_bmrb(bmrb_id, **fetch_kw)
-        return cls.from_entry(entry, entity_id=entity_id, sequence=sequence)
+        return cls.from_entry(entry, entity_id=entity_id, sequence=sequence,
+                              peaklist=peaklist)
  
     @classmethod
-    def from_entry(cls, entry, entity_id=None, sequence=None):
+    def from_entry(cls, entry, entity_id=None, sequence=None, peaklist=None):
         """
-        Build from an already-parsed NMRStarEntry. 
-        Pulls R1 (from T1), R2 (from T2), and hetNOE, converting times to rates using each list's units tag.
+        Build from an already-parsed NMRStarEntry.
+        Pulls R1 (from T1), R2 (from T2), and hetNOE, converting times to rates
+        using each list's units tag.
+
+        `peaklist` (a PeakList, a DataFrame with a Seq_ID column, or an iterable
+        of Seq_IDs) marks which residues have an assigned amide peak; if None,
+        the entry's own backbone amide peaks are derived via PeakList. Residues
+        with no assigned peak are flagged "missing" (.); residues with a peak but
+        no relaxation data are flagged "no data" (x).
         """
         if sequence is None:
             seqs = entry.sequences()
@@ -103,7 +114,7 @@ class RelaxationProfile:
                 entity_id = seqs["ID"].iloc[0]
             if not isinstance(sequence, str) or not sequence:
                 raise ValueError(
- 
+                    "could not resolve a sequence; pass sequence=... explicitly"
                 )
  
         n = len(sequence)
@@ -128,6 +139,14 @@ class RelaxationProfile:
             (table["R2_err"] / table["R2"]) ** 2
             + (table["R1_err"] / table["R1"]) ** 2)
         table["has_data"] = table[["R1", "R2"]].notna().all(axis=1)
+
+        # which residues have an observable amide peak: an explicit peaklist,
+        # else the entry's own amide peaks (reusing PeakList rather than
+        # reimplementing the H+N pairing). Only these can be flagged "missing".
+        if peaklist is None:
+            peaklist = cls._entry_peaklist(entry, entity_id)
+        present = cls._peaklist_seqids(peaklist)
+        table["has_HN"] = table["Seq_ID"].isin(present)
  
         return cls(table, sequence,
                    entry_id=getattr(entry, "entry_id", None),
@@ -171,6 +190,48 @@ class RelaxationProfile:
     def _align_plain(cls, df, n):
         val, err = cls._series_by_seqid(df, n)
         return val.values, err.values
+
+    # chemical-shift (amide peak) availability
+
+    @staticmethod
+    def _entry_peaklist(entry, entity_id):
+        """
+        The entry's backbone amide peak list for one entity (residues with both
+        an amide H and N shift), via PeakList — reused, not reimplemented.
+        """
+        try:
+            from ..peaklist import PeakList
+            return PeakList.from_entry(entry, entity_id=entity_id)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _peaklist_seqids(peaklist):
+        """
+        Seq_IDs present in a peaklist. Accepts a PeakList, a DataFrame with a
+        Seq_ID column (one row per H-N peak), or a plain iterable of Seq_IDs.
+        Rows are required to have both H_ppm and N_ppm where those columns exist.
+        """
+        if peaklist is None:
+            return set()
+        data = getattr(peaklist, "data", peaklist)   # PeakList -> its .data
+        out = set()
+        if isinstance(data, pd.DataFrame):
+            if "Seq_ID" not in data.columns:
+                return set()
+            sub = data.dropna(subset=["Seq_ID"])
+            ppm_cols = [c for c in ("H_ppm", "N_ppm") if c in sub.columns]
+            if ppm_cols:
+                sub = sub.dropna(subset=ppm_cols)
+            values = sub["Seq_ID"]
+        else:
+            values = data                            # iterable of Seq_IDs
+        for s in values:
+            try:
+                out.add(int(s))
+            except (TypeError, ValueError):
+                continue
+        return out
  
     # rigid-body prediction
  
@@ -282,9 +343,8 @@ class RelaxationProfile:
             if row["residue"] == "P":
                 labels.append(PROLINE)
             elif not row["has_data"]:
-                # outside the modeled region -> terminus; else simply missing
-                if have_pred and pd.isna(row.get("scaled_R2_R1_pred")):
-                    labels.append(TERMINUS)
+                if row.get("has_HN", False):
+                    labels.append(NODATA)
                 else:
                     labels.append(MISSING)
             else:
@@ -351,6 +411,8 @@ class RelaxationProfile:
             elif lab == MISSING:
                 ax.axvline(j, color="tab:red", alpha=0.5, lw=0.5)
                 ax.scatter([j], [star_pos], marker="*", color="tab:red")
+            elif lab == NODATA:
+                ax.axvline(j, color="tab:grey", alpha=0.5, lw=0.5)
             elif lab in colors and lab != TERMINUS and pd.notna(row[data_type]):
                 e = err.loc[row.name] if err is not None else None
                 ax.errorbar(j, row[data_type], yerr=e, fmt=".",
