@@ -2,12 +2,9 @@
 
 A dependency-light Python toolkit for working with protein NMR data: parsing
 [NMR-STAR](https://bmrb.io/spec/) files from the [BMRB](https://bmrb.io/),
-re-referencing chemical shifts, building peak lists, and running a full CPMG
-relaxation-dispersion pipeline.
-
-The core (BMRB parsing, chemical shifts, re-referencing) needs only `numpy`,
-`pandas`, `scipy`, and `scikit-learn`. The heavier spectrum and relaxation
-tools are opt-in, so `import makeshift` stays light.
+re-referencing chemical shifts, building peak lists, running a full CPMG
+relaxation-dispersion pipeline, and analysing deposited backbone relaxation data
+for per-residue dynamics.
 
 ## Installation
 
@@ -55,14 +52,16 @@ peaks.data
 
 | Module | What it does |
 |---|---|
-| `makeshift` (core) | `ChemicalShifts`, `NMRStarEntry`, `PeakList` — fetch/parse BMRB entries, extract shifts and sequences, build peak lists. |
+| `makeshift` (core) | `ChemicalShifts`, `NMRStarEntry`, `PeakList` — fetch/parse BMRB entries, extract shifts, sequences, relaxation/order-parameter data, build peak lists. |
 | `makeshift.reref` | LACS and PANAV chemical-shift re-referencing (via `ChemicalShifts.reref`). |
 | `makeshift.spectra` | Read Sparky `.ucsf` spectra (`Spectrum`), pick peaks, and align peak lists (`map_peaklists`). |
-| `makeshift.relaxation` | CPMG relaxation-dispersion pipeline (`CPMGExperiment`): planes → R₂,eff → per-residue classification. |
+| `makeshift.relaxation` | CPMG dispersion pipeline (`CPMGExperiment`) and `RelaxationProfile` — RelaxDB-style per-residue dynamics from deposited R1/R2/NOE. |
 | `makeshift.hydronmr` | Predict per-residue T1/T2/NOE from a PDB structure (`run`). |
+| `makeshift.utils` | Dependency-light helpers: dataset/structure fetching (`fetch_structure`), constants. |
 
 See `demos/` for worked examples: `quick_start.ipynb` (core workflow),
-`reref.ipynb` (re-referencing), and `cpmg_demo.ipynb` (the CPMG pipeline).
+`reref.ipynb` (re-referencing), `cpmg_demo.ipynb` (the CPMG pipeline), and
+`bmrb_relaxation_demo.ipynb` (deposited relaxation → dynamics profile).
 
 ## Re-referencing
 
@@ -89,6 +88,43 @@ print(cs.reref_offsets)    # {'N': ..., 'CA': ..., 'CB': ..., ...}
 Entry 4527 is correctly referenced; entries 6586 and 4150 have been described in
 the literature as needing re-referencing. The two methods have not yet been
 extensively compared.
+
+## Relaxation and dynamics
+
+`NMRStarEntry` extracts any deposited relaxation data, and `RelaxationProfile`
+turns it into a per-residue dynamics analysis in the style of RelaxDB
+([Wayment-Steele, El Nesr et al.](https://www.biorxiv.org/content/10.1101/2025.03.19.642801)).
+
+Pull deposited data straight from an entry:
+
+```python
+entry = ms.NMRStarEntry.from_bmrb(25013)
+entry.datasets()                 # which data types the entry holds
+entry.relaxation("T2")           # R2 (also "T1"/"R1", "T1rho", "NOE") — units-aware
+entry.order_parameters()         # model-free S² (S2, Tau_e, Rex)
+entry.data_loop("spectral_density_values", "_Spectral_density")  # anything else
+```
+
+`RelaxationProfile` assembles R1/R2/NOE into the R₂/R₁ observable, compares it to
+a HYDRONMR rigid-body prediction, and labels each residue by motional regime:
+
+```python
+from makeshift.relaxation import RelaxationProfile
+
+prof = RelaxationProfile.from_bmrb(25013)   # pulls T1/T2/NOE, aligns to the sequence
+prof.add_rigid_prediction()                 # structure: deposited PDB → RCSB, else AlphaFold → AFDB
+print(prof.label())                         # per-residue motion string
+prof.plot("R2_R1")
+```
+
+The structure for the rigid prediction can be a local PDB, a PDB id (fetched
+from RCSB), or a UniProt accession (fetched from AlphaFold DB) — e.g.
+`add_rigid_prediction("1WRP")`, `("P0DP23")`, or `("model.pdb")`; with no
+argument it uses the entry's own cited PDB or AlphaFold model. makeshift does not
+predict structure itself.
+
+Label tokens: `A` ordered, `^` µs–ms exchange (elevated R₂/R₁), `v` ps–ns motion
+(hetNOE ≤ 0.65), `b` both, `.` peak missing, `t` disordered terminus, `p` proline.
 
 ## NMR-STAR concepts
 
