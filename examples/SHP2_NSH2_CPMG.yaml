@@ -1,0 +1,47 @@
+time_T2: 0.04  # constant-time CPMG delay, seconds
+
+# data_dir is the output of: from makeshift.utils import datasets; datasets.fetch("SHP2_NSH2_CPMG")
+data_dir: ~/.makeshift/datasets/SHP2_NSH2_CPMG/SHP2_NSH2_CPMG
+
+reference: nuCPMG_0_1_SH2-WB_N15-CPMG.ucsf
+
+peaklist: 52759
+
+sequence: MTSRRWFHPNITGVEAENLLLTRGVDGSFLARPSKSNPGDFTLSVRRNGAVTHIKIQNTGDYYDLYGGEKFATLAELVQYYMEHHGQLKEKNGDVIELKYPLNCA
+
+pdb: 9EHD
+
+baseline_ref_plane: 50
+
+planes:
+  - file: nuCPMG_50_6_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 50
+  - file: nuCPMG_50_14_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 50
+  - file: nuCPMG_100_9_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 100
+  - file: nuCPMG_1000_10_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 1000
+  - file: nuCPMG_1250_5_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 1250
+  - file: nuCPMG_150_2_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 150
+  - file: nuCPMG_1500_13_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 1500
+  - file: nuCPMG_200_11_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 200
+  - file: nuCPMG_250_7_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 250
+  - file: nuCPMG_350_3_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 350
+  - file: nuCPMG_450_12_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 450
+  - file: nuCPMG_450_16_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 450
+  - file: nuCPMG_600_8_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 600
+  - file: nuCPMG_750_15_SH2-WB_N15-CPMG.ucsf
+    vcpmg: 750
+
+fit_lineshapes_cache: ../examples/SHP2_NSH2_CPMG_fit_lineshapes.json.zip
+hydronmr_r2_cache: ../examples/SHP2_NSH2_CPMG_hydronmr_r2.csv
