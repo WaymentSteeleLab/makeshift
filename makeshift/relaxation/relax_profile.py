@@ -123,14 +123,12 @@ class RelaxationProfile:
             "residue": list(sequence),
         })
  
-        # R1 and R2 come from the T1 / T2 lists (converted to rates)
         for kind, col in (("T1", "R1"), ("T2", "R2")):
             df = entry.relaxation(kind)
             units = cls._list_units(entry, kind)
             table[col], table[f"{col}_err"] = cls._align_rate(
                 df, n, units, kind)
  
-        # hetNOE is already a ratio
         noe = entry.relaxation("NOE")
         table["NOE"], table["NOE_err"] = cls._align_plain(noe, n)
  
@@ -140,9 +138,6 @@ class RelaxationProfile:
             + (table["R1_err"] / table["R1"]) ** 2)
         table["has_data"] = table[["R1", "R2"]].notna().all(axis=1)
 
-        # which residues have an observable amide peak: an explicit peaklist,
-        # else the entry's own amide peaks (reusing PeakList rather than
-        # reimplementing the H+N pairing). Only these can be flagged "missing".
         if peaklist is None:
             peaklist = cls._entry_peaklist(entry, entity_id)
         present = cls._peaklist_seqids(peaklist)
@@ -375,6 +370,7 @@ class RelaxationProfile:
             black = ordered (A)
             purple P = proline
             red star = missing 
+            gray = no data
         The scaled rigid prediction is overlaid for R2_R1. 
         Requires `label()` first.
         """
