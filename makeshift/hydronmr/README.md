@@ -36,7 +36,7 @@ result.to_csv("t1t2.csv")   # resseq, T1, T2, T1_over_T2, NOE
 ```
 
 `to_dataframe()` is the general, correctly-labeled table; derive whatever a
-given analysis needs from it rather than reaching for legacy column shapes.
+given analysis needs from it.
 
 ### Predicted R2 (for R2-based analyses)
 

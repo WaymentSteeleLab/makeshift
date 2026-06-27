@@ -1,126 +1,110 @@
-# `makeshift`: Lightweight NMR tools
+# `makeshift`: lightweight NMR tools
 
-This repository provides a minimal, dependency-light tools to handle NMR data. Makeshift reads [NMR-STAR](https://bmrb.io/spec/) format files from the Biological Magnetic Resonance Bank ([BMRB](https://bmrb.io/)). It extracts sample metadata and measurements into Python dictionaries and pandas DataFrames.
+A dependency-light Python toolkit for working with protein NMR data: parsing
+[NMR-STAR](https://bmrb.io/spec/) files from the [BMRB](https://bmrb.io/),
+re-referencing chemical shifts, building peak lists, and running a full CPMG
+relaxation-dispersion pipeline.
 
-## Features
-
-- Parse `.str` files into nested Python dictionaries
-- Re-reference, calculate CSI, and more in `python`
-- Extract polymer sequences, sample compositions, and chemical shifts
-- Built using Python standard library + `pandas`
+The core (BMRB parsing, chemical shifts, re-referencing) needs only `numpy`,
+`pandas`, `scipy`, and `scikit-learn`. The heavier spectrum and relaxation
+tools are opt-in, so `import makeshift` stays light.
 
 ## Installation
 
 ```bash
-pip install git+https://github.com/WaymentSteeleLab/makeshift.git
+pip install git+https://github.com/gelnesr/makeshift.git
 ```
 
-Or clone and install in editable mode (useful if you want to modify the code):
+Editable install (for development):
 
 ```bash
-git clone https://github.com/WaymentSteeleLab/makeshift.git
+git clone https://github.com/gelnesr/makeshift.git
 cd makeshift
 pip install -e .
 ```
 
-To also install dependencies for running the demo notebooks (seaborn, matplotlib, jupyter):
+The demo notebooks need a few extras:
 
 ```bash
-pip install -e ".[demos]"
+pip install -e ".[demos]"          # seaborn, matplotlib, jupyter
 ```
 
----
+The spectrum/CPMG pipeline (`makeshift.spectra`, `makeshift.relaxation`)
+additionally needs `nmrglue`, `tqdm`, `matplotlib`, and `seaborn`.
 
 ## Quickstart
 
 ```python
 import makeshift as ms
 
-# Download an NMR-STAR file from BMRB
-ms.fetch_nmrstar_file(5363)  # saves as bmr5363_3.str
+# Fetch and parse a BMRB entry into tidy chemical shifts
+cs = ms.ChemicalShifts.from_bmrb(5363)
+cs.data            # one row per shift: Seq_ID, Comp_ID, Atom_ID, Atom_type, Val
+cs.sequences()     # one row per entity: ID, polymer type, sequence
 
-# Parse the file
-entry = ms.parse_nmr_star('bmr5363_3.str')
+# Re-reference, then compute the Chemical Shift Index
+cs = ms.ChemicalShifts.from_bmrb(4527, reref="lacs", calc_csi=True)
+cs.reref_offsets   # {atom: offset applied}
 
-# Extract useful information
-seq = ms.get_sequences(entry)
-samples = ms.get_sample_info(entry)
-cs = ms.get_chem_shifts(entry)
+# Build an assigned peak list (e.g. for an HSQC)
+peaks = cs.peaklist()
+peaks.data
 ```
----
 
-## Probabilistic Re-Referencing
+## Modules
 
-Two lightweight re-referencing implementations are available:
+| Module | What it does |
+|---|---|
+| `makeshift` (core) | `ChemicalShifts`, `NMRStarEntry`, `PeakList` — fetch/parse BMRB entries, extract shifts and sequences, build peak lists. |
+| `makeshift.reref` | LACS and PANAV chemical-shift re-referencing (via `ChemicalShifts.reref`). |
+| `makeshift.spectra` | Read Sparky `.ucsf` spectra (`Spectrum`), pick peaks, and align peak lists (`map_peaklists`). |
+| `makeshift.relaxation` | CPMG relaxation-dispersion pipeline (`CPMGExperiment`): planes → R₂,eff → per-residue classification. |
+| `makeshift.hydronmr` | Predict per-residue T1/T2/NOE from a PDB structure (`run`). |
 
-`panav`: This code implements the core idea described in [Wang & Wishart 2005](https://pubmed.ncbi.nlm.nih.gov/15772753/). The idea is to use HA atoms, hydrogens being rarely mis-referenced, to estimate secondary structure from curated shift distributions from [Wang & Jardetsky 2002](https://onlinelibrary.wiley.com/doi/10.1110/ps.3180102). The method then minimizes the difference in distribution for N, CA, CB atoms between the current distribution and the curated shift distribution.
+See `demos/` for worked examples: `quick_start.ipynb` (core workflow),
+`reref.ipynb` (re-referencing), and `cpmg_demo.ipynb` (the CPMG pipeline).
 
-`lacs`: This code implements the core idea described in [Wang & Markley 2009](https://pmc.ncbi.nlm.nih.gov/articles/PMC2782637/). The idea is to enforce that the chemical shift index (CSI) of the i-1 Carbon and the i Nitrogen intercepts at (0,0), essentially setting the "random coil" regime of each protein to be there.
+## Re-referencing
 
-Note: these two methods have not yet been extensively compared.
+BMRB shifts are sometimes mis-referenced — a constant offset shifts every peak
+of a given nucleus. `ChemicalShifts.reref` corrects this in place using one of
+two methods:
+
+- **PANAV** ([Wang & Wishart 2005](https://pubmed.ncbi.nlm.nih.gov/15772753/)) —
+  uses rarely-misreferenced HA shifts to assign secondary structure, then aligns
+  N/CA/CB to curated per-structure reference distributions
+  ([Wang & Jardetzky 2002](https://onlinelibrary.wiley.com/doi/10.1110/ps.3180102)).
+- **LACS** ([Wang & Markley 2009](https://pmc.ncbi.nlm.nih.gov/articles/PMC2782637/)) —
+  fits secondary shift vs. CSI so the random-coil regime intercepts at the origin;
+  covers CA, CB, C′, N, and HN.
 
 ```python
-ms.fetch_nmrstar_file(4527)
-cs = ms.get_chem_shifts(ms.parse_nmr_star('bmr4527_3.str'))
-
-df, check, offsets = ms.reref(cs, method='panav')  # or method='lacs'
-print(offsets)  # {'N': ..., 'CA': ..., 'CB': ..., 'C': ...}
+cs = ms.ChemicalShifts.from_bmrb(4527)
+cs.reref(method="panav")   # or "lacs"
+print(cs.reref_offsets)    # {'N': ..., 'CA': ..., 'CB': ..., ...}
 ```
-![Image showing distributions](https://github.com/WaymentSteeleLab/NMRstar_parser/blob/c9726af327b8dc4fef08c0c25711448342b0fe7f/static/example_rereferencing_ed.png)
 
-Entry 4527 is an example entry that is correctly referenced. Entries 6586 and 4150 are both entries described previously in literature as needing re-referencing.
+![Re-referencing example](static/example_rereferencing_ed.png)
 
----
+Entry 4527 is correctly referenced; entries 6586 and 4150 have been described in
+the literature as needing re-referencing. The two methods have not yet been
+extensively compared.
 
 ## NMR-STAR concepts
 
-NMR-STAR files are organised around **saveframes**. Each saveframe belongs to a category (e.g. `assigned_chemical_shifts`, `entity`, `sample`) and contains key-value pairs plus data loops.
+NMR-STAR files are organised around **saveframes**, each belonging to a category
+(e.g. `assigned_chemical_shifts`, `entity`, `sample`). The three you interact
+with most:
 
-The three concepts you’ll interact with most:
-
-**Entry** — a single BMRB deposition. One `.str` file, one entry.
-
-**Entity** — a distinct molecular species (protein, DNA strand, ligand, etc.). Multi-component complexes have multiple entities, each with its own `Entity_ID`.
-
-**Chemical shift list** — the `_Atom_chem_shift` loop inside an `assigned_chemical_shifts` saveframe. One row per observed shift, keyed by `Entity_ID`, `Seq_ID`, `Comp_ID`, and `Atom_ID`.
-
----
-
-## API
-
-### Fetching and parsing
-
-| Function | Description |
-|---|---|
-| `fetch_nmrstar_file(bmrb_id)` | Download the NMR-STAR v3 file for a BMRB entry and save it locally. |
-| `parse_nmr_star(file_path)` | Parse a `.str` file into a nested dict keyed by saveframe category. |
-
-### Extracting data
-
-| Function | Description |
-|---|---|
-| `get_sequences(parsed)` | DataFrame of entities: ID, polymer type, one-letter sequence. |
-| `get_sample_info(parsed)` | DataFrame of sample components: name, labeling, concentration. |
-| `get_chem_shifts(parsed, calc_CSI=False)` | Tidy DataFrame of assigned shifts — one row per observation. Pass `calc_CSI=True` to add `csi_raw` and `csi` columns. |
-
-### Re-referencing
-
-| Function | Description |
-|---|---|
-| `reref(df, method)` | Correct backbone referencing errors. `method` is `’panav’` or `’lacs’`. Returns `(df, check, offsets)`. |
-
-`reref` return values:
-- `df` — corrected shifts; `orig` column holds the pre-correction values
-- `check` — `{atom: bool}` indicating which atom types converged
-- `offsets` — `{atom: float | None}` total offset applied per atom type
-
----
+- **Entry** — a single BMRB deposition (one `.str` file).
+- **Entity** — a distinct molecular species (protein, DNA strand, ligand), each
+  with its own `Entity_ID`.
+- **Chemical shift list** — the `_Atom_chem_shift` loop inside an
+  `assigned_chemical_shifts` saveframe; one row per observed shift.
 
 ## License
 
-MIT License
-
----
+MIT License.
 
 ## Acknowledgments
 

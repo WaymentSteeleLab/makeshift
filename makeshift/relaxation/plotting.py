@@ -86,7 +86,8 @@ def plot_r2eff_per_peak(all_r2eff, classifications, pdf_path, ref_df=None):
 def plot_r2eff_grid(all_r2eff, classifications, ref_df=None,
                     color_map=None, ncols=10,
                     figsize_per_panel=(2.5, 2.0),
-                    title_fontsize=6, axis_fontsize=7):
+                    title_fontsize=6, axis_fontsize=7,
+                    sharex=True, sharey=False):
     """
     Plot all R2eff dispersion curves in a compact grid, one panel per peak.
 
@@ -110,6 +111,14 @@ def plot_r2eff_grid(all_r2eff, classifications, ref_df=None,
         (width, height) in inches per panel.
     title_fontsize, axis_fontsize : int
         Font sizes for panel titles and tick labels.
+    sharex : bool
+        Share the x-axis across panels (default True). Safe — every panel has
+        the same νCPMG points — and hides redundant inner tick labels.
+    sharey : bool
+        Share the y-axis across panels (default False). Useful for comparing
+        R2eff magnitudes between peaks, but flattens per-peak dispersion shape;
+        the range is clipped to the 1st–98th percentile so one large-Rex peak
+        doesn't compress the rest.
 
     Returns
     -------
@@ -151,7 +160,7 @@ def plot_r2eff_grid(all_r2eff, classifications, ref_df=None,
     fig, axes = plt.subplots(
         nrows, ncols,
         figsize=(ncols * figsize_per_panel[0], nrows * figsize_per_panel[1]),
-        squeeze=False,
+        squeeze=False, sharex=sharex, sharey=sharey,
     )
 
     for i, ref_idx in enumerate(ref_indices):
@@ -198,14 +207,27 @@ def plot_r2eff_grid(all_r2eff, classifications, ref_df=None,
         ax.set_title(title, fontsize=title_fontsize, color="black")
         ax.tick_params(labelsize=title_fontsize - 1)
 
-        ymin, ymax = ax.get_ylim()
-        if ymax - ymin < 2:
-            mid = (ymin + ymax) / 2
-            ax.set_ylim(mid - 1, mid + 1)
+        # per-panel min-span tweak only makes sense with independent y-axes;
+        # under sharey it would fight the shared range (last write wins)
+        if not sharey:
+            ymin, ymax = ax.get_ylim()
+            if ymax - ymin < 2:
+                mid = (ymin + ymax) / 2
+                ax.set_ylim(mid - 1, mid + 1)
 
     for j in range(n_peaks, nrows * ncols):
         row, col = divmod(j, ncols)
         axes[row][col].set_visible(False)
+
+    # one clipped global y-range when sharing, so a single large-Rex peak
+    # doesn't squash everyone else into a thin band
+    if sharey:
+        r2 = all_r2eff["R2eff"].dropna()
+        if len(r2):
+            ylo = float(np.nanpercentile(r2, 1))
+            yhi = float(np.nanpercentile(r2, 98))
+            pad = 0.05 * (yhi - ylo) if yhi > ylo else 1.0
+            axes[0][0].set_ylim(ylo - pad, yhi + pad)
 
     for r in range(nrows):
         axes[r][0].set_ylabel(r"$R_{2,\mathrm{eff}}$ (s$^{-1}$)", fontsize=axis_fontsize)
