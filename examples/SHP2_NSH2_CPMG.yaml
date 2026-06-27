@@ -43,5 +43,5 @@ planes:
   - file: nuCPMG_750_15_SH2-WB_N15-CPMG.ucsf
     vcpmg: 750
 
-fit_lineshapes_cache: ../examples/SHP2_NSH2_CPMG_fit_lineshapes.json.zip
+fit_lineshapes_cache: out/caches/SHP2_NSH2_CPMG_fit_lineshapes.json.zip
 hydronmr_r2_cache: ../examples/SHP2_NSH2_CPMG_hydronmr_r2.csv

@@ -1,66 +1,151 @@
-# Reference data
+# `makeshift`: lightweight NMR tools
 
-All files are loaded at import time by `makeshift/utils/tables.py` and cached as
-module-level dicts. To update a table, edit the CSV — no code changes needed.
+A dependency-light Python toolkit for working with protein NMR data: parsing
+[NMR-STAR](https://bmrb.io/spec/) files from the [BMRB](https://bmrb.io/),
+re-referencing chemical shifts, building peak lists, running a full CPMG
+relaxation-dispersion pipeline, and analysing deposited backbone relaxation data
+for per-residue dynamics.
 
----
+The core (BMRB parsing, chemical shifts, re-referencing) needs only `numpy`,
+`pandas`, `scipy`, and `scikit-learn`. The heavier spectrum and relaxation
+tools are opt-in, so `import makeshift` stays light.
 
-## `random_coil.csv`
+## Installation
 
-**Columns:** `residue, atom, value`
+```bash
+pip install git+https://github.com/gelnesr/makeshift.git
+```
 
-Random coil chemical shifts for backbone atoms (CA, CB, N, H) per amino acid.
-Empty `value` cells indicate the atom does not exist for that residue (e.g. CB
-for GLY, N/H for PRO) and are loaded as `np.nan`.
+Editable install (for development):
 
-**Source:** Wishart & Sykes (1994), updated values from jojo-use branch.
+```bash
+git clone https://github.com/gelnesr/makeshift.git
+cd makeshift
+pip install -e .
+```
 
-**Used by:** `get_random_coil()` → `chemshift_utils.get_secondary_shift()` — secondary
-shift calculation (observed − random coil) for CSI and LACS fitting.
+The demo notebooks need a few extras:
 
----
+```bash
+pip install -e ".[demos]"          # seaborn, matplotlib, jupyter
+```
 
-## `bmrb_stats.csv`
+The spectrum/CPMG pipeline (`makeshift.spectra`, `makeshift.relaxation`)
+additionally needs `nmrglue`, `tqdm`, `matplotlib`, and `seaborn`.
 
-**Columns:** `residue, atom, mean, std`
+## Quickstart
 
-Full-database mean and standard deviation for backbone atoms (CA, CB, C, N, H)
-per amino acid, drawn from the BMRB chemical shift statistics.
+```python
+import makeshift as ms
 
-**Source:** https://bmrb.io/ref_info/csstats.php?set=full&restype=aa (fetched 2026-04-17).
+# Fetch and parse a BMRB entry into tidy chemical shifts
+cs = ms.ChemicalShifts.from_bmrb(5363)
+cs.data            # one row per shift: Seq_ID, Comp_ID, Atom_ID, Atom_type, Val
+cs.sequences()     # one row per entity: ID, polymer type, sequence
 
-**Used by:** `get_bmrb_stats()` → `ReRef._is_outlier()` — flags observed shifts
-that fall outside `mean ± n_std × std` before LACS fitting. Outlier rows receive
-`reref_mask=False` and are excluded from regression.
+# Re-reference, then compute the Chemical Shift Index
+cs = ms.ChemicalShifts.from_bmrb(4527, reref="lacs", calc_csi=True)
+cs.reref_offsets   # {atom: offset applied}
 
----
+# Build an assigned peak list (e.g. for an HSQC)
+peaks = cs.peaklist()
+peaks.data
+```
 
-## `c_prime_rc.csv`
+## Modules
 
-**Columns:** `residue, value`
+| Module | What it does |
+|---|---|
+| `makeshift` (core) | `ChemicalShifts`, `NMRStarEntry`, `PeakList` — fetch/parse BMRB entries, extract shifts, sequences, relaxation/order-parameter data, build peak lists. |
+| `makeshift.reref` | LACS and PANAV chemical-shift re-referencing (via `ChemicalShifts.reref`). |
+| `makeshift.spectra` | Read Sparky `.ucsf` spectra (`Spectrum`), pick peaks, and align peak lists (`map_peaklists`). |
+| `makeshift.relaxation` | CPMG dispersion pipeline (`CPMGExperiment`) and `RelaxationProfile` — RelaxDB-style per-residue dynamics from deposited R1/R2/NOE. |
+| `makeshift.hydronmr` | Predict per-residue T1/T2/NOE from a PDB structure (`run`). |
+| `makeshift.utils` | Dependency-light helpers: dataset/structure fetching (`fetch_structure`), constants. |
 
-Random coil C' (carbonyl carbon) chemical shifts per amino acid.
+See `demos/` for worked examples: `quick_start.ipynb` (core workflow),
+`reref.ipynb` (re-referencing), `cpmg_demo.ipynb` (the CPMG pipeline), and
+`bmrb_relaxation_demo.ipynb` (deposited relaxation → dynamics profile).
 
-**Source:** Wishart et al. (1995).
+## Re-referencing
 
-**Used by:** `get_c_prime_rc()` → `ReRef._c_prime_secondary_shift()` — secondary
-shift for C' atoms during LACS fitting (C' is handled separately from CA/CB
-because it uses its own random coil reference).
+BMRB shifts are sometimes mis-referenced — a constant offset shifts every peak
+of a given nucleus. `ChemicalShifts.reref` corrects this in place using one of
+two methods:
 
----
+- **PANAV** ([Wang & Wishart 2005](https://pubmed.ncbi.nlm.nih.gov/15772753/)) —
+  uses rarely-misreferenced HA shifts to assign secondary structure, then aligns
+  N/CA/CB to curated per-structure reference distributions
+  ([Wang & Jardetzky 2002](https://onlinelibrary.wiley.com/doi/10.1110/ps.3180102)).
+- **LACS** ([Wang & Markley 2009](https://pmc.ncbi.nlm.nih.gov/articles/PMC2782637/)) —
+  fits secondary shift vs. CSI so the random-coil regime intercepts at the origin;
+  covers CA, CB, C′, N, and HN.
 
-## `panav_distns.csv`
+```python
+cs = ms.ChemicalShifts.from_bmrb(4527)
+cs.reref(method="panav")   # or "lacs"
+print(cs.reref_offsets)    # {'N': ..., 'CA': ..., 'CB': ..., ...}
+```
 
-**Columns:** `Atom_name, SS, AA, mean, stdev`
+![Re-referencing example](static/example_rereferencing_ed.png)
 
-Reference chemical shift distributions per atom, secondary structure class
-(C = coil, H = helix, E = strand), and amino acid. Used to assign the most
-probable secondary structure to each residue from its HA shift, which drives
-the PANAV offset calculation.
+Entry 4527 is correctly referenced; entries 6586 and 4150 have been described in
+the literature as needing re-referencing. The two methods have not yet been
+extensively compared.
 
-**Source:** Wang & Wishart (2005); distributed as `wang_jardetsky_distns.csv`
-in the original jojo-use scripts.
+## Relaxation and dynamics
 
-**Used by:** `get_panav_distns()` → `ReRef._panav_ss_probs()` and
-`ReRef._panav_get_offset()` — probabilistic secondary structure assignment
-and per-atom offset estimation during PANAV re-referencing.
+`NMRStarEntry` extracts any deposited relaxation data, and `RelaxationProfile`
+turns it into a per-residue dynamics analysis in the style of RelaxDB
+([Wayment-Steele, El Nesr et al.](https://www.biorxiv.org/content/10.1101/2025.03.19.642801)).
+
+Pull deposited data straight from an entry:
+
+```python
+entry = ms.NMRStarEntry.from_bmrb(25013)
+entry.datasets()                 # which data types the entry holds
+entry.relaxation("T2")           # R2 (also "T1"/"R1", "T1rho", "NOE") — units-aware
+entry.order_parameters()         # model-free S² (S2, Tau_e, Rex)
+entry.data_loop("spectral_density_values", "_Spectral_density")  # anything else
+```
+
+`RelaxationProfile` assembles R1/R2/NOE into the R₂/R₁ observable, compares it to
+a HYDRONMR rigid-body prediction, and labels each residue by motional regime:
+
+```python
+from makeshift.relaxation import RelaxationProfile
+
+prof = RelaxationProfile.from_bmrb(25013)   # pulls T1/T2/NOE, aligns to the sequence
+prof.add_rigid_prediction()                 # structure: deposited PDB → RCSB, else AlphaFold → AFDB
+print(prof.label())                         # per-residue motion string
+prof.plot("R2_R1")
+```
+
+The structure for the rigid prediction can be a local PDB, a PDB id (fetched
+from RCSB), or a UniProt accession (fetched from AlphaFold DB) — e.g.
+`add_rigid_prediction("1WRP")`, `("P0DP23")`, or `("model.pdb")`; with no
+argument it uses the entry's own cited PDB or AlphaFold model. makeshift does not
+predict structure itself.
+
+Label tokens: `A` ordered, `^` µs–ms exchange (elevated R₂/R₁), `v` ps–ns motion
+(hetNOE ≤ 0.65), `b` both, `.` peak missing, `t` disordered terminus, `p` proline.
+
+## NMR-STAR concepts
+
+NMR-STAR files are organised around **saveframes**, each belonging to a category
+(e.g. `assigned_chemical_shifts`, `entity`, `sample`). The three you interact
+with most:
+
+- **Entry** — a single BMRB deposition (one `.str` file).
+- **Entity** — a distinct molecular species (protein, DNA strand, ligand), each
+  with its own `Entity_ID`.
+- **Chemical shift list** — the `_Atom_chem_shift` loop inside an
+  `assigned_chemical_shifts` saveframe; one row per observed shift.
+
+## License
+
+MIT License.
+
+## Acknowledgments
+
+- [BMRB](https://bmrb.io/) for maintaining and sharing NMR data.

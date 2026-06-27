@@ -15,8 +15,8 @@ _UNIPROT_RE = re.compile(
     r"^[OPQ][0-9][A-Z0-9]{3}[0-9]$"
     r"|^[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}$")
 _UNIPROT_DBCODES = {"SP", "TR", "UNP", "TREMBL", "UNIPROT", "UNIPROTKB", "SWISS-PROT"}
- 
- 
+
+
 class _CategoryView(dict):
     """A {category: {framecode: saveframe}} mapping with attribute access."""
 
@@ -310,7 +310,7 @@ class NMRStarEntry:
         strengths stay distinct.
 
         BMRB is inconsistent about the value tag — some entries use the generic
-        `Val`/`Val_err`, others the type-prefixed `T1_val`/`T2_val_err` — so
+        `Val`/`Val_err`, others the type-prefixed `T1_val`/`T1_val_err` — so
         whichever is present is coalesced into a single `Val`/`Val_err`.
         """
         key = kind.upper().replace("-", "").replace("_", "")

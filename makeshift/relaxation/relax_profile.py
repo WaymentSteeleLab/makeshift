@@ -101,7 +101,7 @@ class RelaxationProfile:
                 entity_id = seqs["ID"].iloc[0]
             if not isinstance(sequence, str) or not sequence:
                 raise ValueError(
-                    "could not resolve a sequence; pass sequence=... explicitly"
+
                 )
 
         n = len(sequence)
