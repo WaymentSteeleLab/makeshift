@@ -6,10 +6,17 @@ import urllib.request
 from collections import defaultdict
 
 import pandas as pd
+import numpy as np
 
 _BMRB_URL = "https://bmrb.io/ftp/pub/bmrb/entry_directories/bmr{id}/bmr{id}_3.str"
 _VALUE_RE = re.compile(r'(?:"[^"]*"|\'[^\']*\'|[^\s]+)')
 
+_UNIPROT_RE = re.compile(
+    r"^[OPQ][0-9][A-Z0-9]{3}[0-9]$"
+    r"|^[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}$")
+_UNIPROT_DBCODES = {"SP", "TR", "UNP", "TREMBL", "UNIPROT", "UNIPROTKB", "SWISS-PROT"}
+ 
+ 
 class _CategoryView(dict):
     """A {category: {framecode: saveframe}} mapping with attribute access."""
 
@@ -215,7 +222,7 @@ class NMRStarEntry:
         rows = []
         for framecode, sf in self.saveframe("entity").items():
             rows.append({"entity": framecode, **{t: sf.get(t) for t in tags}})
-        seq_df = pd.DataFrame.from_records(rows)
+        seq_df = pd.DataFrame.from_records(rows, columns=["entity"] + tags)
         seq_df = seq_df.astype({
             "ID": "Int64",  # nullable integer dtype
             "Polymer_type": "string",
@@ -281,6 +288,134 @@ class NMRStarEntry:
             rows.append(row)
         return pd.DataFrame.from_records(rows)
 
+    # dynamics: relaxation, order parameters, H/D exchange
+
+    _RELAX = {
+        "T1":    ("heteronucl_T1_relaxation",    "_T1",             "T1"),
+        "T2":    ("heteronucl_T2_relaxation",    "_T2",             "T2"),
+        "T1RHO": ("heteronucl_T1rho_relaxation", "_T1rho",          "T1rho"),
+        "NOE":   ("heteronucl_NOEs",             "_Heteronucl_NOE", "Heteronucl_NOE"),
+    }
+    _RELAX_ALIASES = {"R1": "T1", "R2": "T2", "R1RHO": "T1RHO",
+                      "HETNOE": "NOE", "HETERONUCLNOE": "NOE"}
+
+    def relaxation(self, kind):
+        """
+        Heteronuclear relaxation data as a tidy DataFrame, one row per residue.
+
+        kind : 'T1'/'R1', 'T2'/'R2', 'T1rho'/'R1rho', or 'NOE' (case-insensitive).
+        Columns: Seq_ID, Comp_ID, Atom_ID, Val, Val_err (T2 lists also carry
+        Rex_val/Rex_err when present; NOE adds the second atom Seq_ID_2 etc.).
+        The source list framecode is the first column, so multiple field
+        strengths stay distinct.
+
+        BMRB is inconsistent about the value tag — some entries use the generic
+        `Val`/`Val_err`, others the type-prefixed `T1_val`/`T2_val_err` — so
+        whichever is present is coalesced into a single `Val`/`Val_err`.
+        """
+        key = kind.upper().replace("-", "").replace("_", "")
+        key = self._RELAX_ALIASES.get(key, key)
+        if key not in self._RELAX:
+            raise ValueError(
+                f"unknown relaxation kind {kind!r}; "
+                "choose from T1/R1, T2/R2, T1rho/R1rho, NOE"
+            )
+        category, loop, prefix = self._RELAX[key]
+        df = self._coalesce_value(self.data_loop(category, loop), prefix)
+
+        if key == "NOE":
+            keep = ["list", "Seq_ID_1", "Comp_ID_1", "Atom_ID_1",
+                    "Seq_ID_2", "Comp_ID_2", "Atom_ID_2", "Val", "Val_err"]
+            df = df.reindex(columns=keep).rename(
+                columns={"Seq_ID_1": "Seq_ID", "Comp_ID_1": "Comp_ID",
+                         "Atom_ID_1": "Atom_ID"})
+            return self._coerce(df, ["Seq_ID", "Seq_ID_2", "Val", "Val_err"])
+
+        keep = ["list", "Seq_ID", "Comp_ID", "Atom_ID", "Atom_type", "Val", "Val_err"]
+        if "Rex_val" in df.columns and df["Rex_val"].notna().any():
+            keep += ["Rex_val", "Rex_err"]
+        df = df.reindex(columns=keep)
+        return self._coerce(df, ["Seq_ID", "Val", "Val_err", "Rex_val", "Rex_err"])
+
+    _ORDER = {
+        "Order":    ("order_parameters",    "_Order",             "Order"),
+    }
+
+    def order_parameters(self):
+        """
+        Model-free order parameters (S2) as a tidy DataFrame, one row per
+        residue: Seq_ID, Comp_ID, Atom_ID, S2, S2_err, Tau_e, Rex, Model_fit.
+        """
+
+        category, loop, prefix = self._ORDER['Order']
+        df = self._coalesce_value(self.data_loop(category, loop), prefix)
+
+        tags = ["Seq_ID", "Comp_ID", "Atom_ID",
+                "Order_param_val", "Order_param_val_fit_err",
+                "Tau_e_val", "Rex_val", "Model_fit"]
+        df = self._loop_records("order_parameters", "_Order_param", tags, id_key="list")
+        df = self._coerce(df, ["Seq_ID", "Order_param_val",
+                               "Order_param_val_fit_err", "Tau_e_val", "Rex_val"])
+        return df.rename(columns={"Order_param_val": "S2",
+                                  "Order_param_val_fit_err": "S2_err",
+                                  "Tau_e_val": "Tau_e", "Rex_val": "Rex"})
+    def datasets(self):
+        """What data the entry contains: one row per data type with its count
+        (from the entry_information _Data_set loop). Use this to discover which
+        of the methods above will return anything."""
+        return self._loop_records("entry_information", "_Data_set",
+                                  ["Type", "Count"], id_key="entry")
+
+    def data_loop(self, category, loop_name, tags=None):
+        """
+        Generic escape hatch: flatten the `loop_name` loop from every saveframe
+        of `category` into one DataFrame (framecode in the first column). Keeps
+        all columns when `tags` is None. Use for data types without a dedicated
+        method (coupling constants, RDCs, spectral density, CSA, ...); inspect a
+        saveframe's available loops with `entry.saveframe(category)`.
+        """
+        frames = []
+        for framecode, sf in self.saveframe(category).items():
+            if loop_name in sf:
+                df = self.loop_to_dataframe(sf[loop_name])
+                if tags is not None:
+                    df = df.reindex(columns=tags)
+                df.insert(0, "list", framecode)
+                frames.append(df)
+        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+    @staticmethod
+    def _coalesce_value(df, prefix):
+        """
+        Normalise a relaxation loop's value columns to canonical `Val`/`Val_err`.
+
+        BMRB entries use either the generic tag (`Val`) or the type-prefixed one
+        (`T1_val`, `T2_val_err`, ...); take whichever is populated. Null markers
+        are converted to NaN first so the fallback actually fills.
+        """
+        if df.empty:
+            return df
+        df = df.replace({".": np.nan, "?": np.nan, "N/A": np.nan})
+        for canon, suffix in [("Val", "val"), ("Val_err", "val_err")]:
+            typed = f"{prefix}_{suffix}"           # e.g. T2_val, T2_val_err
+            if canon not in df.columns:
+                df[canon] = np.nan
+            if typed in df.columns:
+                df[canon] = df[canon].fillna(df[typed])
+                df = df.drop(columns=[typed])
+        return df
+
+    @staticmethod
+    def _coerce(df, num_cols):
+        """Replace BMRB null markers with NaN and coerce `num_cols` to numeric."""
+        if df.empty:
+            return df
+        df = df.replace({".": np.nan, "?": np.nan, "N/A": np.nan})
+        for c in num_cols:
+            if c in df.columns:
+                df[c] = pd.to_numeric(df[c], errors="coerce")
+        return df
+
     @staticmethod
     def _restructure(data):
         """Index flat {framecode: saveframe} by category then framecode."""
@@ -301,7 +436,42 @@ class NMRStarEntry:
                     code = (row.get("Database_accession_code") or "").strip()
                     if code and code not in (".", "?"):
                         pdbs.append(code)
+        # PDB codes also appear cross-referenced on entities
+        links = self.db_links()
+        if not links.empty:
+            for _, row in links.iterrows():
+                if (row.get("Database_code") or "").strip().upper() == "PDB":
+                    code = (row.get("Accession_code") or "").strip()
+                    if code and code not in (".", "?"):
+                        pdbs.append(code)
         return list(dict.fromkeys(pdbs))
+
+    def db_links(self, entity_id=None):
+        df = self._loop_records(
+            "entity", "_Entity_db_link",
+            ["Database_code", "Accession_code", "Entity_ID"], id_key="entity")
+        if entity_id is not None and not df.empty:
+            df = df[df["Entity_ID"].astype("string") == str(entity_id)]
+        return df
+
+    def get_alphafold_ids(self, entity_id=None):
+        df = self.db_links(entity_id=entity_id)
+        if df.empty:
+            return []
+        alphafold, uniprot = [], []
+        for _, row in df.iterrows():
+            code = (row.get("Database_code") or "").strip()
+            acc = (row.get("Accession_code") or "").strip()
+            if not acc or acc in (".", "?"):
+                continue
+            if code.upper() in ("ALPHAFOLD", "ALPHAFOLDDB", "AFDB"):
+                alphafold.append(acc)
+            elif code.upper() in _UNIPROT_DBCODES or _UNIPROT_RE.match(acc.upper()):
+                uniprot.append(acc)
+        return list(dict.fromkeys(alphafold or uniprot))
+
+    # alias: AlphaFold lookup uses UniProt accessions
+    get_uniprot_ids = get_alphafold_ids
 
     def _entry_citation(self):
             """The saveframe marked as the entry citation, else the first citation."""

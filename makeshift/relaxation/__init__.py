@@ -1,17 +1,5 @@
 """
-CPMG relaxation-dispersion pipeline.
-
-Turns a series of 2D ¹H-¹⁵N planes (a reference plane + CPMG planes at varying
-νCPMG) into per-residue R₂,eff dispersion data, then classifies residues using
-hydrodynamic predictions. Built on :mod:`makeshift.spectra` for the spectrum
-and matching primitives, and :mod:`makeshift.hydronmr` for predicted R2.
-
-Depends on scipy / tqdm / nmrglue (the optional ``relaxation`` extra), plus
-matplotlib only if plotting is requested. Not imported by the top-level
-package, so the core stays dependency-light.
-
-    from makeshift.relaxation import CPMGExperiment
-    exp = CPMGExperiment.from_config("exp.yml").run("out/")
+R1/R2/NOE and CPMG relaxation-dispersion pipeline
 """
 
 from .config import load_config, load_planes
@@ -19,9 +7,11 @@ from .lineshape import fit_peaks
 from .r2eff import compute_r2eff
 from .classify import classify_peaks, validate_sequence
 from .cpmg import CPMGExperiment, run_protein, save_results_csv
+from .relax_profile import RelaxationProfile
 
 __all__ = [
     "CPMGExperiment", "run_protein", "save_results_csv",
+    "RelaxationProfile",
     "load_config", "load_planes",
     "fit_peaks", "compute_r2eff",
     "classify_peaks", "validate_sequence",

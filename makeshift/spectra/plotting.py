@@ -5,10 +5,16 @@ import seaborn as sns
 from .spectrum import estimate_background
 
 
-def plot_spectrum(ref_data, contour_levels=8, cmap="plasma",
-                  contour_color=None, linewidth=0.8, vmax_scale=0.5,
-                  xlim=None, ylim=None, baseline=10,
-                  figsize=(8, 7), ax=None):
+def plot_spectrum(ref_data, 
+                  contour_levels=8, 
+                  cmap="plasma",
+                  contour_color=None, 
+                  linewidth=0.8, 
+                  vmax_scale=0.5,
+                  xlim=None, ylim=None, 
+                  baseline=10,
+                  figsize=(8, 7),
+                  ax=None):
     """
     Plot 2D spectrum contours.
 
@@ -48,11 +54,18 @@ def plot_spectrum(ref_data, contour_levels=8, cmap="plasma",
     return fig, ax
 
 
-def plot_peaklist(ax=None, peaks_df=None, marker="x", peaks_xcol="H_ppm", peaks_ycol="N_ppm",
-                  color="limegreen", markersize=3,
-                  text="ref_index", label_fontsize=6,
+def plot_peaklist(ax=None, 
+                  peaks_df=None, 
+                  marker="x", 
+                  peaks_xcol="H_ppm", 
+                  peaks_ycol="N_ppm",
+                  color="limegreen", 
+                  markersize=3,
+                  text="ref_index", 
+                  label_fontsize=6,
                   label=None,
-                  hue=None, palette=None,
+                  hue=None, 
+                  palette=None,
                   figsize=(8, 6)):
     """
     Plot peak markers (and optional labels), optionally onto an existing axes.
@@ -145,12 +158,18 @@ def plot_peaklist(ax=None, peaks_df=None, marker="x", peaks_xcol="H_ppm", peaks_
 
 
 def plot_csp(peaks_df1, peaks_df2, on,
-             xcol="H_ppm", ycol="N_ppm",
-             color1="steelblue", color2="tab:orange",
-             line_color="gray", line_alpha=0.5,
-             marker="o", markersize=4,
-             text=None, label_fontsize=6,
-             ax=None, figsize=(8, 6)):
+             xcol="H_ppm", 
+             ycol="N_ppm",
+             color1="steelblue", 
+             color2="tab:orange",
+             line_color="gray", 
+             line_alpha=0.5,
+             marker="o", 
+             markersize=4,
+             text=None, 
+             label_fontsize=6,
+             ax=None, 
+             figsize=(8, 6)):
     """
     Plot two matched peaklists and draw connecting lines between paired peaks.
 
