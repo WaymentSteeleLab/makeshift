@@ -6,3 +6,24 @@ _AA_3TO1 = {
 }
 
 _AA_1TO3 = {v: k for k, v in _AA_3TO1.items()}
+
+_BACKBONE = ["H", "HA", "N", "CA", "CB", "C"]
+
+_SS = ("C", "H", "E") 
+
+_DEUTER_KEYWORDS = ("2h", "deuter")
+_METHYL_KEYWORDS = ("ilv", "ile", "leu", "val", "ala", "partial",
+                        "selective", "sail", "methyl", "ch3", "ail")
+_DENATURANT_KEYWORDS = ("urea", "carbamide", "gdnhcl", "gdmhcl",
+                            "guanidinium chloride", "guanidine hydrochloride",
+                            "guanidinium hydrochloride", "guanidine hcl")
+
+_UNIPROT_DBCODES = {"SP", "TR", "UNP", "TREMBL", "UNIPROT", "UNIPROTKB", "SWISS-PROT"}
+
+import re
+
+_UNIPROT_RE = re.compile(
+    r"^[OPQ][0-9][A-Z0-9]{3}[0-9]$"
+    r"|^[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}$")
+
+_PDB_RE = re.compile(r"^[0-9][A-Za-z0-9]{3}$")

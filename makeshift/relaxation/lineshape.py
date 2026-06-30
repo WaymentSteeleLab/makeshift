@@ -10,11 +10,6 @@ from tqdm import tqdm
 from ..spectra.spectrum import estimate_background
 from .config import _yaml_set_cache
 
-
-# ---------------------------------------------------------------------------
-# Cache helpers
-# ---------------------------------------------------------------------------
-
 def _cache_save(fit_results: pd.DataFrame, cache_path: Path) -> None:
     json_str = fit_results.to_json(orient="records")
     with zipfile.ZipFile(cache_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -35,10 +30,6 @@ def _cache_load(cache_path: Path) -> pd.DataFrame:
           f"({df['ref_index'].nunique()} peaks × {df['plane'].nunique()} planes)")
     return df
 
-
-# ---------------------------------------------------------------------------
-# Lineshape math
-# ---------------------------------------------------------------------------
 
 def _gaussian_1d(x, x0, lw):
     sig = lw / (2 * np.sqrt(2 * np.log(2)))

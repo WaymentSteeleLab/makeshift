@@ -8,14 +8,11 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 
+from .utils.constants import _UNIPROT_DBCODES, _UNIPROT_RE
+from .utils.constants import _DEUTER_KEYWORDS, _METHYL_KEYWORDS, _DENATURANT_KEYWORDS
+
 _BMRB_URL = "https://bmrb.io/ftp/pub/bmrb/entry_directories/bmr{id}/bmr{id}_3.str"
 _VALUE_RE = re.compile(r'(?:"[^"]*"|\'[^\']*\'|[^\s]+)')
-
-_UNIPROT_RE = re.compile(
-    r"^[OPQ][0-9][A-Z0-9]{3}[0-9]$"
-    r"|^[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}$")
-_UNIPROT_DBCODES = {"SP", "TR", "UNP", "TREMBL", "UNIPROT", "UNIPROTKB", "SWISS-PROT"}
-
 
 class _CategoryView(dict):
     """A {category: {framecode: saveframe}} mapping with attribute access."""
@@ -252,6 +249,43 @@ class NMRStarEntry:
         tags = ["ID", "Sample_ID", "Mol_common_name", "Entity_ID",
                 "Isotopic_labeling", "Concentration_val", "Concentration_val_units"]
         return self._loop_records("sample", "_Sample_component", tags, id_key="sample")
+
+    def _sample_rows(self, entity_id=None, sample_id=None):
+        """sample_info() filtered (as strings) by sample_id and/or entity_id."""
+        df = self.sample_info()
+        if df.empty:
+            return df
+        if sample_id is not None:
+            df = df[df["Sample_ID"].astype("string") == str(sample_id)]
+        if entity_id is not None:
+            df = df[df["Entity_ID"].astype("string") == str(entity_id)]
+        return df
+
+    @staticmethod
+    def _any_keyword(series, keywords):
+        vals = series.dropna().astype("string").str.lower()
+        return bool(vals.apply(lambda s: any(k in s for k in keywords)).any())
+
+    def is_deuterated(self, entity_id=None, sample_id=None):
+        """
+        True if the entity's isotopic labeling indicates 2H/deuteration.
+        """
+        rows = self._sample_rows(entity_id, sample_id)
+        return self._any_keyword(rows["Isotopic_labeling"], self._DEUTER_KEYWORDS)
+
+    def is_methyl_labeled(self, entity_id=None, sample_id=None):
+        """
+        True if the isotopic labeling indicates methyl / selective labeling
+        """
+        rows = self._sample_rows(entity_id, sample_id)
+        return self._any_keyword(rows["Isotopic_labeling"], self._METHYL_KEYWORDS)
+
+    def is_denatured(self, sample_id=None):
+        """
+        True if the sample contains a chemical denaturant (urea or GdnHCl).
+        """
+        rows = self._sample_rows(sample_id=sample_id)
+        return self._any_keyword(rows["Mol_common_name"], self._DENATURANT_KEYWORDS)
 
     def assembly_info(self):
         """One row per entity assembly (flattens the _Entity_assembly loop)."""

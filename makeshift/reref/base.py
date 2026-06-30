@@ -1,7 +1,6 @@
 """ Shared helpers for the reref subpackage. """
 
-_BACKBONE = ["H", "HA", "N", "CA", "CB", "C"]
-
+from ..utils.constants import _BACKBONE
 
 def apply_offsets(df, offsets):
     """

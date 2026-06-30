@@ -11,13 +11,12 @@ import numpy as np
 import pandas as pd
 
 from ..data.tables import get_panav_distns
+from ..utils.constants import _SS
 
 _PANAV_REF = get_panav_distns()    # {residue: {ss: {atom: (mean, std)}}}
 
-_SS = ("C", "H", "E")              # coil, helix, strand
 _NO_REF = {("PRO", "N"), ("PRO", "H"), ("GLY", "CB")}
 _PANAV_ATOMS = ("N", "CA", "CB", "C")
-
 
 def _has_ref(comp_id, atom_id):
     """True if a usable PANAV reference distribution exists for this atom."""

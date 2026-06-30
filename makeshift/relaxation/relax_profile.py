@@ -32,8 +32,6 @@ from ..utils.structures import detect_source
 ORDERED, REX, PSNS, BOTH = "A", "^", "v", "b"
 MISSING, TERMINUS, PROLINE, NODATA = ".", "t", "p", "x"
 
-
-
 def _to_rate(values, units, kind):
     """
     Return relaxation values as rates (s^-1).

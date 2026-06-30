@@ -8,15 +8,10 @@ import re
 import urllib.request
 import urllib.error
 
+from ..utils.constants import _UNIPROT_RE
+
 _RCSB_URL = "https://files.rcsb.org/download/{id}.pdb"
 _AFDB_URL = "https://alphafold.ebi.ac.uk/files/AF-{acc}-F{frag}-model_{version}.pdb"
-
-# 4-char classic PDB id (first char a digit); UniProt accession (6 or 10 chars)
-_PDB_RE = re.compile(r"^[0-9][A-Za-z0-9]{3}$")
-_UNIPROT_RE = re.compile(
-    r"^[OPQ][0-9][A-Z0-9]{3}[0-9]$"
-    r"|^[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}$")
-
 
 def _default_cache():
     return os.path.join(os.path.expanduser("~"), ".makeshift", "structures")
