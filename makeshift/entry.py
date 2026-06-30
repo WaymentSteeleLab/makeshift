@@ -271,21 +271,21 @@ class NMRStarEntry:
         True if the entity's isotopic labeling indicates 2H/deuteration.
         """
         rows = self._sample_rows(entity_id, sample_id)
-        return self._any_keyword(rows["Isotopic_labeling"], self._DEUTER_KEYWORDS)
+        return self._any_keyword(rows["Isotopic_labeling"], _DEUTER_KEYWORDS)
 
     def is_methyl_labeled(self, entity_id=None, sample_id=None):
         """
         True if the isotopic labeling indicates methyl / selective labeling
         """
         rows = self._sample_rows(entity_id, sample_id)
-        return self._any_keyword(rows["Isotopic_labeling"], self._METHYL_KEYWORDS)
+        return self._any_keyword(rows["Isotopic_labeling"], _METHYL_KEYWORDS)
 
     def is_denatured(self, sample_id=None):
         """
         True if the sample contains a chemical denaturant (urea or GdnHCl).
         """
         rows = self._sample_rows(sample_id=sample_id)
-        return self._any_keyword(rows["Mol_common_name"], self._DENATURANT_KEYWORDS)
+        return self._any_keyword(rows["Mol_common_name"], _DENATURANT_KEYWORDS)
 
     def assembly_info(self):
         """One row per entity assembly (flattens the _Entity_assembly loop)."""
