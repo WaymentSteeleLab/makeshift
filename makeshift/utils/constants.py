@@ -22,6 +22,8 @@ _DENATURANT_KEYWORDS = ("urea", "carbamide", "gdnhcl", "gdmhcl",
 
 _UNIPROT_DBCODES = {"SP", "TR", "UNP", "TREMBL", "UNIPROT", "UNIPROTKB", "SWISS-PROT"}
 
+_NULL_MARKERS = (".", "?", "", "n/a", "na", "<na>", "nan", "none")
+
 import re
 
 _UNIPROT_RE = re.compile(
