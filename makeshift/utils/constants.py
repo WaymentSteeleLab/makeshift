@@ -12,11 +12,13 @@ _BACKBONE = ["H", "HA", "N", "CA", "CB", "C"]
 _SS = ("C", "H", "E") 
 
 _DEUTER_KEYWORDS = ("2h", "deuter")
-_METHYL_KEYWORDS = ("ilv", "ile", "leu", "val", "ala", "partial",
-                        "selective", "sail", "methyl", "ch3", "ail")
+_METHYL_KEYWORDS = ("ilv", "ail", "ile", "leu", "val", "ala", "met", "thr",
+                        "sail", "methyl", "ch3", "chd2", "ch2d")
+
 _DENATURANT_KEYWORDS = ("urea", "carbamide", "gdnhcl", "gdmhcl",
                             "guanidinium chloride", "guanidine hydrochloride",
-                            "guanidinium hydrochloride", "guanidine hcl")
+                            "guanidinium hydrochloride", "guanidine hcl", "guanidin", 
+                            "gdncl", "gdnscn", "guhcl", "gu-hcl")
 
 _UNIPROT_DBCODES = {"SP", "TR", "UNP", "TREMBL", "UNIPROT", "UNIPROTKB", "SWISS-PROT"}
 
