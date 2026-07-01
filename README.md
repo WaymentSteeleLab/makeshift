@@ -1,10 +1,7 @@
 # `makeshift`: lightweight NMR tools
 
-A dependency-light Python toolkit for working with protein NMR data: parsing
-[NMR-STAR](https://pynmrstar.readthedocs.io/en/latest/) files from the [BMRB](https://bmrb.io/),
-re-referencing chemical shifts, building peak lists, running a full CPMG
-relaxation-dispersion pipeline, and analysing deposited backbone relaxation data
-for per-residue dynamics.
+A dependency-light Python toolkit for working with protein NMR data from either custom input or
+[NMR-STAR](https://pynmrstar.readthedocs.io/en/latest/) files from the [BMRB](https://bmrb.io/).
 
 ## Installation
 
@@ -31,7 +28,7 @@ cs = ms.ChemicalShifts.from_bmrb(5363)
 cs.data            # one row per shift: Seq_ID, Comp_ID, Atom_ID, Atom_type, Val
 cs.sequences()     # one row per entity: ID, polymer type, sequence
 
-# Re-reference, then compute the Chemical Shift Index
+# Re-reference shifts
 cs = ms.ChemicalShifts.from_bmrb(4527, reref="lacs", calc_csi=True)
 cs.reref_offsets   # {atom: offset applied}
 
@@ -49,11 +46,15 @@ peaks.data
 | `makeshift.spectra` | Read Sparky `.ucsf` spectra (`Spectrum`), pick peaks, and align peak lists (`map_peaklists`). |
 | `makeshift.relaxation` | CPMG dispersion pipeline (`CPMGExperiment`) and `RelaxationProfile` — RelaxDB-style per-residue dynamics from deposited R1/R2/NOE. |
 | `makeshift.hydronmr` | Predict per-residue T1/T2/NOE from a PDB structure (`run`). |
+| `makeshift.talosn` | Predict backbone torsion angles, S2 order parameters, and secondary structure from chemical shifts via the NIH TALOS-N binary (`TalosN`). |
 | `makeshift.utils` | Dependency-light helpers: dataset/structure fetching (`fetch_structure`), constants. |
 
-See `demos/` for worked examples: `quick_start.ipynb` (core workflow),
-`reref.ipynb` (re-referencing), `cpmg_demo.ipynb` (the CPMG pipeline), and
-`bmrb_relaxation_demo.ipynb` (deposited relaxation → dynamics profile).
+See `demos/` for worked examples: 
+- `quick_start.ipynb` (core workflow),
+- `reref.ipynb` (re-referencing), 
+- `cpmg_demo.ipynb` (the CPMG pipeline),
+- `bmrb_relaxation_demo.ipynb` (deposited relaxation → dynamics profile)
+- `talosn_demo.ipynb` (TALOS-N prediction).
 
 ## Re-referencing
 
@@ -93,7 +94,7 @@ Pull deposited data straight from an entry:
 entry = ms.NMRStarEntry.from_bmrb(25013)
 entry.datasets()                 # which data types the entry holds
 entry.relaxation("T2")           # R2 (also "T1"/"R1", "T1rho", "NOE") — units-aware
-entry.order_parameters()         # model-free S² (S2, Tau_e, Rex)
+entry.order_parameters()         # model-free S2 (S2, Tau_e, Rex)
 entry.data_loop("spectral_density_values", "_Spectral_density")  # anything else
 ```
 
@@ -118,6 +119,36 @@ predict structure itself.
 Label tokens: `A` ordered, `^` µs–ms exchange (elevated R₂/R₁), `v` ps–ns motion
 (hetNOE ≤ 0.65), `b` both, `.` peak missing, `t` disordered terminus, `p` proline.
 
+## TALOS-N: prediction from chemical shifts
+
+`makeshift.talosn` wraps the NIH
+[TALOS-N](https://spin.niddk.nih.gov/bax-apps/software/TALOS-N/) binary (Shen &
+Bax, *J. Biomol. NMR* 2013), which predicts backbone φ/ψ torsion angles,
+per-residue S2 order parameters, and secondary structure from assigned backbone
+chemical shifts using a trained neural network.
+
+The binary and its database aren't bundled — they're downloaded on demand from
+NIH (under their [Terms of Use](https://spin.niddk.nih.gov/bax-apps/terms.html),
+which the installer prints) into a `data_dir` you choose. Keep that path in a
+variable and pass the same one to install and to each `TalosN`:
+
+```python
+from pathlib import Path
+from makeshift import talosn
+
+data_dir = Path.home() / "talosn_data"
+talosn.install_talosn_data(data_dir=data_dir)     # one-time, ~ a few hundred MB
+
+tn = talosn.TalosN.from_bmrb(4527, data_dir=data_dir)
+tn.run()                    # or run(auto_install=True) to fetch the binary on first use
+tn.order_parameters         # predS2.tab — per-residue S2
+tn.torsion_angles           # pred.tab   — φ/ψ per residue + confidence class
+tn.secondary_structure      # predSS.tab — helix/sheet/coil
+```
+
+`data_dir` defaults to inside the installed package if omitted (usually not what
+you want for a few-hundred-MB download).
+
 ## NMR-STAR concepts
 
 NMR-STAR files are organised around **saveframes**, each belonging to a category
@@ -134,6 +165,13 @@ with most:
 
 MIT License.
 
+`makeshift.talosn` downloads and runs the TALOS-N binary, which is distributed
+separately by NIH under its own
+[Terms of Use](https://spin.niddk.nih.gov/bax-apps/terms.html) (including no
+redistribution without permission from the authors); those terms govern the
+downloaded software, not this wrapper.
+
 ## Acknowledgments
 
-- [BMRB](https://bmrb.io/) for maintaining and sharing NMR data.
+- The [Biological Magnetic Resonance Bank (BMRB)](https://bmrb.io/) for maintaining and sharing NMR data.
+- The Bax lab at NIH for [TALOS-N](https://spin.niddk.nih.gov/bax-apps/software/TALOS-N/).
