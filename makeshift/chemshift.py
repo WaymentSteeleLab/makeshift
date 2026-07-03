@@ -31,6 +31,9 @@ class ChemicalShifts:
             cs["name"] = sf.get("Name", ".")
             cs["ChemShift_ID"] = framecode
             cs = cls._clean(cs)
+            sids = [r.get("Sample_ID") for r in sf.get("_Chem_shift_experiment", [])]
+            sids = [s for s in sids if s and s not in (".", "?")]
+            cs["Sample_ID"] = ",".join(dict.fromkeys(sids)) or pd.NA
             frames.append(cs)
 
         if not frames:

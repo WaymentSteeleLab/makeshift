@@ -9,10 +9,13 @@ import pandas as pd
 import numpy as np
 
 from .utils.constants import _UNIPROT_DBCODES, _UNIPROT_RE
-from .utils.constants import _DEUTER_KEYWORDS, _METHYL_KEYWORDS, _DENATURANT_KEYWORDS
+from .utils.constants import _DEUTER_KEYWORDS, _METHYL_KEYWORDS, _DENATURANT_KEYWORDS, _NULL_MARKERS
 
 _BMRB_URL = "https://bmrb.io/ftp/pub/bmrb/entry_directories/bmr{id}/bmr{id}_3.str"
-_VALUE_RE = re.compile(r'(?:"[^"]*"|\'[^\']*\'|[^\s]+)')
+_VALUE_RE = re.compile(
+    r"""'(?:[^']|'(?=\S))*'(?=\s|$)"""   # single-quoted; close-quote needs trailing ws/EOL
+    r"""|"(?:[^"]|"(?=\S))*"(?=\s|$)"""  # double-quoted; same rule
+    r"""|\S+""")                          # bare token
 
 class _CategoryView(dict):
     """A {category: {framecode: saveframe}} mapping with attribute access."""
@@ -39,9 +42,6 @@ class NMRStarEntry:
 
         entry = NMRStarEntry.from_bmrb(15000)
         entry = NMRStarEntry.from_file("bmr15000_3.str")
-
-    The parsed structure is available as ``entry.data``:
-        data[Sf_category][Sf_framecode] -> {tag: value, _Loop_name: [rows]}
     """
 
     def __init__(self, data=None, entry_id=None, source_file=None):
@@ -58,10 +58,8 @@ class NMRStarEntry:
 
     @classmethod
     def from_bmrb(cls, bmrb_id, output_dir="", keep_download=False):
-        """Download a BMRB entry and parse it.
-
-        By default the .str file is fetched to a temp file and removed once
-        parsed; pass ``keep_download=True`` to write it to ``output_dir``.
+        """
+        Download a BMRB entry and parse it.
         """
         url = _BMRB_URL.format(id=bmrb_id)
 
@@ -120,18 +118,39 @@ class NMRStarEntry:
                     i += 1
                 loop_category = loop_tags[0].split(".")[0] if loop_tags else ""
                 base_prefix = loop_category + "."
+                ncols = len(loop_tags)
+                buf = []                       # values accumulate across physical lines
                 while i < len(lines):
                     data_line = lines[i].strip()
                     if data_line == "stop_":
                         break
-                    if data_line:
-                        values = _VALUE_RE.findall(data_line)
-                        if len(values) == len(loop_tags):
-                            row = {tag[len(base_prefix):] if tag.startswith(base_prefix) else tag:
-                                   val.strip('"')
-                                   for tag, val in zip(loop_tags, values)}
-                            current_loops[loop_category].append(row)
-                    i += 1
+                    if data_line.startswith(";"):   # semicolon-delimited multi-line value
+                        text = []
+                        after = data_line[1:]        # content after the opening ';' (usually empty)
+                        if after.strip():
+                            text.append(after)
+                        i += 1
+                        # read until a line whose first non-blank char is ';'
+                        while i < len(lines) and not lines[i].lstrip().startswith(";"):
+                            text.append(lines[i].rstrip("\n"))
+                            i += 1
+                        buf.append("".join(text))
+                        # the closing ';' line may carry trailing values after the ';'
+                        if i < len(lines):
+                            trailing = lines[i].strip()[1:]
+                            if trailing.strip():
+                                buf.extend(v.strip('"') for v in _VALUE_RE.findall(trailing))
+                            i += 1                   # past closing ';'
+                    else:
+                        if data_line:
+                            buf.extend(v.strip('"') for v in _VALUE_RE.findall(data_line))
+                        i += 1
+                    # emit every complete record buffered so far
+                    while ncols and len(buf) >= ncols:
+                        values, buf = buf[:ncols], buf[ncols:]
+                        row = {tag[len(base_prefix):] if tag.startswith(base_prefix) else tag: val
+                               for tag, val in zip(loop_tags, values)}
+                        current_loops[loop_category].append(row)
                 i += 1  # past stop_
                 continue
 
@@ -164,10 +183,6 @@ class NMRStarEntry:
     @property
     def categories(self):
         """Saveframe categories as an attribute-accessible mapping.
-
-            entry.categories                           -> <categories: entity, ...>
-            list(entry.categories)                     -> ['entity', ...]
-            entry.categories.assigned_chemical_shifts  -> {framecode: saveframe}
         """
         return _CategoryView(self.data)
 
@@ -194,7 +209,9 @@ class NMRStarEntry:
                 df = self.loop_to_dataframe(sf[loop_name]).reindex(columns=tags)
                 df.insert(0, id_key, framecode)
                 frames.append(df)
-        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        if frames:
+            return pd.concat(frames, ignore_index=True)
+        return pd.DataFrame(columns=[id_key, *tags])
 
     @staticmethod
     def _clean(val):
@@ -250,41 +267,76 @@ class NMRStarEntry:
                 "Isotopic_labeling", "Concentration_val", "Concentration_val_units"]
         return self._loop_records("sample", "_Sample_component", tags, id_key="sample")
 
-    def _sample_rows(self, entity_id=None, sample_id=None):
-        """sample_info() filtered (as strings) by sample_id and/or entity_id."""
+    def _sample_rows(self, entity_id=None, sample_id=None, sample_name=None):
+        """sample_info() filtered by sample_id and/or entity_id."""
         df = self.sample_info()
         if df.empty:
             return df
+        if sample_name is not None:
+            df = df[df["sample"].astype("string") == str(sample_name)]
         if sample_id is not None:
             df = df[df["Sample_ID"].astype("string") == str(sample_id)]
         if entity_id is not None:
             df = df[df["Entity_ID"].astype("string") == str(entity_id)]
         return df
 
-    @staticmethod
-    def _any_keyword(series, keywords):
-        vals = series.dropna().astype("string").str.lower()
-        return bool(vals.apply(lambda s: any(k in s for k in keywords)).any())
+    @classmethod
+    def _has_keyword(cls, value, keywords):
+        if value is None:
+            return False
+        s = str(value).strip().lower()
+        return s not in _NULL_MARKERS and any(k in s for k in keywords)
 
-    def is_deuterated(self, entity_id=None, sample_id=None):
-        """
-        True if the entity's isotopic labeling indicates 2H/deuteration.
-        """
-        rows = self._sample_rows(entity_id, sample_id)
+    def _any_keyword(self, series, keywords):
+        return any(self._has_keyword(v, keywords) for v in series)
+
+    def _is_real_entity(self, series):
+        s = series.astype("string").str.strip().str.lower()
+        return series.notna() & ~s.isin(_NULL_MARKERS)
+
+    def _entity_flag_table(self, keywords, flag_name):
+        """Unique [sample, Sample_ID, Entity_ID, flag], flag read from Isotopic_labeling."""
+        cols = ["sample", "Sample_ID", "Entity_ID", flag_name]
+        df = self.sample_info()
+        if df.empty:
+            return pd.DataFrame(columns=cols)
+        df = df[self._is_real_entity(df["Entity_ID"])].copy()
+        df[flag_name] = [self._has_keyword(v, keywords) for v in df["Isotopic_labeling"]]
+        return (df.groupby(["sample", "Sample_ID", "Entity_ID"], as_index=False, sort=False)[flag_name]
+                  .any())
+
+    def _sample_flag_table(self, keywords, flag_name):
+        """Unique [sample, Sample_ID, Entity_ID, flag], flag scans every molecule in the sample."""
+        cols = ["sample", "Sample_ID", "Entity_ID", flag_name]
+        df = self.sample_info()
+        if df.empty:
+            return pd.DataFrame(columns=cols)
+        per_sample = {sid: self._any_keyword(g["Mol_common_name"], keywords)
+                      for sid, g in df.groupby("Sample_ID", sort=False)}
+        ents = df[self._is_real_entity(df["Entity_ID"])][["sample", "Sample_ID", "Entity_ID"]]
+        ents = ents.drop_duplicates().reset_index(drop=True)
+        ents[flag_name] = ents["Sample_ID"].map(per_sample)
+        return ents
+
+    def is_deuterated(self, entity_id=None, sample_id=None, sample_name=None):
+        """Bool if an id is given, else a [Sample_ID, Entity_ID, deuterated] table."""
+        if entity_id is None and sample_id is None:
+            return self._entity_flag_table(_DEUTER_KEYWORDS, "deuterated")
+        rows = self._sample_rows(entity_id, sample_id, sample_name)
         return self._any_keyword(rows["Isotopic_labeling"], _DEUTER_KEYWORDS)
 
-    def is_methyl_labeled(self, entity_id=None, sample_id=None):
-        """
-        True if the isotopic labeling indicates methyl / selective labeling
-        """
-        rows = self._sample_rows(entity_id, sample_id)
+    def is_methyl_labeled(self, entity_id=None, sample_id=None, sample_name=None):
+        """Bool if an id is given, else a [Sample_ID, Entity_ID, methyl_labeled] table."""
+        if entity_id is None and sample_id is None:
+            return self._entity_flag_table(_METHYL_KEYWORDS, "methyl_labeled")
+        rows = self._sample_rows(entity_id, sample_id, sample_name)
         return self._any_keyword(rows["Isotopic_labeling"], _METHYL_KEYWORDS)
 
-    def is_denatured(self, sample_id=None):
-        """
-        True if the sample contains a chemical denaturant (urea or GdnHCl).
-        """
-        rows = self._sample_rows(sample_id=sample_id)
+    def is_denatured(self, entity_id=None, sample_id=None, sample_name=None):
+        """Bool if sample_id is given, else a [Sample_ID, Entity_ID, denatured] table."""
+        if sample_id is None:
+            return self._sample_flag_table(_DENATURANT_KEYWORDS, "denatured")
+        rows = self._sample_rows(entity_id, sample_id, sample_name)
         return self._any_keyword(rows["Mol_common_name"], _DENATURANT_KEYWORDS)
 
     def assembly_info(self):
@@ -313,6 +365,7 @@ class NMRStarEntry:
             row = {"sample_conditions": framecode}
             for var in sf.get("_Sample_condition_variable", []):
                 ctype = var.get("Type")
+                ctype = ctype.strip('*')
                 if not ctype or ctype in (".", "?"):
                     continue
                 row[ctype] = self._num(var.get("Val"))
