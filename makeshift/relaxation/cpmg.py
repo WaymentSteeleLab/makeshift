@@ -1,16 +1,49 @@
+"""
+CPMG pipeline.
+
+:class:`CPMGExperiment` ties the stages together for one protein: load
+config/planes -> pick peaks -> (optional) map a reference assignment peaklist
+-> fit lineshapes -> compute R2eff -> classify -> write a results CSV.
+
+    exp = CPMGExperiment.from_config("exp.yml")
+    exp.run("out/")
+    exp.classifications   # results also available on the object
+"""
+
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from pathlib import Path
 
 from .config import load_config, load_planes
 from .lineshape import fit_peaks
 from .r2eff import compute_r2eff
 from .classify import classify_peaks, validate_sequence, _parse_seqpos
-from .plotting import plot_r2eff_per_peak, plot_r2eff_grid, plot_waterfall
-from ..spectrum.peaks import pick_peaks, load_peaklist
-from ..spectrum.matching import map_peaklists
-from ..plotting.plotting import plot_spectrum, plot_peaklist
+from ..spectra.matching import map_peaklists
+
+_DEFAULT_COLORS = {
+    "Rex": "tab:orange",
+    "elevated_R2": "#8ACE00",
+    "flat": "black",
+    "unfit": "red",
+}
+
+
+def _peaklist_df(peaklist):
+    """Resolve a peaklist input to a DataFrame of assigned amides
+    (Seq_ID, Auth_seq_ID, Comp_ID, H_ppm, N_ppm, assn_label).
+
+    Accepts a :class:`PeakList`, a DataFrame, a BMRB id (int or digit-string),
+    or a CSV path.
+    """
+    from ..peaklist import PeakList
+    if isinstance(peaklist, PeakList):
+        return peaklist.data
+    if isinstance(peaklist, pd.DataFrame):
+        return peaklist
+    s = str(peaklist).strip()
+    if s.isdigit():
+        return PeakList.from_bmrb(int(s)).data
+    return PeakList.from_csv(peaklist).data
 
 
 def save_results_csv(ref_df, classifications, csv_path, fit_results=None, missing_df=None):
@@ -20,28 +53,8 @@ def save_results_csv(ref_df, classifications, csv_path, fit_results=None, missin
     Columns: ref_index, assn_label (if present), N_ppm, H_ppm, vol, vol_err,
     lw_n, lw_h (if fit_results given, from the reference plane),
     R2first, R2last, std_first, std_last, std_total, Rex_val, Rex_err, Rex,
-    elevated_R2, label, seqpos, R2_hydro, scaled_R2_pred, rigid_rmse, missing_assignment.
-
-    Rows are sorted by seqpos (peaks without a seqpos are placed last).
-
-    Parameters
-    ----------
-    ref_df : DataFrame
-        Picked peaks, optionally with assn_label.
-    classifications : DataFrame
-        Output of classify_peaks.
-    csv_path : str or Path
-    fit_results : DataFrame, optional
-        Output of fit_peaks. If given, the reference-plane (plane 0) vol,
-        vol_err, lw_n, lw_h are merged in.
-    missing_df : DataFrame, optional
-        Columns: seqpos, label ("proline" or "no_peaklist_assignment"), as
-        computed in run_protein. Appended as extra rows (with NaN peak
-        columns) and carried forward in the new "missing_assignment" column.
-
-    Returns
-    -------
-    DataFrame written to csv_path.
+    elevated_R2, label, seqpos, R2_hydro, scaled_R2_pred, rigid_rmse,
+    missing_assignment. Rows are sorted by seqpos (peaks without a seqpos last).
     """
     classifications = classifications.drop(columns=["assn_label"], errors="ignore")
     ref_cols = [c for c in ["ref_index", "assn_label", "N_ppm", "H_ppm"] if c in ref_df.columns]
@@ -65,154 +78,187 @@ def save_results_csv(ref_df, classifications, csv_path, fit_results=None, missin
         out = out.sort_values("seqpos", na_position="last").reset_index(drop=True)
 
     out.to_csv(csv_path, index=False)
-    print(f"  Saved results CSV → {Path(csv_path).name}")
+    print(f"  Saved results CSV \u2192 {Path(csv_path).name}")
     return out
 
 
-def run_protein(yaml_path, out_dir, lineshape="gaussian",
-                max_r2err_threshold=10000.0, color_map=None,
-                xlim=(10.5, 6.0), ylim=(135, 100),
-                zoom_xlim=(9, 7), zoom_ylim=(125, 112)):
+class CPMGExperiment:
     """
-    Run the full CPMG pipeline for one protein and write standard outputs.
+    One CPMG relaxation-dispersion experiment: its config, the loaded planes,
+    and (after :meth:`run`) the fitted/classified results.
 
-    Steps: load config/planes -> pick peaks -> (optional) BMRB assignment ->
-    fit lineshapes -> compute R2eff -> classify peaks (with HYDRONMR
-    elevated_R2 classification) -> write plots and CSV.
-
-    Parameters
-    ----------
-    yaml_path : str or Path
-        CPMG config YAML (see load_config).
-    out_dir : str or Path
-        Output directory; created if absent. Files are named
-        <yaml_stem>_<thing>.<ext>.
-    lineshape, max_r2err_threshold :
-        Passed to fit_peaks / classify_peaks. Peak-picking baseline,
-        matching tolerance, start_num, and end_num are read from config
-        (see load_config for defaults).
-    color_map : dict, optional
-        Classification -> colour, used for the classified HSQC and waterfall
-        plots. Defaults to a built-in CPMG_COLORS-style map.
-    xlim, ylim : tuple
-        ppm window for HSQC plots.
-    zoom_xlim, zoom_ylim : tuple
-        ppm window for the zoomed-in panel of the peak-mapping plot.
-
-    Returns
-    -------
-    dict with keys: ref_df, fit_results, all_r2eff, classifications.
+    Construct with :meth:`from_config`, then call :meth:`run`.
     """
-    if color_map is None:
-        color_map = {
-            "Rex": "tab:orange",
-            "elevated_R2": "#8ACE00",
-            "flat": "black",
-            "unfit": "red",
-        }
 
-    yaml_path = Path(yaml_path)
-    out_dir = Path(out_dir) / "outputs"
-    cache_dir = Path(out_dir).parent / "caches"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    stem = yaml_path.stem
+    def __init__(self, config, ref_spectrum, plane_data, vcpmg_values, time_T2):
+        self.config = config
+        self.ref_spectrum = ref_spectrum
+        self.plane_data = plane_data
+        self.vcpmg_values = vcpmg_values
+        self.time_T2 = time_T2
 
-    print("== Loading config and planes ==")
-    config = load_config(yaml_path)
-    ref_spectrum, plane_data, vcpmg_values, time_T2 = load_planes(config)
+        # populated by run()
+        self.ref_df = None
+        self.fit_results = None
+        self.all_r2eff = None
+        self.classifications = None
+        self.missing_df = None
 
-    print("== Picking peaks ==")
-    ref_df = pick_peaks(ref_spectrum, baseline=config["baseline_ref_plane"])
-    ref_df["ref_index"] = ref_df.index
-    print(f"  {len(ref_df)} peaks picked")
+    @classmethod
+    def from_config(cls, yaml_path):
+        """Load a CPMG config YAML (see :func:`load_config`) and read all of
+        its UCSF planes into a ready-to-run experiment."""
+        print("== Loading config and planes ==")
+        config = load_config(yaml_path)
+        ref_spectrum, plane_data, vcpmg_values, time_T2 = load_planes(config)
+        return cls(config, ref_spectrum, plane_data, vcpmg_values, time_T2)
 
-    fig, ax = plot_spectrum(ref_spectrum, baseline=config["baseline_ref_plane"], xlim=xlim, ylim=ylim, cmap="Greys_r")
-    ax.set_title(f"{stem} — reference HSQC")
-    fig.savefig(out_dir / f"{stem}_hsqc_unlabeled.pdf", bbox_inches="tight")
-    plt.close(fig)
+    def run(self, out_dir, lineshape="gaussian", max_r2err_threshold=10000.0,
+            color_map=None, make_plots=False, peaklist=None,
+            xlim=(10.5, 6.0), ylim=(135, 100),
+            zoom_xlim=(9, 7), zoom_ylim=(125, 112)):
+        """
+        Run the full pipeline and write a results CSV to ``out_dir``.
 
-    print("== Peak assignment ==")
-    sequence = config.get("sequence")
-    peaklist = config.get("peaklist")
-    missing_df = None
-    if peaklist and sequence:
-        peaks_for_missing = load_peaklist(peaklist)
-        assigned_seqpos = set(
-            peaks_for_missing["assn_label"].apply(_parse_seqpos).dropna().astype(int)
-        )
-        rows = []
-        for i, char in enumerate(sequence):
-            seqpos = i + 1
-            if char == "P":
-                rows.append(dict(seqpos=seqpos, label="proline"))
-            elif seqpos not in assigned_seqpos:
-                rows.append(dict(seqpos=seqpos, label="no_peaklist_assignment"))
-        missing_df = pd.DataFrame(rows)
-    if peaklist:
+        Steps: pick peaks -> (optional) reference-peaklist assignment -> fit
+        lineshapes -> compute R2eff -> classify peaks (with HYDRONMR
+        elevated_R2 classification) -> write the CSV. With ``make_plots=True``
+        the diagnostic HSQC / dispersion / waterfall PDFs are also written
+        (requires the plotting modules).
+
+        Results are stored on the object (``ref_df``, ``fit_results``,
+        ``all_r2eff``, ``classifications``) and ``self`` is returned.
+        """
+        color_map = color_map or dict(_DEFAULT_COLORS)
+        config = self.config
+        out_dir = Path(out_dir) / "outputs"
+        cache_dir = out_dir.parent / "caches"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        stem = config["yaml_path"].stem
+
+        print("== Picking peaks ==")
+        ref_df = self.ref_spectrum.pick_peaks(baseline=config["baseline_ref_plane"])
+        ref_df["ref_index"] = ref_df.index
+        print(f"  {len(ref_df)} peaks picked")
+
+        print("== Peak assignment ==")
+        sequence = config.get("sequence")
+        peaklist = peaklist if peaklist is not None else config.get("peaklist")
+        missing_df = None
+        if peaklist is not None and sequence:
+            peaks_for_missing = _peaklist_df(peaklist)
+            assigned_seqpos = set(
+                peaks_for_missing["assn_label"].apply(_parse_seqpos).dropna().astype(int)
+            )
+            rows = []
+            for i, char in enumerate(sequence):
+                seqpos = i + 1
+                if char == "P":
+                    rows.append(dict(seqpos=seqpos, label="proline"))
+                elif seqpos not in assigned_seqpos:
+                    rows.append(dict(seqpos=seqpos, label="no_peaklist_assignment"))
+            missing_df = pd.DataFrame(rows)
+
         picked_df = ref_df.copy()
-        peaks = load_peaklist(peaklist)
-        if sequence:
-            validate_sequence(sequence, peaks)
+        peaks_shifted = None
+        if peaklist is not None:
+            peaks = _peaklist_df(peaklist)
+            if sequence:
+                validate_sequence(sequence, peaks)
+            ref_df, peaks_shifted = map_peaklists(ref_df, peaks, tol=config["peak_mapping_tol"])
+        else:
+            print("  No peaklist provided or in config \u2014 skipping.")
 
-        ref_df, peaks_shifted = map_peaklists(ref_df, peaks, tol=config["peak_mapping_tol"])
+        print("== Fitting lineshapes ==")
+        fit_results = fit_peaks(self.plane_data, ref_df, self.ref_spectrum.uc, config,
+                                lineshape=lineshape, cache_dir=cache_dir)
 
-        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-        for ax, panel_xlim, panel_ylim in zip(axes, (xlim, zoom_xlim), (ylim, zoom_ylim)):
-            plot_spectrum(ref_spectrum, baseline=config["baseline_ref_plane"],
-                          xlim=panel_xlim, ylim=panel_ylim, cmap="Greys_r", ax=ax)
-            plot_peaklist(ax, picked_df, text=None, color="tab:blue", label="picked peaks")
-            plot_peaklist(ax, peaks_shifted, text="assn_label", color="tab:green", label="ref peaklist, translated")
-            plot_peaklist(ax, ref_df, text="assn_label", color="magenta", label="mapped peaks")
-        fig.suptitle(f"{stem} — peak mapping")
-        plt.tight_layout()
-        fig.savefig(out_dir / f"{stem}_peak_mapping.pdf", bbox_inches="tight")
+        print("== Computing R2eff ==")
+        all_r2eff = compute_r2eff(fit_results, self.vcpmg_values, self.time_T2)
+
+        print("== Classifying peaks ==")
+        classifications = classify_peaks(all_r2eff, ref_df, config,
+                                         max_r2err_threshold=max_r2err_threshold)
+        print(classifications["label"].value_counts().to_string())
+
+        # store results on the object
+        self.ref_df = ref_df
+        self.fit_results = fit_results
+        self.all_r2eff = all_r2eff
+        self.classifications = classifications
+        self.missing_df = missing_df
+
+        if make_plots:
+            self._render_plots(stem, out_dir, picked_df, peaks_shifted,
+                               color_map, sequence,
+                               xlim, ylim, zoom_xlim, zoom_ylim)
+
+        print("== Writing CSV ==")
+        save_results_csv(ref_df, classifications, out_dir / f"{stem}.csv",
+                         fit_results=fit_results, missing_df=missing_df)
+
+        return self
+
+    def _render_plots(self, stem, out_dir, picked_df, peaks_shifted,
+                      color_map, sequence, xlim, ylim, zoom_xlim, zoom_ylim):
+        """Render the diagnostic PDFs. Imports plotting lazily so the data
+        pipeline does not depend on the plotting modules."""
+        import matplotlib.pyplot as plt
+        from .plotting import plot_r2eff_grid, plot_waterfall
+        from ..spectra.plotting import plot_spectrum, plot_peaklist
+
+        ref_spectrum = self.ref_spectrum
+        ref_df = self.ref_df
+        baseline = self.config["baseline_ref_plane"]
+
+        fig, ax = plot_spectrum(ref_spectrum, baseline=baseline, xlim=xlim, ylim=ylim, cmap="Greys_r")
+        ax.set_title(f"{stem} \u2014 reference HSQC")
+        fig.savefig(out_dir / f"{stem}_hsqc_unlabeled.pdf", bbox_inches="tight")
         plt.close(fig)
-    else:
-        print("  No peaklist in config — skipping.")
 
-    print("== Fitting lineshapes ==")
-    fit_results = fit_peaks(plane_data, ref_df, ref_spectrum.uc, config, lineshape=lineshape, cache_dir=cache_dir)
+        if peaks_shifted is not None:
+            fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+            for ax, panel_xlim, panel_ylim in zip(axes, (xlim, zoom_xlim), (ylim, zoom_ylim)):
+                plot_spectrum(ref_spectrum, baseline=baseline,
+                              xlim=panel_xlim, ylim=panel_ylim, cmap="Greys_r", ax=ax)
+                plot_peaklist(ax, picked_df, text=None, color="tab:blue", label="picked peaks")
+                plot_peaklist(ax, peaks_shifted, text="assn_label", color="tab:green",
+                              label="ref peaklist, translated")
+                plot_peaklist(ax, ref_df, text="assn_label", color="magenta", label="mapped peaks")
+            fig.suptitle(f"{stem} \u2014 peak mapping")
+            plt.tight_layout()
+            fig.savefig(out_dir / f"{stem}_peak_mapping.pdf", bbox_inches="tight")
+            plt.close(fig)
 
-    print("== Computing R2eff ==")
-    all_r2eff = compute_r2eff(fit_results, vcpmg_values, time_T2)
+        merged = ref_df.merge(self.classifications[["ref_index", "label"]], on="ref_index", how="left")
+        merged["label"] = merged["label"].fillna("unlabeled")
+        text_col = ("assn_label"
+                    if "assn_label" in merged.columns and merged["assn_label"].notna().any()
+                    else "ref_index")
 
-    print("== Classifying peaks ==")
-    classifications = classify_peaks(all_r2eff, ref_df, config,
-                                     max_r2err_threshold=max_r2err_threshold)
-    print(classifications["label"].value_counts().to_string())
+        fig, ax = plot_spectrum(ref_spectrum, baseline=baseline, contour_color="black",
+                                xlim=xlim, ylim=ylim, figsize=(9, 8))
+        plot_peaklist(ax, merged, marker=".", markersize=4, text=text_col,
+                      label_fontsize=6, hue="label", palette=color_map)
+        ax.set_title(f"{stem} \u2014 CPMG classification", fontsize=14)
+        fig.savefig(out_dir / f"{stem}_hsqc_annotated_assigned.pdf", bbox_inches="tight")
+        plt.close(fig)
 
-    merged = ref_df.merge(classifications[["ref_index", "label"]], on="ref_index", how="left")
-    merged["label"] = merged["label"].fillna("unlabeled")
+        fig, _ = plot_r2eff_grid(self.all_r2eff, self.classifications, ref_df=ref_df, color_map=color_map)
+        fig.savefig(out_dir / f"{stem}_grid.pdf", bbox_inches="tight")
+        plt.close(fig)
 
-    text_col = ("assn_label"
-                if "assn_label" in merged.columns and merged["assn_label"].notna().any()
-                else "ref_index")
+        fig, ax = plot_waterfall(self.all_r2eff, self.classifications, ref_df, color_map=color_map,
+                                 sequence=sequence, missing_df=self.missing_df)
+        fig.savefig(out_dir / f"{stem}_waterfall.pdf", bbox_inches="tight")
+        plt.close(fig)
 
-    fig, ax = plot_spectrum(ref_spectrum, baseline=config["baseline_ref_plane"],
-                            contour_color="black", xlim=xlim, ylim=ylim,
-                            figsize=(9, 8))
-    plot_peaklist(ax, merged, marker=".", markersize=4,
-                  text=text_col, label_fontsize=6,
-                  hue="label", palette=color_map)
-    ax.set_title(f"{stem} — CPMG classification", fontsize=14)
-    fig.savefig(out_dir / f"{stem}_hsqc_annotated_assigned.pdf", bbox_inches="tight")
-    plt.close(fig)
 
-    print("== Plotting dispersion grid ==")
-    fig, _ = plot_r2eff_grid(all_r2eff, classifications, ref_df=ref_df, color_map=color_map)
-    fig.savefig(out_dir / f"{stem}_grid.pdf", bbox_inches="tight")
-    plt.close(fig)
-
-    print("== Plotting waterfall ==")
-    fig, ax = plot_waterfall(all_r2eff, classifications, ref_df, color_map=color_map,
-                             sequence=sequence, missing_df=missing_df)
-    fig.savefig(out_dir / f"{stem}_waterfall.pdf", bbox_inches="tight")
-    plt.close(fig)
-
-    print("== Writing CSV ==")
-    save_results_csv(ref_df, classifications, out_dir / f"{stem}.csv",
-                     fit_results=fit_results, missing_df=missing_df)
-
-    return dict(ref_df=ref_df, fit_results=fit_results, all_r2eff=all_r2eff,
-                classifications=classifications)
+def run_protein(yaml_path, out_dir, **kwargs):
+    """Thin backward-compatible wrapper around
+    ``CPMGExperiment.from_config(yaml_path).run(out_dir, ...)``. Returns the
+    results dict (ref_df, fit_results, all_r2eff, classifications)."""
+    exp = CPMGExperiment.from_config(yaml_path).run(out_dir, **kwargs)
+    return dict(ref_df=exp.ref_df, fit_results=exp.fit_results,
+                all_r2eff=exp.all_r2eff, classifications=exp.classifications)

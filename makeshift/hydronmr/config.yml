@@ -1,14 +1,12 @@
 # Default Fast-HYDRONMR run configuration.
-#
+
 # The only thing that varies per run is the input PDB structure
-# (passed separately to hydronmr.run(pdb_path, ...)). Everything below
-# matches GROUND_TRUTH_DONT_OVERWRITE/*/hydronmr.dat (all 8 ground-truth
-# cases share these values).
+# (passed separately to hydronmr.run(pdb_path, ...))
 
 temperature_k: 293.0        # T (temperature, K)
 viscosity_poise: 0.01       # ETA (solvent viscosity, poise)
-aer_angstrom: 3.0            # AER, radius of the atomic elements
-ind: 1                       # type of hydrodynamic interaction (1 or 3);
+aer_angstrom: 3.0           # AER, radius of the atomic elements
+ind: 1                      # type of hydrodynamic interaction (1 or 3);
                               # see SHELL_MODEL_NOTES.md -- ground truth
                               # uses ind=3 with the (not-yet-ported) shell
                               # model; ind=1 on the raw AER model is the

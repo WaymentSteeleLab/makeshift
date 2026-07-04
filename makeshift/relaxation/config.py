@@ -2,7 +2,7 @@ import yaml
 import urllib.request
 from pathlib import Path
 
-from ..io.io import read_ucsf
+from ..spectra.spectrum import Spectrum
 
 
 def _fetch_pdb(pdb_code: str) -> Path:
@@ -114,12 +114,12 @@ def load_planes(config):
     vcpmg_values : list of float — νCPMG in Hz, one per CPMG plane
     time_T2 : float — constant-time delay in seconds
     """
-    ref_spectrum = read_ucsf(config["reference"])
+    ref_spectrum = Spectrum.from_ucsf(config["reference"])
     sorted_planes = sorted(config["planes"], key=lambda p: float(p["vcpmg"]))
     plane_data = [ref_spectrum.data]
     vcpmg_values = []
     for plane in sorted_planes:
-        plane_data.append(read_ucsf(plane["file"]).data)
+        plane_data.append(Spectrum.from_ucsf(plane["file"]).data)
         print(f'read data from {plane["file"]}')
         vcpmg_values.append(float(plane["vcpmg"]))
     return ref_spectrum, plane_data, vcpmg_values, float(config["time_T2"])

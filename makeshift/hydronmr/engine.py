@@ -1,16 +1,9 @@
 """
 HYDRONMR engine: run state + Python API entry point.
 
-This module combines:
-  - `HydronmrState` ("common block" state passed between physics
-    routines, mirroring the original Fortran COMMON blocks).
-  - `run()` / `Result`: the public API entry point (mode 25, PDB
-    structure -> per-residue NMR relaxation). No CLI -- call `run()`
-    directly.
-
 Example
 -------
-    from hydronmr.engine import run
+    from makeshift.hydronmr import run
     result = run("in.pdb", csv_path="t1t2.csv")
     print(result.csv_path)
 """
@@ -20,6 +13,7 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 import numpy as np
+import pandas as pd
 
 from .physics.config import Config, DEFAULT_CONFIG_PATH
 from .physics.structure import structure_pro
@@ -31,16 +25,6 @@ from .physics.output import write_t1t2_csv, per_residue_results
 
 @dataclass
 class HydronmrState:
-    """"Common block" state for the HYDRONMR port.
-
-    The original Fortran program communicates between subroutines
-    almost entirely through COMMON blocks. Rather than threading
-    dozens of arrays and scalars through every function signature, we
-    collect that shared state into a single mutable object, mirroring
-    the COMMON blocks. Each physics module receives this object as its
-    first argument, named `g` (for "globals"), exactly the way the
-    Fortran subroutines implicitly receive COMMON.
-    """
 
     # ---- run-mode flags (set in MAIN__) ----------------------------------
     modehyd: int = 25      # 25 = "advanced" PDB/protein NMR mode
@@ -80,6 +64,26 @@ class Result:
     state: HydronmrState
     per_residue: dict       # (chain, resseq) -> (T1, T2, T1/T2, NOE)
     csv_path: Optional[Path] = None
+ 
+    def to_dataframe(self):
+        """Per-residue results as a tidy DataFrame, one row per residue with
+        columns: chain, seqpos, T1, T2, T1_over_T2, NOE."""
+        rows = [
+            dict(chain=chain, seqpos=resseq,
+                 T1=t1, T2=t2, T1_over_T2=ratio, NOE=noe)
+            for (chain, resseq), (t1, t2, ratio, noe) in self.per_residue.items()
+        ]
+        return (pd.DataFrame(rows)
+                .sort_values(["chain", "seqpos"])
+                .reset_index(drop=True))
+ 
+    def to_csv(self, path):
+        """Write per-residue results to ``path`` (columns: resseq, T1, T2,
+        T1_over_T2, NOE) and return the path written."""
+        from .physics.output import write_t1t2_csv
+        from .physics.pdb import nh_bond_vectors, parse_pdb_atoms
+        nh_vectors = nh_bond_vectors(parse_pdb_atoms(self.state.pdb_path))
+        return write_t1t2_csv(self.state, nh_vectors, path)
 
 
 def run(

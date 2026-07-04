@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from ..spectrum.peaks import _AA_3TO1
-from ..hydronmr.hydronmr.engine import run as run_hydronmr
+from ..utils.constants import _AA_3TO1
+from ..hydronmr import run as run_hydronmr
 from .config import _yaml_set_cache
 
 

@@ -1,23 +1,24 @@
+"""
+Peak-list alignment and one-to-one matching.
+
+Aligns two peak tables in (H_ppm, N_ppm) — typically a reference assignment
+list onto peaks picked from a spectrum.
+"""
+
 import numpy as np
 import pandas as pd
 from scipy.optimize import linear_sum_assignment
 
-# ---------------------------------------------------------------------------
-# Peak matching (Hungarian algorithm, one-to-one)
-# ---------------------------------------------------------------------------
 
-def match_peaks_hungarian_(df, ref_df, tol_h=0.03, tol_n=0.3,
-                h_col="H_ppm", n_col="N_ppm"):
+def _match_hungarian(df, ref_df, tol_h=0.03, tol_n=0.3, h_col="H_ppm", n_col="N_ppm"):
     """
     Match peaks between two DataFrames using the Hungarian algorithm.
 
     Each peak in ref_df is matched to at most one peak in df within
     (tol_h, tol_n) ppm tolerance.
 
-    Returns
-    -------
-    DataFrame aligned to ref_df with added columns: ref_index, matched,
-    dist_h, dist_n.
+    Returns a DataFrame aligned to ref_df with added columns: ref_index,
+    matched, dist_h, dist_n.
     """
     ref = ref_df.reset_index(drop=True)
     tgt = df.reset_index(drop=True)
@@ -64,10 +65,6 @@ def match_peaks_hungarian_(df, ref_df, tol_h=0.03, tol_n=0.3,
         rows.append(row)
     return pd.DataFrame(rows).reset_index(drop=True)
 
-
-# ---------------------------------------------------------------------------
-# Peaklist alignment / mapping
-# ---------------------------------------------------------------------------
 
 def _find_offset(left, right, tol):
     """Grid search for the (Δ¹H, Δ¹⁵N) that minimizes the RMSE of
@@ -154,8 +151,10 @@ def _detect_conflicts(right_mapped, left, matched, tol, tmp_label):
 
     return matched
 
+
 def _apply_how(left, right_mapped, matched, how, right_label, tmp_label):
-    """Build (left_out, right_mapped) according to `how`, mirroring pandas
+    """
+    Build (left_out, right_mapped) according to `how`, mirroring pandas
     merge semantics. See map_peaklists for the meaning of each mode.
     """
     if how not in ("left", "right", "inner", "outer"):
@@ -189,67 +188,43 @@ def _apply_how(left, right_mapped, matched, how, right_label, tmp_label):
 
 
 def map_peaklists(left, right, offset=None,
-                tol=1, label_cols=("assn_label", "assn_label"),
-                how="inner"):
+                  tol=1, label_cols=("assn_label", "assn_label"),
+                  how="inner"):
     """
     Align two peak lists in (H_ppm, N_ppm) and match them one-to-one.
 
-    Typical use is mapping a reference peaklist containing
-    assignments (right) onto peaks picked from a spectrum (left), but either
-    side can be any DataFrame with H_ppm/N_ppm columns — e.g. matching peaks
-    picked from two different spectra to each other. `right` is the side
-    that gets shifted by the offset; `left` is treated as fixed.
+    Align two peak lists in (H_ppm, N_ppm) and match them one-to-one.
 
-    Step 1 — Translation offset: if offset is None, a grid search finds the
-    (Δ¹H, Δ¹⁵N) that minimizes the RMSE of nearest-neighbor distance
-    (normalized by (tol_h, tol_n) so both dimensions contribute equally)
-    between right and left.
-
-    Step 2 — One-to-one Hungarian matching within the tolerance window.
-
-    Step 3 — Conflict detection: right-side peaks that were within tolerance
-    of a left-side peak that got assigned to a closer competitor are flagged.
+    `right` (e.g. a reference assignment list) is shifted by a translation
+    offset — grid-searched if `offset` is None — then Hungarian-matched to
+    `left` (treated as fixed) within tolerance. Right-side peaks that lost a
+    close match to a competitor are flagged in a `conflict` column.
 
     Parameters
     ----------
-    left : DataFrame
-        Picked spectrum peaks with H_ppm and N_ppm columns. Treated as fixed.
-    right : DataFrame
-        Peaks to map onto left, with H_ppm, N_ppm, and a label column (e.g.
-        output of load_peaklist). Shifted by the offset before matching.
+    left, right : DataFrame
+        Peak tables with H_ppm/N_ppm columns (pass a PeakList's `.data`).
+        `left` is fixed; `right` is shifted onto it.
     offset : (float, float) or None
-        (Δ¹H, Δ¹⁵N) to apply to `right` before matching. If None, a grid
-        search finds the best offset.
+        (Δ¹H, Δ¹⁵N) applied to `right`; grid-searched if None.
     tol : float
-        Scalar multiplier on the default post-shift matching tolerances
-        (tol_h, tol_n) = (0.03, 0.3) * tol, in ppm.
+        Multiplier on the default matching tolerances (0.03, 0.3) ppm.
     label_cols : (str, str)
-        Label column names on (left, right) used for conflict detection and
-        carried through to the outputs. Either can be None if that side has
-        no label column.
+        Label columns on (left, right); either may be None.
     how : {"inner", "left", "right", "outer"}
-        Mirrors pandas merge semantics, and applies only to left_out — the
-        returned right_mapped always contains the full right peaklist
-        (translated by the offset), regardless of `how`.
-        "inner" (default): left_out contains only matched left peaks (no
-        extra NaN rows).
-        "right": left_out contains only matched left peaks, plus one extra
-        row per unmatched right peak (left-side columns NaN).
-        "left": left_out contains all left-side peaks, matched or not.
-        "outer": left_out is the union — all left-side peaks plus one
-        extra row per unmatched right peak (left-side columns NaN).
+        pandas-merge semantics for `left_out`; `right_mapped` is always full.
 
     Returns
     -------
-    left_out : DataFrame — updated with <right label_col> and conflict columns,
-        filtered/extended according to `how` (see above)
-    right_mapped : DataFrame — full right-side peaklist after offset
-        (for plotting), independent of `how`
+    left_out : DataFrame
+        Matched peaks with the right label + `conflict`, filtered per `how`.
+    right_mapped : DataFrame
+        Full right peaklist after the offset (for plotting).
     """
     left_label, right_label = label_cols
-    tol_h, tol_n = 0.03*tol,0.3*tol
+    tol_h, tol_n = 0.03 * tol, 0.3 * tol
 
-    # ── offset ────────────────────────────────────────────────────────────
+    #  offset 
     if offset is not None:
         best_dh, best_dn = float(offset[0]), float(offset[1])
         print(f'  Using provided offset: Δ¹H = {best_dh:+.3f}, '
@@ -257,7 +232,7 @@ def map_peaklists(left, right, offset=None,
     else:
         best_dh, best_dn = _find_offset(left, right, (tol_h, tol_n))
 
-    # ── shift and match ───────────────────────────────────────────────────
+    #  shift and match 
     right_mapped = right.copy()
     right_mapped['H_ppm'] += best_dh
     right_mapped['N_ppm'] += best_dn
@@ -267,14 +242,14 @@ def map_peaklists(left, right, offset=None,
     if right_label is None:
         right_mapped[tmp_label] = right_mapped.index
 
-    matched = match_peaks_hungarian_(right_mapped, left,
-                          tol_h=tol_h, tol_n=tol_n,
-                          h_col='H_ppm', n_col='N_ppm')
+    matched = _match_hungarian(right_mapped, left,
+                               tol_h=tol_h, tol_n=tol_n,
+                               h_col='H_ppm', n_col='N_ppm')
 
-    # ── conflict detection ────────────────────────────────────────────────
+    #  conflict detection 
     matched = _detect_conflicts(right_mapped, left, matched, (tol_h, tol_n), tmp_label)
 
-    # ── build updated left ───────────────────────────────────────────────
+    #  build updated left 
     out, right_mapped = _apply_how(left, right_mapped, matched, how, right_label, tmp_label)
 
     if right_label is None:
@@ -282,6 +257,7 @@ def map_peaklists(left, right, offset=None,
 
     n_assigned = matched['matched'].sum()
     n_conflict = matched['conflict'].sum()
-    print(f'  {n_assigned}/{len(right)} peaks in right peaklist assigned  |  {n_conflict} flagged for inspection')
+    print(f'  {n_assigned}/{len(right)} peaks in right peaklist assigned  |  '
+          f'{n_conflict} flagged for inspection')
 
     return out, right_mapped

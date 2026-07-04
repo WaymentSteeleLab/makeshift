@@ -2,37 +2,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from ..io.io import estimate_background
+from .spectrum import estimate_background
 
-# ---------------------------------------------------------------------------
-# Plotting
-# ---------------------------------------------------------------------------
 
-def plot_spectrum(ref_data, contour_levels=8, cmap="plasma",
-                  contour_color=None, linewidth=0.8, vmax_scale=0.5,
-                  xlim=None, ylim=None, baseline=10,
-                  figsize=(8, 7), ax=None):
+def plot_spectrum(ref_data, 
+                  contour_levels=8, 
+                  cmap="plasma",
+                  contour_color=None, 
+                  linewidth=0.8, 
+                  vmax_scale=0.5,
+                  xlim=None, ylim=None, 
+                  baseline=10,
+                  figsize=(8, 7),
+                  ax=None):
     """
     Plot 2D spectrum contours.
 
-    Parameters
-    ----------
-    ref_data : Spectrum
-        Output of read_ucsf (data + per-axis unit-conversion objects).
-    contour_color : str or None
-        If set, draw all contours in this solid color instead of using `cmap`.
-    linewidth : float
-        Contour line width.
-    baseline : float
-        Lowest contour level = baseline × noise floor. Matches
-        pick_peaks so contour base and picking threshold stay consistent.
-    figsize : tuple
-        Figure size passed to plt.subplots when ax is None.
-    ax : matplotlib Axes or None
-        If provided, plot into this axes instead of creating a new figure.
-
-    Use `plot_peaklist` to overlay peak markers/labels on the returned axes —
-    this lets you plot multiple peaklists on top of the same spectrum.
+    Use `plot_peaklist` to overlay peak markers/labels on the returned axes 
     """
     uc = ref_data.uc
     data = ref_data.data
@@ -68,11 +54,18 @@ def plot_spectrum(ref_data, contour_levels=8, cmap="plasma",
     return fig, ax
 
 
-def plot_peaklist(ax=None, peaks_df=None, marker="x", peaks_xcol="H_ppm", peaks_ycol="N_ppm",
-                  color="limegreen", markersize=3,
-                  text="ref_index", label_fontsize=6,
+def plot_peaklist(ax=None, 
+                  peaks_df=None, 
+                  marker="x", 
+                  peaks_xcol="H_ppm", 
+                  peaks_ycol="N_ppm",
+                  color="limegreen", 
+                  markersize=3,
+                  text="ref_index", 
+                  label_fontsize=6,
                   label=None,
-                  hue=None, palette=None,
+                  hue=None, 
+                  palette=None,
                   figsize=(8, 6)):
     """
     Plot peak markers (and optional labels), optionally onto an existing axes.
@@ -165,12 +158,18 @@ def plot_peaklist(ax=None, peaks_df=None, marker="x", peaks_xcol="H_ppm", peaks_
 
 
 def plot_csp(peaks_df1, peaks_df2, on,
-             xcol="H_ppm", ycol="N_ppm",
-             color1="steelblue", color2="tab:orange",
-             line_color="gray", line_alpha=0.5,
-             marker="o", markersize=4,
-             text=None, label_fontsize=6,
-             ax=None, figsize=(8, 6)):
+             xcol="H_ppm", 
+             ycol="N_ppm",
+             color1="steelblue", 
+             color2="tab:orange",
+             line_color="gray", 
+             line_alpha=0.5,
+             marker="o", 
+             markersize=4,
+             text=None, 
+             label_fontsize=6,
+             ax=None, 
+             figsize=(8, 6)):
     """
     Plot two matched peaklists and draw connecting lines between paired peaks.
 
@@ -197,9 +196,6 @@ def plot_csp(peaks_df1, peaks_df2, on,
         Axes to plot onto. Creates a new figure if None.
     figsize : tuple
 
-    Returns
-    -------
-    fig, ax
     """
     standalone = ax is None
     if standalone:

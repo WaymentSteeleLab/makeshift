@@ -13,7 +13,7 @@ from typing import List
 
 import yaml
 
-DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yml"
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config.yml"
 
 
 @dataclass
