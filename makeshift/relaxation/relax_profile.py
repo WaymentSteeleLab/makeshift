@@ -28,6 +28,7 @@ import pandas as pd
 
 from ..entry import NMRStarEntry
 from ..utils.structures import detect_source
+from . import fixes
 
 ORDERED, REX, PSNS, BOTH = "A", "^", "v", "b"
 MISSING, TERMINUS, PROLINE, NODATA = ".", "t", "p", "x"
@@ -125,7 +126,7 @@ class RelaxationProfile:
             df = entry.relaxation(kind)
             units = cls._list_units(entry, kind)
             table[col], table[f"{col}_err"] = cls._align_rate(
-                df, n, units, kind)
+                df, n, units, kind, entry_id=entry.entry_id)
  
         noe = entry.relaxation("NOE")
         table["NOE"], table["NOE_err"] = cls._align_plain(noe, n)
@@ -149,34 +150,57 @@ class RelaxationProfile:
  
     @staticmethod
     def _list_units(entry, kind):
+        override = fixes.unit_override(entry.entry_id, kind)
+        if override is not None:
+            return override
         for sf in entry.saveframe(f"heteronucl_{kind}_relaxation").values():
             u = sf.get(f"{kind}_val_units")
             if u and u not in (".", "?"):
                 return u
         return None
- 
+
     @staticmethod
     def _series_by_seqid(df, n, value_col="Val", err_col="Val_err"):
-        """Index a relaxation DataFrame's value/err onto 1..n by Seq_ID."""
+        """
+        Index a relaxation DataFrame's value/err onto 1..n by Seq_ID.
+
+        Restricts to backbone N/H rows when Atom_ID is present and any are
+        found, keeping the first match per residue — some entries (e.g. for
+        Arg, Trp) also deposit a sidechain relaxation value under the same
+        Seq_ID, which would otherwise silently overwrite the backbone one.
+        """
         val = pd.Series(np.nan, index=np.arange(1, n + 1))
         err = pd.Series(np.nan, index=np.arange(1, n + 1))
         if df is None or df.empty:
             return val, err
         sub = df.dropna(subset=["Seq_ID"])
+        if "Atom_ID" in sub.columns:
+            backbone = sub["Atom_ID"].isin(("N", "H"))
+            if backbone.any():
+                sub = sub[backbone]
+        sub = sub.drop_duplicates(subset="Seq_ID", keep="first")
         for _, row in sub.iterrows():
             s = int(row["Seq_ID"])
             if 1 <= s <= n:
                 val.loc[s] = row.get(value_col, np.nan)
                 err.loc[s] = row.get(err_col, np.nan)
         return val, err
- 
+
     @classmethod
-    def _align_rate(cls, df, n, units, kind):
-        val, err = cls._series_by_seqid(df, n)
+    def _align_rate(cls, df, n, units, kind, entry_id=None):
+        value_col, err_col = "Val", "Val_err"
+        if fixes.value_err_swapped(entry_id, kind):
+            value_col, err_col = err_col, value_col
+        val, err = cls._series_by_seqid(df, n, value_col=value_col, err_col=err_col)
         rate = _to_rate(val.values, units, kind)
         # convert a time error into a rate error: d(1/T) = dT / T^2
         is_time = not (rate.size and np.allclose(rate, val.values, equal_nan=True))
         rate_err = (err.values / val.values ** 2) if is_time else err.values
+
+        if fixes.err_reciprocal(entry_id, kind):
+            rate_err = 1.0 / rate_err
+        if fixes.err_invalid(entry_id, kind):
+            rate_err = np.full(n, np.nan)
         return rate, rate_err
  
     @classmethod
