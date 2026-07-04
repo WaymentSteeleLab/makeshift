@@ -222,10 +222,10 @@ class CPMGExperiment:
             for ax, panel_xlim, panel_ylim in zip(axes, (xlim, zoom_xlim), (ylim, zoom_ylim)):
                 plot_spectrum(ref_spectrum, baseline=baseline,
                               xlim=panel_xlim, ylim=panel_ylim, cmap="Greys_r", ax=ax)
-                plot_peaklist(ax, picked_df, text=None, color="tab:blue", label="picked peaks")
-                plot_peaklist(ax, peaks_shifted, text="assn_label", color="tab:green",
+                plot_peaklist(picked_df, ax=ax, text=None, color="tab:blue", label="picked peaks")
+                plot_peaklist(peaks_shifted, ax=ax, text="assn_label", color="tab:green",
                               label="ref peaklist, translated")
-                plot_peaklist(ax, ref_df, text="assn_label", color="magenta", label="mapped peaks")
+                plot_peaklist(ref_df, ax=ax, text="assn_label", color="magenta", label="mapped peaks")
             fig.suptitle(f"{stem} \u2014 peak mapping")
             plt.tight_layout()
             fig.savefig(out_dir / f"{stem}_peak_mapping.pdf", bbox_inches="tight")
@@ -239,7 +239,7 @@ class CPMGExperiment:
 
         fig, ax = plot_spectrum(ref_spectrum, baseline=baseline, contour_color="black",
                                 xlim=xlim, ylim=ylim, figsize=(9, 8))
-        plot_peaklist(ax, merged, marker=".", markersize=4, text=text_col,
+        plot_peaklist(merged, ax=ax, marker=".", markersize=4, text=text_col,
                       label_fontsize=6, hue="label", palette=color_map)
         ax.set_title(f"{stem} \u2014 CPMG classification", fontsize=14)
         fig.savefig(out_dir / f"{stem}_hsqc_annotated_assigned.pdf", bbox_inches="tight")

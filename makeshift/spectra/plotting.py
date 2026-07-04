@@ -54,14 +54,14 @@ def plot_spectrum(ref_data,
     return fig, ax
 
 
-def plot_peaklist(ax=None, 
-                  peaks_df=None, 
-                  marker="x", 
+def plot_peaklist(peaks_df=None,
+                  ax=None,
+                  marker="x",
                   peaks_xcol="H_ppm", 
                   peaks_ycol="N_ppm",
                   color="limegreen", 
                   markersize=3,
-                  text="ref_index", 
+                  text="assn_label",
                   label_fontsize=6,
                   label=None,
                   hue=None, 
@@ -72,11 +72,11 @@ def plot_peaklist(ax=None,
 
     Parameters
     ----------
+    peaks_df : DataFrame
+        Peaks to plot.
     ax : matplotlib Axes or None
         Axes to plot onto. If None, a new figure is created with inverted axes
         (H on x, N on y, both increasing toward origin as in NMR convention).
-    peaks_df : DataFrame
-        Peaks to plot.
     markersize : float
         Marker size for peak positions.
     text : str or None
