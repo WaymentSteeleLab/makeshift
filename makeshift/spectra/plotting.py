@@ -5,6 +5,26 @@ import seaborn as sns
 from .spectrum import estimate_background
 
 
+def _resolve_palette(palette, categories):
+    """
+    Build a {category: colour} mapping.
+
+    `palette` may be a dict (used as-is, values missing a key fall back to
+    "gray" at lookup time), or any seaborn/matplotlib palette spec (a
+    palette name like "tab10"/"husl", a list of colours, etc.) which is
+    assigned to `categories` in sorted order. `categories` should reflect
+    the full set of possible values (e.g. all of peaks_df1[hue], not just
+    the current subset) so the same category always maps to the same
+    colour across repeated calls, even when only some categories are
+    present in a given call.
+    """
+    if isinstance(palette, dict):
+        return palette
+    colors = sns.color_palette(palette if palette is not None else "tab10",
+                                n_colors=len(categories))
+    return {cat: colors[i] for i, cat in enumerate(categories)}
+
+
 def plot_spectrum(ref_data, 
                   contour_levels=8, 
                   cmap="plasma",
@@ -158,17 +178,19 @@ def plot_peaklist(peaks_df=None,
 
 
 def plot_csp(peaks_df1, peaks_df2, on,
-             xcol="H_ppm", 
+             xcol="H_ppm",
              ycol="N_ppm",
-             color1="steelblue", 
+             color1="steelblue",
              color2="tab:orange",
-             line_color="gray", 
+             line_color="gray",
              line_alpha=0.5,
-             marker="o", 
+             marker="o",
              markersize=4,
-             text=None, 
+             text=None,
              label_fontsize=6,
-             ax=None, 
+             hue=None,
+             palette=None,
+             ax=None,
              figsize=(8, 6)):
     """
     Plot two matched peaklists and draw connecting lines between paired peaks.
@@ -183,15 +205,32 @@ def plot_csp(peaks_df1, peaks_df2, on,
     xcol, ycol : str
         Column names for H and N chemical shifts in both DataFrames.
     color1, color2 : str
-        Marker colours for peaks_df1 and peaks_df2 respectively.
+        Marker colours for peaks_df1 and peaks_df2 respectively. Ignored when
+        hue is set.
     line_color, line_alpha : str, float
         Style for the connecting lines.
     marker : str
-        Matplotlib marker string applied to both peaklists.
+        Matplotlib marker string applied to peaks_df1. peaks_df2 is always
+        drawn with a triangle marker ("^").
     markersize : float
     text : str or None
         Column in peaks_df1 to use for per-peak annotations. Pass None to suppress.
     label_fontsize : int
+    hue : str or None
+        Column in peaks_df1 to colour matched pairs by. When set, both the
+        peaks_df1 and peaks_df2 marker of a pair take the same colour (based
+        on peaks_df1's value), each unique value gets its own legend entry,
+        and annotation text is coloured to match.
+    palette : dict, str, list, or None
+        Colour mapping for hue values. A dict maps values straight to
+        colours (missing keys fall back to 'gray'). Anything else (a
+        seaborn/matplotlib palette name, a list of colours, or None for the
+        "tab10" default) is assigned to the sorted unique values of
+        peaks_df1[hue] — using the full column rather than just the merged
+        subset, so a given category (e.g. a given amino acid in Comp_ID)
+        always gets the same colour regardless of which subset of
+        categories happens to be present in a particular call. Ignored when
+        hue is None.
     ax : matplotlib Axes or None
         Axes to plot onto. Creates a new figure if None.
     figsize : tuple
@@ -212,21 +251,43 @@ def plot_csp(peaks_df1, peaks_df2, on,
     ycol1 = ycol + "_1" if ycol + "_1" in merged.columns else ycol
     xcol2 = xcol + "_2" if xcol + "_2" in merged.columns else xcol
     ycol2 = ycol + "_2" if ycol + "_2" in merged.columns else ycol
+    hue_col = None
+    if hue is not None:
+        hue_col = hue + "_1" if hue + "_1" in merged.columns else hue
 
     for _, row in merged.iterrows():
         ax.plot([row[xcol1], row[xcol2]], [row[ycol1], row[ycol2]],
                 color=line_color, alpha=line_alpha, linewidth=0.8, zorder=2)
 
-    ax.plot(merged[xcol1], merged[ycol1],
-            marker, color=color1, ms=markersize, mew=1.2, zorder=3, label="peaks_df1")
-    ax.plot(merged[xcol2], merged[ycol2],
-            marker, color=color2, ms=markersize, mew=1.2, zorder=3, label="peaks_df2")
+    if hue_col is not None and hue_col in merged.columns:
+        categories = (peaks_df1[hue] if hue in peaks_df1.columns else merged[hue_col])
+        categories = sorted(categories.dropna().unique())
+        pal = _resolve_palette(palette, categories)
+        for group_val, grp in merged.groupby(hue_col):
+            color = pal.get(group_val, "gray")
+            ax.plot(grp[xcol1], grp[ycol1],
+                    marker, color=color, ms=markersize, mew=1.2, zorder=3,
+                    label=f"{hue}: {group_val}")
+            ax.plot(grp[xcol2], grp[ycol2],
+                    "^", color=color, ms=markersize, mew=1.2, zorder=3)
+            if text is not None and text in grp.columns:
+                for _, row in grp.iterrows():
+                    ax.text(row[xcol1] - 0.02, row[ycol1] - 0.2,
+                            str(row[text]), color=color,
+                            fontsize=label_fontsize, zorder=4,
+                            ha="left", va="bottom")
+        ax.legend(loc="upper left", fontsize=11)
+    else:
+        ax.plot(merged[xcol1], merged[ycol1],
+                marker, color=color1, ms=markersize, mew=1.2, zorder=3, label="peaks_df1")
+        ax.plot(merged[xcol2], merged[ycol2],
+                "^", color=color2, ms=markersize, mew=1.2, zorder=3, label="peaks_df2")
 
-    if text is not None and text in merged.columns:
-        for _, row in merged.iterrows():
-            ax.text(row[xcol1] - 0.02, row[ycol1] - 0.2,
-                    str(row[text]), color=color1,
-                    fontsize=label_fontsize, zorder=4,
-                    ha="left", va="bottom")
+        if text is not None and text in merged.columns:
+            for _, row in merged.iterrows():
+                ax.text(row[xcol1] - 0.02, row[ycol1] - 0.2,
+                        str(row[text]), color=color1,
+                        fontsize=label_fontsize, zorder=4,
+                        ha="left", va="bottom")
 
     return fig, ax
