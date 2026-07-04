@@ -3,7 +3,6 @@ Per-residue peak assignments as an object.
 
 By default this is the backbone amide (H, N) pair used for 2D HSQC-type
 peak lists, but ``dims`` lets you build peak lists over any set of atoms
-(e.g. 3D HNCA/HNCO triples, CA/CB pairs, methyl H/C pairs, ...).
 """
 import pandas as pd
 import warnings
@@ -13,17 +12,9 @@ from .chemshift import ChemicalShifts
 
 from .utils.constants import _AA_3TO1, _AA_1TO3
 
-# Built-in aliases so one canonical label matches multiple Atom_ID spellings
-# for the same nucleus (different entries call the amide proton "H" or "HN").
-_ATOM_ALIASES = {"H": ("H", "HN"), "HN": ("H", "HN")}
-_CANONICAL_LABEL = {"HN": "H"}
-
-# dims is normally just a flat sequence of atom labels, e.g. ("H", "N") or
-# ("CA", "CB") — each becomes a f"{label}_ppm" column. For a label whose atom
-# goes by more than one Atom_ID spelling not covered by _ATOM_ALIASES, pass
-# the fuller (label, acceptable_atom_names) form instead, e.g.
-# ("N", ("HD21", "HD22")) for an Asn/Gln sidechain amide.
 _DEFAULT_DIMS = ("H", "N")
+_CANONICAL_LABEL = {"HN": "H"}
+_ATOM_ALIASES = {"H": ("H", "HN"), "HN": ("H", "HN")}
 _CSV_DEFAULT_DIMS = (("H", ("1H",)), ("N", ("15N",)))
 
 
@@ -40,8 +31,7 @@ class PeakList:
     def _normalize_dims(dims):
         """
         Accept either a flat sequence of atom labels (``("H", "N")``) or the
-        fuller ``(label, acceptable_atom_names)`` form for custom aliasing;
-        always returns the fuller form.
+        fuller ``(label, acceptable_atom_names)`` form for custom aliasing
         """
         out = []
         for d in dims:
@@ -63,11 +53,6 @@ class PeakList:
     @staticmethod
     def _merge_dims(sub, dims, id_col="Seq_ID", atom_col="Atom_ID", val_col="Val",
                      base_cols=("Auth_seq_ID", "Comp_ID")):
-        """
-        Pivot a long (id, atom, value) table into one row per id_col with a
-        ``{label}_ppm`` column per dim. Returns (out_df, missing_labels);
-        missing_labels lists dims with no matching atoms at all in ``sub``.
-        """
         atoms_present = set(sub[atom_col].unique())
         missing = [label for label, names in dims if not (set(names) & atoms_present)]
         if missing:
