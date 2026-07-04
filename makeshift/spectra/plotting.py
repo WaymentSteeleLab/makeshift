@@ -9,14 +9,8 @@ def _resolve_palette(palette, categories):
     """
     Build a {category: colour} mapping.
 
-    `palette` may be a dict (used as-is, values missing a key fall back to
-    "gray" at lookup time), or any seaborn/matplotlib palette spec (a
-    palette name like "tab10"/"husl", a list of colours, etc.) which is
-    assigned to `categories` in sorted order. `categories` should reflect
-    the full set of possible values (e.g. all of peaks_df1[hue], not just
-    the current subset) so the same category always maps to the same
-    colour across repeated calls, even when only some categories are
-    present in a given call.
+    `palette` may be a dict
+    `categories` should reflect the full set of possible values 
     """
     if isinstance(palette, dict):
         return palette
@@ -109,7 +103,7 @@ def plot_peaklist(peaks_df=None,
     hue : str or None
         Column in peaks_df to colour peaks by. When set, each unique value gets
         its own colour from `palette`, markers are grouped in the legend, and
-        annotation text is coloured to match.  Inspired by seaborn's hue/palette API.
+        annotation text is coloured to match. 
     palette : dict or None
         Maps hue values to matplotlib colours. Values absent from the dict
         fall back to 'gray'. Ignored when hue is None.
@@ -217,20 +211,10 @@ def plot_csp(peaks_df1, peaks_df2, on,
         Column in peaks_df1 to use for per-peak annotations. Pass None to suppress.
     label_fontsize : int
     hue : str or None
-        Column in peaks_df1 to colour matched pairs by. When set, both the
-        peaks_df1 and peaks_df2 marker of a pair take the same colour (based
-        on peaks_df1's value), each unique value gets its own legend entry,
-        and annotation text is coloured to match.
+        Column in peaks_df1 to colour matched pairs by.
     palette : dict, str, list, or None
         Colour mapping for hue values. A dict maps values straight to
-        colours (missing keys fall back to 'gray'). Anything else (a
-        seaborn/matplotlib palette name, a list of colours, or None for the
-        "tab10" default) is assigned to the sorted unique values of
-        peaks_df1[hue] — using the full column rather than just the merged
-        subset, so a given category (e.g. a given amino acid in Comp_ID)
-        always gets the same colour regardless of which subset of
-        categories happens to be present in a particular call. Ignored when
-        hue is None.
+        colours Ignored when hue is None.
     ax : matplotlib Axes or None
         Axes to plot onto. Creates a new figure if None.
     figsize : tuple
