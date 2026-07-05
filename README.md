@@ -9,15 +9,6 @@ A dependency-light Python toolkit for working with protein NMR data from either 
 pip install git+https://github.com/WaymentSteeleLab/makeshift.git
 ```
 
-The demo notebooks need a few extras:
-
-```bash
-pip install -e ".[demos]"          # seaborn, matplotlib, jupyter
-```
-
-The spectrum/CPMG pipeline (`makeshift.spectra`, `makeshift.relaxation`)
-additionally needs `nmrglue`, `tqdm`, `matplotlib`, and `seaborn`.
-
 ## Quickstart
 
 ```python
