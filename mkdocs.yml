@@ -1,5 +1,5 @@
 site_name: makeshift
-site_description: Lightweight, dependency-light Python tools for protein NMR data
+site_description: open-source Python package for accessing and analyzing NMR data
 site_url: https://makeshift.readthedocs.io/
 repo_url: https://github.com/WaymentSteeleLab/makeshift
 repo_name: WaymentSteeleLab/makeshift
