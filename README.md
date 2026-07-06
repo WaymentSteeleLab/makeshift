@@ -1,6 +1,6 @@
 # `makeshift`: lightweight NMR tools
 
-A dependency-light Python toolkit for working with protein NMR data from either custom input or
+A dependency-light open-source Python package for working with protein NMR data from either custom input or
 [NMR-STAR](https://pynmrstar.readthedocs.io/en/latest/) files from the [BMRB](https://bmrb.io/).
 
 ## Installation
