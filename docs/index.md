@@ -21,7 +21,7 @@ handful of common downstream analyses without pulling in a heavyweight
 dependency stack.
 
 | Module | What it does |
-|-----|---|
+|-------|---|
 | [`makeshift`](api/entry.md) (core) | Fetch/parse BMRB entries; extract chemical shifts, sequences, relaxation and order-parameter data; build assigned peak lists. Classes: [`NMRStarEntry`](api/entry.md), [`ChemicalShifts`](api/chemshift.md), [`PeakList`](api/peaklist.md). |
 | [`makeshift.reref`](api/reref.md) | LACS and PANAV chemical-shift re-referencing (via `ChemicalShifts.reref`). |
 | [`makeshift.spectra`](api/spectra.md) | Read Sparky `.ucsf` spectra ([`Spectrum`](api/spectra.md)), pick peaks, and align peak lists (`map_peaklists`). |
