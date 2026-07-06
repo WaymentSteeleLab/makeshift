@@ -22,7 +22,7 @@ dependency stack.
 
 | Module | What it does |
 |-----------|---|
-| [`makeshift`](api/entry.md)(core) | Fetch/parse BMRB entries; extract chemical shifts, sequences, relaxation and order-parameter data; build assigned peak lists. Classes: [`NMRStarEntry`](api/entry.md), [`ChemicalShifts`](api/chemshift.md), [`PeakList`](api/peaklist.md). |
+| [`makeshift`](api/entry.md) (core) | Fetch/parse BMRB entries; extract chemical shifts, sequences, relaxation and order-parameter data; build assigned peak lists. Classes: [`NMRStarEntry`](api/entry.md), [`ChemicalShifts`](api/chemshift.md), [`PeakList`](api/peaklist.md). |
 | [`ms.reref`](api/reref.md) | LACS and PANAV chemical-shift re-referencing (via `ChemicalShifts.reref`). |
 | [`ms.spectra`](api/spectra.md) | Read Sparky `.ucsf` spectra ([`Spectrum`](api/spectra.md)), pick peaks, and align peak lists (`map_peaklists`). |
 | [`ms.relaxation`](api/relaxation.md) | CPMG dispersion pipeline ([`CPMGExperiment`](api/cpmg.md)) and [`RelaxationProfile`](api/relaxation.md) — RelaxDB-style per-residue dynamics from deposited R1/R2/NOE. |
