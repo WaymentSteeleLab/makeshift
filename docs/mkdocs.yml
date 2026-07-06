@@ -1,0 +1,7 @@
+mkdocs-material        
+mkdocstrings[python]  
+
+nmrglue
+tqdm
+matplotlib
+seaborn
