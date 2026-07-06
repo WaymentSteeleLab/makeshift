@@ -55,10 +55,10 @@ its rigid R₂/R₁ to the data. The structure can be:
 
 With no argument it uses the first available PDB or AlphaFold model based on the entry cited.
 
-> [!NOTE]
-> `makeshift` does **not** predict structure itself — it only fetches an
-> existing experimental or predicted model. See
-> [Datasets & structures](datasets.md) for more information or provide your own prediction.
+
+!!! note "`makeshift` does **not** predict structure "
+    It only fetches an existing experimental or predicted model. See
+    [Datasets & structures](datasets.md) for more information or provide your own prediction.
 
 ## Motion labels
 

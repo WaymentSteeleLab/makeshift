@@ -1,7 +1,7 @@
 # makeshift
 
-**Lightweight NMR tools** — a dependency-light Python toolkit for working with
-protein NMR data, from either custom input or
+**Lightweight NMR tools** — a dependency-light open-source Python package for working with
+biomolecular NMR data, from either custom input or
 [NMR-STAR](https://pynmrstar.readthedocs.io/en/latest/) files from the
 [BMRB](https://bmrb.io/).
 
@@ -21,7 +21,7 @@ handful of common downstream analyses without pulling in a heavyweight
 dependency stack.
 
 | Module | What it does |
-|---|---|
+|-----|---|
 | [`makeshift`](api/entry.md) (core) | Fetch/parse BMRB entries; extract chemical shifts, sequences, relaxation and order-parameter data; build assigned peak lists. Classes: [`NMRStarEntry`](api/entry.md), [`ChemicalShifts`](api/chemshift.md), [`PeakList`](api/peaklist.md). |
 | [`makeshift.reref`](api/reref.md) | LACS and PANAV chemical-shift re-referencing (via `ChemicalShifts.reref`). |
 | [`makeshift.spectra`](api/spectra.md) | Read Sparky `.ucsf` spectra ([`Spectrum`](api/spectra.md)), pick peaks, and align peak lists (`map_peaklists`). |
@@ -43,7 +43,9 @@ dependency stack.
 
 ## License
 
-MIT License. Note that `makeshift.talosn` downloads and runs the TALOS-N binary,
+MIT License. 
+
+Note that `makeshift.talosn` downloads and runs the TALOS-N binary,
 which is distributed separately by NIH under its own
 [Terms of Use](https://spin.niddk.nih.gov/bax-apps/terms.html); those terms
 govern the downloaded software, not this wrapper.
