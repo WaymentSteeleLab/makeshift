@@ -1,0 +1,4 @@
+.md-typeset table td:first-child,
+.md-typeset table th:first-child {
+  white-space: nowrap;
+}
