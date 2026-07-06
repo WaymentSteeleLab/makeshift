@@ -1,6 +1,6 @@
 site_name: makeshift
 site_description: Lightweight, dependency-light Python tools for protein NMR data
-site_url: https://makeshift-nmr.readthedocs.io/
+site_url: https://makeshift.readthedocs.io/
 repo_url: https://github.com/WaymentSteeleLab/makeshift
 repo_name: WaymentSteeleLab/makeshift
 edit_uri: edit/main/docs/
@@ -108,4 +108,4 @@ markdown_extensions:
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 watch:
-  - makeshift-nmr
+  - makeshift
