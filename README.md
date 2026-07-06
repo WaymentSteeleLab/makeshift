@@ -1,4 +1,4 @@
-# `makeshift`
+# makeshift
 
 An open-source Python package for accessing and analyzing NMR data from either custom input or
 [NMR-STAR](https://pynmrstar.readthedocs.io/en/latest/) files from the [BMRB](https://bmrb.io/).
