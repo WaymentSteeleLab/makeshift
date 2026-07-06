@@ -23,12 +23,12 @@ dependency stack.
 | Module | What it does |
 |-----------|---|
 | [`makeshift`](api/entry.md) (core) | Fetch/parse BMRB entries; extract chemical shifts, sequences, relaxation and order-parameter data; build assigned peak lists. Classes: [`NMRStarEntry`](api/entry.md), [`ChemicalShifts`](api/chemshift.md), [`PeakList`](api/peaklist.md). |
-| [`ms.reref`](api/reref.md) | LACS and PANAV chemical-shift re-referencing (via `ChemicalShifts.reref`). |
-| [`ms.spectra`](api/spectra.md) | Read Sparky `.ucsf` spectra ([`Spectrum`](api/spectra.md)), pick peaks, and align peak lists (`map_peaklists`). |
-| [`ms.relaxation`](api/relaxation.md) | CPMG dispersion pipeline ([`CPMGExperiment`](api/cpmg.md)) and [`RelaxationProfile`](api/relaxation.md) — RelaxDB-style per-residue dynamics from deposited R1/R2/NOE. |
-| [`ms.hydronmr`](api/hydronmr.md) | Predict per-residue T1/T2/NOE from a PDB structure. |
-| [`ms.talosn`](api/talosn.md) | Predict backbone torsion angles, S² order parameters, and secondary structure from chemical shifts via the NIH TALOS-N binary. |
-| [`ms.utils`](api/utils.md) | Dependency-light helpers: dataset/structure fetching, constants. |
+| [`makeshift.reref`](api/reref.md) | LACS and PANAV chemical-shift re-referencing (via `ChemicalShifts.reref`). |
+| [`makeshift.spectra`](api/spectra.md) | Read Sparky `.ucsf` spectra ([`Spectrum`](api/spectra.md)), pick peaks, and align peak lists (`map_peaklists`). |
+| [`makeshift.relaxation`](api/relaxation.md) | CPMG dispersion pipeline ([`CPMGExperiment`](api/cpmg.md)) and [`RelaxationProfile`](api/relaxation.md) — RelaxDB-style per-residue dynamics from deposited R1/R2/NOE. |
+| [`makeshift.hydronmr`](api/hydronmr.md) | Predict per-residue T1/T2/NOE from a PDB structure. |
+| [`makeshift.talosn`](api/talosn.md) | Predict backbone torsion angles, S² order parameters, and secondary structure from chemical shifts via the NIH TALOS-N binary. |
+| [`makeshift.utils`](api/utils.md) | Dependency-light helpers: dataset/structure fetching, constants. |
 
 ## Where to go next
 
