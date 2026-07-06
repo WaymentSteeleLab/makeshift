@@ -1,0 +1,3 @@
+# ChemicalShifts
+
+::: makeshift.chemshift.ChemicalShifts

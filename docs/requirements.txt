@@ -1,6 +1,12 @@
-mkdocs-material        
-mkdocstrings[python]  
+# Docs site
+mkdocs-material
+mkdocstrings[python]
 
+# Runtime deps needed for mkdocstrings to import makeshift's modules.
+# nmrglue 0.11 is incompatible with NumPy 2.x, so pin NumPy<2 and a
+# compatible SciPy for the API-reference build.
+numpy<2
+scipy<1.14
 nmrglue
 tqdm
 matplotlib

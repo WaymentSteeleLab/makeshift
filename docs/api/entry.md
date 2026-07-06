@@ -1,0 +1,3 @@
+# NMRStarEntry
+
+::: makeshift.entry.NMRStarEntry
