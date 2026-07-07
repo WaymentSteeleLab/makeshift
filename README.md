@@ -1,5 +1,8 @@
 # makeshift
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/WaymentSteeleLab/makeshift/blob/main/LICENSE)
+[![Docs](https://img.shields.io/badge/docs-makeshift-blue)](https://makeshift-docs.readthedocs.io)
+
 An open-source Python package for accessing and analyzing NMR data from either custom input or
 [NMR-STAR](https://pynmrstar.readthedocs.io/en/latest/) files from the [BMRB](https://bmrb.io/).
 
