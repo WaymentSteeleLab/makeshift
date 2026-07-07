@@ -41,7 +41,7 @@ nav:
   - Getting started:
       - Installation: installation.md
       - Quickstart: quickstart.md
-      - NMR-STAR concepts: concepts.md
+      - Concepts: concepts.md
   - User guide:
       - Reading BMRB entries: guide/entries.md
       - Chemical shifts: guide/chemical-shifts.md
@@ -49,7 +49,7 @@ nav:
       - Peak lists: guide/peaklists.md
       - Spectra: guide/spectra.md
       - Relaxation & dynamics: guide/relaxation.md
-      - CPMG dispersion: guide/cpmg.md
+      - CPMG processing: guide/cpmg.md
       - HYDRONMR prediction: guide/hydronmr.md
       - TALOS-N prediction: guide/talosn.md
       - Datasets & structures: guide/datasets.md

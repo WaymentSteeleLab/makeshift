@@ -1,6 +1,6 @@
 # Core concepts
 
-`makeshift` centres on three objects: `NMRStarEntry`, `ChemicalShifts`, and
+`makeshift` centers on three objects: `NMRStarEntry`, `ChemicalShifts`, and
 `PeakList`. Understand how they connect and what each does, and the rest of the
 API follows naturally.
 
