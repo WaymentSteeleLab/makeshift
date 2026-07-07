@@ -1,6 +1,6 @@
 # makeshift
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/WaymentSteeleLab/makeshift/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow)](https://github.com/WaymentSteeleLab/makeshift/blob/main/LICENSE)
 [![Docs](https://img.shields.io/badge/docs-makeshift-blue)](https://makeshift-docs.readthedocs.io)
 
 An open-source Python package for accessing and analyzing NMR data from either custom input or
