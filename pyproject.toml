@@ -5,8 +5,31 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "makeshift"
 version = "0.1.0"
+description = "open-source Python package for accessing and analyzing NMR data"
+readme = "README.md"
 requires-python = ">=3.8"
-
+license = {text = "MIT"}
+authors = [
+    {name = "Gina El Nesr", email = "gelnesr@stanford.edu"},
+    {name = "Hannah K. Wayment-Steele, email = "hannah.waymentsteele@wisc.edu"}
+]
+keywords = ["nmr", "nmr-data", "protein-dynamics", "data-science", "protein", "open-source"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
 dependencies = [
     "numpy",
     "pandas",
@@ -18,11 +41,17 @@ dependencies = [
     "tqdm",
 ]
 
+[project.optional-dependencies]
+demos = ["jupyter"]
+
+[project.urls]
+Homepage = "https://github.com/WaymentSteeleLab/makeshift"
+Repository = "https://github.com/WaymentSteeleLab/makeshift"
+Documentation = "https://makeshift-docs.readthedocs.io/"
+Issues = "https://github.com/WaymentSteeleLab/makeshift/issues"
+
 [tool.setuptools.packages.find]
 include = ["makeshift*"]
 
 [tool.setuptools.package-data]
 makeshift = ["data/*.csv"]
-
-[project.optional-dependencies]
-demos = ["jupyter"]
