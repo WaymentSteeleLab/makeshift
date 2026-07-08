@@ -9,7 +9,7 @@ mainstream scientific-Python packages: `numpy`, `pandas`, `scipy`,
 ## Install from GitHub
 
 ```bash
-pip install git+https://github.com/WaymentSteeleLab/makeshift.git
+pip install makeshift-nmr
 ```
 
 ## Install for local development

@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "makeshift"
+name = "makeshift-nmr"
 version = "0.1.0"
 description = "open-source Python package for accessing and analyzing NMR data"
 readme = "README.md"

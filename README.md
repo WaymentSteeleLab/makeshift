@@ -9,7 +9,7 @@ An open-source Python package for accessing and analyzing NMR data from either c
 ## Installation
 
 ```bash
-pip install git+https://github.com/WaymentSteeleLab/makeshift.git
+pip install makeshift-nmr
 ```
 
 ## Quickstart
@@ -70,7 +70,7 @@ cs.reref(method="panav")   # or "lacs"
 print(cs.reref_offsets)    # {'N': ..., 'CA': ..., 'CB': ..., ...}
 ```
 
-![Re-referencing example](docs/static/example_rereferencing_ed.png)
+![Re-referencing example](https://raw.githubusercontent.com/WaymentSteeleLab/makeshift/main/docs/static/example_rereferencing_ed.png)
 
 Entry 4527 is correctly referenced; entries 6586 and 4150 have been described in
 the literature as needing re-referencing. The two methods have not yet been
