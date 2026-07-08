@@ -11,7 +11,7 @@ requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [
     {name = "Gina El Nesr", email = "gelnesr@stanford.edu"},
-    {name = "Hannah K. Wayment-Steele, email = "hannah.waymentsteele@wisc.edu"}
+    {name = "Hannah K. Wayment-Steele", email = "hannah.waymentsteele@wisc.edu"},
 ]
 keywords = ["nmr", "nmr-data", "protein-dynamics", "data-science", "protein", "open-source"]
 classifiers = [
