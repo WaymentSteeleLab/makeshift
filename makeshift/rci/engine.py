@@ -495,8 +495,6 @@ class RCI:
                 # 17.7*RCI)), which increases with RCI -- the opposite of
                 # the standard S2 sense -- and is not reproduced here.
                 "S2": 1 - 0.5 * math.log(1 + 10 * rci),
-                "MD_RMSD": rci * 29.55,
-                "NMR_RMSD": rci * 16.44,
             })
 
         self.results = pd.DataFrame(rows)
