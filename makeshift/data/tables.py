@@ -41,3 +41,29 @@ def get_c_prime_rc():
     """C' random coil values (Wishart et al. 1995). Returns {residue: float}."""
     df = pd.read_csv(_DATA / 'c_prime_rc.csv')
     return dict(zip(df['residue'], df['value'].astype(float)))
+
+
+def _load_rci_table(filename):
+    """RCI atom-effect table: residue -> {N,CO,CA,CB,NH,HA: float}, NaN where undefined."""
+    df = pd.read_csv(_DATA / filename, index_col='residue')
+    return df.astype(float)
+
+
+def get_rci_tables():
+    """
+    Lookup tables for the RCI (Random Coil Index) flexibility predictor
+    (Berjanskii/Schwarzinger neighbor-correction scheme). Each value is a
+    DataFrame indexed by one-letter residue code with columns
+    [N, CO, CA, CB, NH, HA]; NaN marks an atom that has no defined value
+    for that residue (e.g. Gly CB, Pro N/NH).
+
+    Returns a dict with keys: random_coil, preceed_effect, next_effect,
+    preceed_preceed_effect, next_next_effect.
+    """
+    return {
+        "random_coil": _load_rci_table("rci_random_coil.csv"),
+        "preceed_effect": _load_rci_table("rci_preceed_effect.csv"),
+        "next_effect": _load_rci_table("rci_next_effect.csv"),
+        "preceed_preceed_effect": _load_rci_table("rci_preceed_preceed_effect.csv"),
+        "next_next_effect": _load_rci_table("rci_next_next_effect.csv"),
+    }
