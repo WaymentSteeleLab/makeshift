@@ -7,7 +7,10 @@ This ports exactly the code path that script takes with its own default
 settings (Schwarzinger random-coil table, Schwarzinger neighbor corrections,
 3-point smoothing, ``end_effect3`` termini correction, ``function_flag==8``
 sigma combination) -- the ~30 alternate branches behind its other CLI flags
-are not reproduced.
+are not reproduced. The one deliberate deviation is ``S2``: the published
+Berjanskii & Wishart 2005 relation is used instead of ``rci_v_1c.py``'s own
+``.S2.txt`` formula, which is inverted relative to the standard S2
+convention (see the comment at its computation below).
 """
 
 import math
@@ -486,7 +489,12 @@ class RCI:
                 "Seq_ID": r,
                 "Comp_ID": seq_map.get(r),
                 "RCI": rci,
-                "S2": 0.4 * math.log(1 + 17.7 * rci),
+                # Published relation (Berjanskii & Wishart 2005): canonical
+                # S2 convention, rigid -> ~1, flexible -> lower. Note this
+                # differs from rci_v_1c.py's own .S2.txt output (0.4*ln(1+
+                # 17.7*RCI)), which increases with RCI -- the opposite of
+                # the standard S2 sense -- and is not reproduced here.
+                "S2": 1 - 0.5 * math.log(1 + 10 * rci),
                 "MD_RMSD": rci * 29.55,
                 "NMR_RMSD": rci * 16.44,
             })
