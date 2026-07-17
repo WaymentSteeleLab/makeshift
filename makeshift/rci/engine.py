@@ -20,6 +20,9 @@ import pandas as pd
 
 from ..data.tables import get_rci_tables
 from ..utils.constants import _AA_3TO1
+from ._talosn import run_talosn_rci
+
+_ALGORITHMS = ("wishart", "talosn")
 
 # RCI atom name -> makeshift Atom_ID
 _ATOM_TO_MAKESHIFT = {"N": "N", "CO": "C", "CA": "CA", "CB": "CB", "NH": "H", "HA": "HA"}
@@ -331,16 +334,46 @@ class RCI:
         cs = ChemicalShifts.from_bmrb(4403, keep_download=True)
         r = RCI.calc(cs)
         r.results
+
+    `neighbor_table` selects which preceed/next-residue correction values
+    to use -- ``"schwarzinger"`` (the reference script's own default),
+    ``"wang"``, or ``"schwartz_wang"``; see
+    :data:`makeshift.data.tables.RCI_NEIGHBOR_TABLES`. Secondary structure
+    isn't predicted anywhere in this port (matching the reference script's
+    default, which treats every residue as coil), so all three currently
+    resolve to their coil-state values -- the tables differ from each
+    other regardless, since each was fit independently, but a full
+    helix/sheet-aware calculation would need a secondary structure input
+    that doesn't exist yet.
+
+    `algorithm` selects which RCI computation to run:
+
+    - ``"wishart"`` (default): the ``rci_v_1c.py`` port described above.
+    - ``"talosn"``: TALOS-N's own bundled RCI-S2 reimplementation
+      (``RCI.cpp``/``TALOS.cpp``), reproduced bug-for-bug against the
+      actual TALOS-N v4.11 source so that ``RCI(..., algorithm="talosn")``
+      matches the real compiled binary's output rather than
+      ``rci_v_1c.py``'s. It's a simpler, independently-drifted algorithm
+      (fixed +-1 residue averaging window, no gap-filling, a few
+      hardcoded-index bugs) that ignores `neighbor_table` -- TALOS-N's
+      compiled-in tables are fixed and were confirmed byte-identical to
+      the Schwarzinger table this repo ships. See
+      :mod:`makeshift.rci._talosn` for details.
     """
 
     def __init__(self, shifts=None, sequence=None, first_resid=None, entry_id=None,
-                 entity_id=None, entry=None):
+                 entity_id=None, entry=None, neighbor_table="schwarzinger",
+                 algorithm="wishart"):
+        if algorithm not in _ALGORITHMS:
+            raise ValueError(f"algorithm must be one of {_ALGORITHMS}, got {algorithm!r}")
         self.shifts = shifts
         self.sequence = sequence
         self.first_resid = first_resid
         self.entry_id = entry_id
         self.entity_id = entity_id
         self.entry = entry
+        self.neighbor_table = neighbor_table
+        self.algorithm = algorithm
         self.results = None
 
     @staticmethod
@@ -363,13 +396,16 @@ class RCI:
         return sequence, entity_id
 
     @classmethod
-    def from_bmrb(cls, bmrb_id, entity_id=None, sequence=None, **fetch_kw):
+    def from_bmrb(cls, bmrb_id, entity_id=None, sequence=None,
+                  neighbor_table="schwarzinger", algorithm="wishart", **fetch_kw):
         from ..entry import NMRStarEntry
         entry = NMRStarEntry.from_bmrb(bmrb_id, **fetch_kw)
-        return cls.from_entry(entry, entity_id=entity_id, sequence=sequence)
+        return cls.from_entry(entry, entity_id=entity_id, sequence=sequence,
+                              neighbor_table=neighbor_table, algorithm=algorithm)
 
     @classmethod
-    def from_entry(cls, entry, entity_id=None, sequence=None):
+    def from_entry(cls, entry, entity_id=None, sequence=None,
+                    neighbor_table="schwarzinger", algorithm="wishart"):
         from ..chemshift import ChemicalShifts
 
         if sequence is None:
@@ -380,13 +416,15 @@ class RCI:
             raise ValueError(
                 f"No backbone chemical shifts in entry {getattr(entry, 'entry_id', None)}"
             )
-        first_resid = int(shifts["Seq_ID"].min())
+        first_resid = entry.resolve_first_resid(entity_id, sequence, shifts)
         return cls(shifts, sequence, first_resid=first_resid,
                     entry_id=getattr(entry, "entry_id", None),
-                    entity_id=entity_id, entry=entry)
+                    entity_id=entity_id, entry=entry, neighbor_table=neighbor_table,
+                    algorithm=algorithm)
 
     @classmethod
-    def calc(cls, chemshifts, entity_id=None, sequence=None):
+    def calc(cls, chemshifts, entity_id=None, sequence=None,
+             neighbor_table="schwarzinger", algorithm="wishart"):
         """
         Compute RCI directly from a :class:`ChemicalShifts` object (e.g.
         ``ChemicalShifts.from_bmrb(...)``) and return the populated,
@@ -404,10 +442,11 @@ class RCI:
         shifts = chemshifts.data
         if shifts.empty:
             raise ValueError("chemshifts has no chemical shift data")
-        first_resid = int(shifts["Seq_ID"].min())
+        first_resid = entry.resolve_first_resid(entity_id, sequence, shifts) if entry is not None else int(shifts["Seq_ID"].min())
         obj = cls(shifts, sequence, first_resid=first_resid,
                   entry_id=getattr(entry, "entry_id", None),
-                  entity_id=entity_id, entry=entry)
+                  entity_id=entity_id, entry=entry, neighbor_table=neighbor_table,
+                  algorithm=algorithm)
         obj.run()
         return obj
 
@@ -432,12 +471,26 @@ class RCI:
         }
 
     def run(self):
+        if self.algorithm == "talosn":
+            self._run_talosn()
+        else:
+            self._run_wishart()
+        return self
+
+    def _run_talosn(self):
+        seq_map = self._seq_map()
+        tables = get_rci_tables(neighbor_table="schwarzinger")
+        simpred = _build_simpred(seq_map, tables)
+        self.results = run_talosn_rci(self.shifts, seq_map, simpred)
+        return self
+
+    def _run_wishart(self):
         seq_map = self._seq_map()
         first_residue = min(seq_map)
         last_residue = max(seq_map)
         all_residues = list(range(first_residue, last_residue + 1))
 
-        tables = get_rci_tables()
+        tables = get_rci_tables(neighbor_table=self.neighbor_table)
         simpred = _build_simpred(seq_map, tables)
 
         oxidized_cys = set(

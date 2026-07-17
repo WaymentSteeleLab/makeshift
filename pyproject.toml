@@ -54,4 +54,4 @@ Issues = "https://github.com/WaymentSteeleLab/makeshift/issues"
 include = ["makeshift*"]
 
 [tool.setuptools.package-data]
-makeshift = ["data/*.csv"]
+makeshift = ["data/*.csv", "data/rci_data/*.csv"]
