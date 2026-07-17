@@ -269,13 +269,14 @@ class TalosN:
     """
 
     def __init__(self, shifts, sequence=None, entry_id=None, entity_id=None,
-                 entry=None, data_dir=None):
+                 entry=None, data_dir=None, first_resid=None):
         self.shifts = shifts
         self.sequence = sequence
         self.entry_id = entry_id
         self.entity_id = entity_id
         self.entry = entry
         self.data_dir = data_dir
+        self.first_resid = first_resid
         self.results = None
 
     @classmethod
@@ -313,9 +314,11 @@ class TalosN:
             raise ValueError(
                 f"No backbone chemical shifts in entry {getattr(entry, 'entry_id', None)}"
             )
+        first_resid = entry.resolve_first_resid(entity_id, sequence, shifts)
         return cls(shifts, sequence,
                    entry_id=getattr(entry, "entry_id", None),
-                   entity_id=entity_id, entry=entry, data_dir=data_dir)
+                   entity_id=entity_id, entry=entry, data_dir=data_dir,
+                   first_resid=first_resid)
 
     def run(self, output_dir=None, reference_pdb=None, auto_exclude=True,
             no_proton=False, cleanup=False, auto_install=False):
@@ -334,7 +337,8 @@ class TalosN:
             if isinstance(self.shifts, pd.DataFrame):
                 cs_df = utils.filter_backbone(self.shifts)
                 input_file = os.path.join(output_dir, "input.tab")
-                utils.shifts_to_tab(cs_df, input_file, sequence=self.sequence)
+                utils.shifts_to_tab(cs_df, input_file, sequence=self.sequence,
+                                     first_resid=self.first_resid)
             else:
                 input_file = str(self.shifts)
                 if not os.path.exists(input_file):

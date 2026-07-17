@@ -250,6 +250,33 @@ class NMRStarEntry:
                 warnings.warn(f"Could not find entity: {entity_id}. Returning all sequences", UserWarning)
         return seq_df
 
+    def residue_numbering(self, entity_id=None):
+        """Per-entity residue numbering from ``_Entity_comp_index``
+        (``ID`` -> ``Comp_ID``), covering every residue whether or not it
+        has assigned shifts. Returns a DataFrame with columns
+        [entity, ID, Comp_ID, Entity_ID]; empty if the loop is absent.
+        """
+        tags = ["ID", "Comp_ID", "Entity_ID"]
+        df = self._loop_records("entity", "_Entity_comp_index", tags, id_key="entity")
+        if df.empty:
+            return df
+        df = df.astype({"ID": "Int64"})
+        if entity_id is not None:
+            df = df[df["Entity_ID"].astype("string") == str(entity_id)]
+        return df
+
+    def resolve_first_resid(self, entity_id, sequence, shifts):
+        """The chain's true starting residue number: from the entity's
+        own numbering when available and consistent with `sequence`'s
+        length, else ``min(shifts.Seq_ID)`` -- which is wrong whenever
+        N-terminal residues have no assigned shifts.
+        """
+        if entity_id is not None:
+            numbering = self.residue_numbering(entity_id=entity_id)
+            if len(numbering) == len(sequence):
+                return int(numbering["ID"].min())
+        return int(shifts["Seq_ID"].min())
+
     def polymer_type(self, entity_id=None):
         """One row per entity: ID, polymer type, one-letter sequence."""
         
