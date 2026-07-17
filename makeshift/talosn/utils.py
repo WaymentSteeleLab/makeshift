@@ -9,7 +9,7 @@ import pandas as pd
 
 from ..utils.constants import _AA_3TO1, _BACKBONE
 
-BACKBONE_ATOMS = tuple(_BACKBONE) + ("HN",)
+BACKBONE_ATOMS = tuple(_BACKBONE) + ("HN", "HA2", "HA3")
 
 
 def aa_code_to_one_letter(resname):
