@@ -1,0 +1,62 @@
+
+ Case: tmp
+ Hydro Mode: 25   Type of HI:  3   Mode Adv.(1)/Simple(0):  1
+ Double-sum method. Factors FACTORT,FACTORR,FACTORV:
+   1.000  -1.000   1.000
+ Input file: in.pdb
+ Main results file: tmp.res
+ Reading atomic coordinates from PDB file: in.pdb
+
+ There are   1552 spheres (extended atoms) in the primary hydrodynamic model
+ The bead radius (Angstroms) is    3.0
+
+ SigmaMin and SigmaMax to be estimated automatically
+    According to INTER=3 :
+       For SIGMAMAX, N between   400  and   500
+       For SIGMAMIN, N between  1800  and  2000
+ Estimation of first and last sigma for the shell extrapolation
+    Finding sigma so that N is between  400 and  500
+    For sigma= 1.426 the number of minibeads is N= 1207
+    For sigma= 1.747 the number of minibeads is N=  745
+    For sigma= 1.933 the number of minibeads is N=  582
+    For sigma= 2.034 the number of minibeads is N=  505
+    For sigma= 2.086 the number of minibeads is N=  467
+    Finding sigma so that N is between 1800 and 2000
+    For sigma= 1.008 the number of minibeads is N= 2619
+    For sigma= 1.235 the number of minibeads is N= 1643
+    For sigma= 1.116 the number of minibeads is N= 2070
+    For sigma= 1.174 the number of minibeads is N= 1862
+ Estimation of first and last sigmas has been succesfull
+ For sigma1= 2.086  N1=   467 For sigma2= 1.174  N2=  1862
+ Succesful automatic determination of bounds for SIGMA
+ SIGMAMIN =  2.09  with  467 minibeads
+ SIGMAMAX =  1.17  with 1862 minibeads
+ Number of points in extrapolations (values of SIGMA):  7
+ Minibeads radius (Angstroms) between: 1.17 and 2.09
+
+ Physical constants from data file:
+ T= 293.K      eta=  0.01000 poise
+ Type of hydrodynamic calculation: IND=3
+
+ Shell with N= 467   sigma=  2.08618331
+ Shell with N= 580   sigma=  1.93409061
+ Shell with N= 700   sigma=  1.78199792
+ Shell with N= 869   sigma=  1.62990522
+ Shell with N= 1101   sigma=  1.47781265
+ Shell with N= 1433   sigma=  1.32571995
+ Shell with N= 1862   sigma=  1.17362726
+ Obtaining unitary dipole vectors. IFLAG=1
+           Iflag= 1   N-H bonds, implicit hydrogens (not given in pdb)
+
+ Calculating NH or CH dipoles from PDB file
+ Number of dipoles: 206
+ Number of valid/available dipoles: 193
+ End of determination of dipoles
+ --- Calculation for 11.74 Teslas
+ Calculation of T1, T2, NOE,...
+ Table of spectral densities
+ End of NMR relaxation calculations
+ Generating pseudo-PDB file for primary model
+   * Output file will be :tmp-pri.bea
+ Generating static VRML  file for primary model
+   * Output file will be :tmp-pri.vrml
