@@ -1,19 +1,20 @@
 """
-RCI (Random Coil Index) engine: a pure-Python/pandas port of the flexibility
-predictor from assigned backbone chemical shifts (Berjanskii & Wishart 2005),
-based on the reference implementation ``rci_v_1c.py``.
+Random Coil Index: per-residue backbone flexibility from assigned shifts.
 
-This ports exactly the code path that script takes with its own default
-settings (Schwarzinger random-coil table, Schwarzinger neighbor corrections,
-3-point smoothing, ``end_effect3`` termini correction, ``function_flag==8``
-sigma combination) -- the ~30 alternate branches behind its other CLI flags
-are not reproduced. The one deliberate deviation is ``S2``: the published
-Berjanskii & Wishart 2005 relation is used instead of ``rci_v_1c.py``'s own
-``.S2.txt`` formula, which is inverted relative to the standard S2
-convention (see the comment at its computation below).
+Port of the reference script ``rci_v_1c.py`` (Berjanskii & Wishart 2005),
+following the code path that script takes under its own defaults —
+Schwarzinger random coil and neighbor corrections, 3-point smoothing,
+``end_effect3`` termini correction, ``function_flag==8`` sigma combination.
+The alternate branches behind its other CLI flags are not reproduced.
+
+S2 is the one deliberate departure: the published Berjanskii & Wishart
+relation is used rather than the script's own ``.S2.txt`` formula, which runs
+the opposite way. The TALOS-N backend lives in :mod:`makeshift.rci._talosn`;
+both are validated in ``docs/rci_validation.md``.
 """
 
 import math
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -27,29 +28,27 @@ _ALGORITHMS = ("wishart", "talosn")
 # RCI atom name -> makeshift Atom_ID
 _ATOM_TO_MAKESHIFT = {"N": "N", "CO": "C", "CA": "CA", "CB": "CB", "NH": "H", "HA": "HA"}
 
-# Atom types actually used in the sigma calculation (H/NH excluded by default),
-# in the exact order the reference script processes them (write_atom_list()).
+# Atoms used in the sigma sum (NH excluded), in the order the reference script
+# processes them — the order matters, see the gap-fill bounds in _run_wishart.
 _CALC_ATOMS = ["CA", "CB", "CO", "N", "HA"]
 
 _HERTZ = {"CA": 2.5, "CB": 2.5, "CO": 2.5, "N": 1.0, "HA": 10.0}
 _COEF = {"CA": 0.72, "CB": 0.15, "CO": 0.72, "N": 0.59, "HA": 0.85}
 
-_EARLY_FLOOR_POS = 0.1
-_EARLY_FLOOR_NEG = -0.1
-_FLOOR1 = 0.5      # per-atom Hertz-scaled deviation floor
-_FLOOR = 0.5        # sigma ceiling before termini correction
-_FLOOR2 = 0.6        # sigma ceiling after termini correction
+_EARLY_FLOOR = 0.1          # min |deviation| in Hz, before averaging
+_DEV_FLOOR = 0.5            # min |deviation| in Hz, per atom in the sigma sum
+_SIGMA_MAX = 0.5            # sigma ceiling, before the termini correction
+_SIGMA_MAX_TERMINI = 0.6    # sigma ceiling, after it
 _GAP_LIMIT = 2
 _SCALE = 1.125
 _OXIDIZED_CYS_CB_PPM = 35.0
 
 
 def _build_simpred(seq_map, tables):
-    """Reference ('random coil + neighbor correction') shift per residue.
-
-    Returns a DataFrame indexed by residue number with columns
-    [N, C, CA, CB, H, HA] (makeshift atom names); NaN where undefined
-    (e.g. Gly CB, Pro N/H).
+    """
+    Reference shift per residue: random coil plus +-1 and +-2 neighbor
+    corrections. Returns a DataFrame indexed by residue number, columns
+    [N, C, CA, CB, H, HA], NaN where undefined (Gly CB, Pro N/H).
     """
     rc = tables["random_coil"]
     preceed = tables["preceed_effect"]
@@ -82,20 +81,21 @@ def _build_simpred(seq_map, tables):
 
 
 def _early_floor_clamp(diff, atom):
-    hz = _HERTZ[atom]
-    pos_floor = _EARLY_FLOOR_POS / hz
-    neg_floor = _EARLY_FLOOR_NEG / hz
-    if 0 < diff < pos_floor:
-        return pos_floor
-    if neg_floor < diff < 0:
-        return neg_floor
+    """Push a nonzero deviation out to at least +-0.1 Hz so it survives the mean."""
+    floor = _EARLY_FLOOR / _HERTZ[atom]
+    if 0 < diff < floor:
+        return floor
+    if -floor < diff < 0:
+        return -floor
     return diff
 
 
 def _raw_deviation(observed_multi, simpred, atom):
-    """{residue: [abs deviation, ...]} for one atom type, with the early-floor
-    clamp. `observed_multi` maps residue -> list of observed shift values
-    (almost always singleton; see note on Gly HA2/HA3 below)."""
+    """
+    {residue: [abs deviation, ...]} for one atom type, clamped by
+    _early_floor_clamp. `observed_multi` maps residue -> list of observed
+    values; it is a list only because Gly contributes both HA2 and HA3.
+    """
     out = {}
     for resnum, obs_vals in observed_multi.items():
         simpred_val = simpred.get(resnum)
@@ -111,13 +111,13 @@ def _raw_deviation(observed_multi, simpred, atom):
 
 
 def _gap_fill(raw, all_residues, bound_first, bound_last, gap_limit=_GAP_LIMIT):
-    """gap_fill2(): fill missing (residue, atom) abs-deviations from the
-    nearest observed value up to `gap_limit` residues on each side
-    (independently). `raw` maps residue -> list of values (see
-    _raw_deviation): a direct match is passed through unaveraged (a Gly
-    residue keeps both its HA2/HA3 entries), but a *borrowed* neighbor's
-    value(s) are immediately averaged to a single number, matching
-    gap_fill2()'s pos_neg_list_*_ave."""
+    """
+    gap_fill2(): fill a missing (residue, atom) deviation from the nearest
+    observed value up to `gap_limit` residues away on each side.
+
+    A residue with its own value passes through untouched, so Gly keeps both
+    HA2 and HA3. Borrowed values are averaged down to one number first.
+    """
     filled = {}
     for r in all_residues:
         if r in raw:
@@ -140,20 +140,15 @@ def _gap_fill(raw, all_residues, bound_first, bound_last, gap_limit=_GAP_LIMIT):
 
 
 def _smooth3(values, gap_limit=_GAP_LIMIT):
-    """smoothing()/final_smoothing() specialized to smooth_factor=3
-    (the script's effective default despite its misleading top-of-file
-    flags -- see rci_v_1c.py lines 1138-1163).
+    """
+    smoothing()/final_smoothing() at smooth_factor=3, the script's effective
+    default. Returns {residue: float} over [min(values), max(values)].
 
-    `values`: {residue: [float, ...]}. Almost always a singleton list;
-    a residue can carry >1 raw value because the reference script matches
-    observed atoms by a 2-character name prefix, which for atom type "HA"
-    also matches Gly's HA2/HA3 (both slice to "HA") -- so a Gly residue
-    contributes two values instead of one, and any 3-window touching it
-    totals >3 values (see rci_v_1c.py lines 2159-2183, the branch that
-    handles "more than smooth_factor" by just averaging everything found,
-    with no borrowing).
-
-    Returns {residue: float} covering [min(values), max(values)].
+    `values` maps residue -> list of floats. The list is a singleton except
+    at Gly, which contributes both HA2 and HA3 (the 2-character atom-name
+    match treats them as one atom type), so a window touching a Gly holds
+    more than 3 values. In that case the script averages everything it has
+    and skips the borrowing below.
     """
     if not values:
         return {}
@@ -162,7 +157,7 @@ def _smooth3(values, gap_limit=_GAP_LIMIT):
     last_residue = residues[-1]
     result = {}
 
-    # N-terminus: only the very first residue, forward-only 1-neighbor average.
+    # N-terminus: first residue only, averaged forward with one neighbor.
     r0 = first_residue
     collected = list(values[r0])
     for d in (r0 + 1, r0 + 2):
@@ -171,7 +166,7 @@ def _smooth3(values, gap_limit=_GAP_LIMIT):
             break
     result[r0] = sum(collected) / len(collected)
 
-    # C-terminus: only the very last residue, backward-only 1-neighbor average.
+    # C-terminus: last residue only, averaged backward with one neighbor.
     rN = last_residue
     collected = list(values[rN])
     for d in (rN - 1, rN - 2):
@@ -180,7 +175,7 @@ def _smooth3(values, gap_limit=_GAP_LIMIT):
             break
     result[rN] = sum(collected) / len(collected)
 
-    # Main sliding 3-window; center ranges over (first_residue, last_residue) exclusive.
+    # Sliding 3-window over every interior residue.
     for r in range(first_residue, last_residue - 1):
         center = r + 1
         window = (r, r + 1, r + 2)
@@ -196,7 +191,7 @@ def _smooth3(values, gap_limit=_GAP_LIMIT):
             continue
 
         if total_count > 3:
-            # No borrowing needed -- just average whatever the window has.
+            # A Gly is in the window; average what's there, don't borrow.
             result[center] = sum(collected) / len(collected)
             continue
 
@@ -269,8 +264,11 @@ def _smooth3(values, gap_limit=_GAP_LIMIT):
 
 
 def _combine_sigma(smoothed_by_atom, all_residues):
-    """function_flag==8: combine per-atom smoothed abs deviations into a
-    per-residue sigma."""
+    """
+    function_flag==8: collapse the per-atom smoothed deviations into one
+    sigma per residue. Deviations go to Hz, get floored, are weighted by
+    atom, and the mean is inverted — small deviations mean a rigid residue.
+    """
     sigma = {}
     for r in all_residues:
         contributions = []
@@ -279,8 +277,8 @@ def _combine_sigma(smoothed_by_atom, all_residues):
             if v is None:
                 continue
             v = v * _HERTZ[atom]
-            if abs(v) < _FLOOR1:
-                v = _FLOOR1 if v >= 0 else -_FLOOR1
+            if abs(v) < _DEV_FLOOR:
+                v = _DEV_FLOOR if v >= 0 else -_DEV_FLOOR
             contributions.append(v * _COEF[atom] * 5)
         if not contributions:
             continue
@@ -288,13 +286,16 @@ def _combine_sigma(smoothed_by_atom, all_residues):
         value_abs = 0.0
         if mean_v != 0:
             value_abs = 1.0 / (abs(mean_v) ** 1.5)
-        sigma[r] = min(value_abs, _FLOOR)
+        sigma[r] = min(value_abs, _SIGMA_MAX)
     return sigma
 
 
 def _end_effect3(sigma, first_residue, last_residue):
-    """Termini correction (termini_corr_flag==3): reflect sigma up toward
-    the local terminal max within 3 residues of each chain end."""
+    """
+    end_effect3(): within 3 residues of either terminus, pull sigma up
+    toward the local maximum. Termini are flexible and the smoothing above
+    otherwise drags them down toward the ordered core.
+    """
     n_end = [(sigma[r], r) for r in sigma if abs(r - first_residue) <= 4]
     c_end = [(sigma[r], r) for r in sigma if abs(last_residue - r) <= 4]
 
@@ -310,55 +311,44 @@ def _end_effect3(sigma, first_residue, last_residue):
         if abs(r - first_residue) <= 3:
             if n_max is not None and s < n_max and r < n_max_place:
                 s2 = s + 2 * abs(s - n_max)
-                result[r] = min(s2, _FLOOR2)
+                result[r] = min(s2, _SIGMA_MAX_TERMINI)
         elif abs(last_residue - r) <= 3:
             if c_max is not None and s < c_max and r > c_max_place:
                 s2 = s + 2 * abs(s - c_max)
-                result[r] = min(s2, _FLOOR2)
+                result[r] = min(s2, _SIGMA_MAX_TERMINI)
     return result
 
 
 class RCI:
     """
-    Predict per-residue backbone flexibility (Random Coil Index) from
-    assigned NMR chemical shifts. Pure Python/pandas -- no external binary.
+    Per-residue backbone flexibility from assigned chemical shifts. Pure
+    Python — no external binary, unlike :class:`~makeshift.talosn.TalosN`.
 
         r = RCI.from_bmrb(4403)
         r.run()
-        r.results   # Seq_ID, Comp_ID, RCI, S2, MD_RMSD, NMR_RMSD
+        r.results     # Seq_ID, Comp_ID, RCI, S2
 
-    Or, starting from a :class:`~makeshift.chemshift.ChemicalShifts` you
-    already have (e.g. from ``ChemicalShifts.from_bmrb(...)``), compute in
-    one step with :meth:`calc`:
+    Or, from a :class:`~makeshift.chemshift.ChemicalShifts` you already have,
+    in one step:
 
         cs = ChemicalShifts.from_bmrb(4403, keep_download=True)
-        r = RCI.calc(cs)
-        r.results
+        RCI.calc(cs).results
 
-    `neighbor_table` selects which preceed/next-residue correction values
-    to use -- ``"schwarzinger"`` (the reference script's own default),
-    ``"wang"``, or ``"schwartz_wang"``; see
-    :data:`makeshift.data.tables.RCI_NEIGHBOR_TABLES`. Secondary structure
-    isn't predicted anywhere in this port (matching the reference script's
-    default, which treats every residue as coil), so all three currently
-    resolve to their coil-state values -- the tables differ from each
-    other regardless, since each was fit independently, but a full
-    helix/sheet-aware calculation would need a secondary structure input
-    that doesn't exist yet.
-
-    `algorithm` selects which RCI computation to run:
-
-    - ``"wishart"`` (default): the ``rci_v_1c.py`` port described above.
-    - ``"talosn"``: TALOS-N's own bundled RCI-S2 reimplementation
-      (``RCI.cpp``/``TALOS.cpp``), reproduced bug-for-bug against the
-      actual TALOS-N v4.11 source so that ``RCI(..., algorithm="talosn")``
-      matches the real compiled binary's output rather than
-      ``rci_v_1c.py``'s. It's a simpler, independently-drifted algorithm
-      (fixed +-1 residue averaging window, no gap-filling, a few
-      hardcoded-index bugs) that ignores `neighbor_table` -- TALOS-N's
-      compiled-in tables are fixed and were confirmed byte-identical to
-      the Schwarzinger table this repo ships. See
-      :mod:`makeshift.rci._talosn` for details.
+    Parameters
+    ----------
+    algorithm : {'wishart', 'talosn'}
+        Which calculation to run. ``'wishart'`` ports the reference script
+        ``rci_v_1c.py``; ``'talosn'`` ports the separate RCI-S2 module
+        bundled inside TALOS-N, which reproduces its quirks so the output
+        matches the compiled binary (see :mod:`makeshift.rci._talosn`).
+        The two agree closely on RCI but report S2 on different scales —
+        see ``docs/rci_validation.md``.
+    neighbor_table : {'schwarzinger', 'wang', 'schwartz_wang'}
+        Which preceding/next-residue corrections to use; see
+        :data:`makeshift.data.tables.RCI_NEIGHBOR_TABLES`. Nothing here
+        predicts secondary structure, so all three resolve to their
+        coil-state values. **Ignored when algorithm='talosn'**, whose
+        tables are compiled into the binary.
     """
 
     def __init__(self, shifts=None, sequence=None, first_resid=None, entry_id=None,
@@ -426,10 +416,9 @@ class RCI:
     def calc(cls, chemshifts, entity_id=None, sequence=None,
              neighbor_table="schwarzinger", algorithm="wishart"):
         """
-        Compute RCI directly from a :class:`ChemicalShifts` object (e.g.
-        ``ChemicalShifts.from_bmrb(...)``) and return the populated,
-        already-run :class:`RCI`. Resolves the polymer sequence from the
-        ChemicalShifts' underlying entry unless `sequence` is given.
+        Build from a :class:`ChemicalShifts`, run, and return the populated
+        :class:`RCI`. The sequence comes from the ChemicalShifts' entry
+        unless `sequence` is passed.
         """
         entry = chemshifts.entry
         if sequence is None:
@@ -442,7 +431,10 @@ class RCI:
         shifts = chemshifts.data
         if shifts.empty:
             raise ValueError("chemshifts has no chemical shift data")
-        first_resid = entry.resolve_first_resid(entity_id, sequence, shifts) if entry is not None else int(shifts["Seq_ID"].min())
+        if entry is not None:
+            first_resid = entry.resolve_first_resid(entity_id, sequence, shifts)
+        else:
+            first_resid = int(shifts["Seq_ID"].min())
         obj = cls(shifts, sequence, first_resid=first_resid,
                   entry_id=getattr(entry, "entry_id", None),
                   entity_id=entity_id, entry=entry, neighbor_table=neighbor_table,
@@ -451,13 +443,13 @@ class RCI:
         return obj
 
     def _seq_map(self):
+        """{residue number: one-letter code} over the whole polymer."""
         if self.sequence is not None:
             first_resid = self.first_resid if self.first_resid is not None else 1
             return {
                 first_resid + i: aa.upper()
                 for i, aa in enumerate(self.sequence)
             }
-        import warnings
         warnings.warn(
             "No sequence supplied; inferring from the chemical shift table "
             "(neighbor-residue corrections will be missing for any residue "
@@ -471,6 +463,7 @@ class RCI:
         }
 
     def run(self):
+        """Run the selected algorithm and populate :attr:`results`."""
         if self.algorithm == "talosn":
             self._run_talosn()
         else:
@@ -506,9 +499,8 @@ class RCI:
         smoothed_by_atom = {}
         for atom in _CALC_ATOMS:
             makeshift_atom = _ATOM_TO_MAKESHIFT[atom]
-            # Match atom names by 2-char prefix, exactly like the reference
-            # script's `atom_name[0:2]==atom_type` -- this deliberately also
-            # matches Gly's HA2/HA3 when atom=="HA" (see _smooth3 docstring).
+            # 2-character prefix match, as in the reference script. This is
+            # what picks up Gly's HA2/HA3 under atom type "HA".
             obs = self.shifts[self.shifts["Atom_ID"].str[:2] == makeshift_atom]
             if atom == "CB":
                 obs = obs[~obs["Seq_ID"].isin(oxidized_cys)]
@@ -542,11 +534,9 @@ class RCI:
                 "Seq_ID": r,
                 "Comp_ID": seq_map.get(r),
                 "RCI": rci,
-                # Published relation (Berjanskii & Wishart 2005): canonical
-                # S2 convention, rigid -> ~1, flexible -> lower. Note this
-                # differs from rci_v_1c.py's own .S2.txt output (0.4*ln(1+
-                # 17.7*RCI)), which increases with RCI -- the opposite of
-                # the standard S2 sense -- and is not reproduced here.
+                # Berjanskii & Wishart 2005 as published: rigid -> ~1.
+                # rci_v_1c.py's own .S2.txt writes 0.4*ln(1+17.7*RCI),
+                # which climbs with RCI; not reproduced here.
                 "S2": 1 - 0.5 * math.log(1 + 10 * rci),
             })
 

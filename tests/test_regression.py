@@ -1,30 +1,36 @@
 """
-Regression tests for hydronmr.engine.run().
+Regression tests for makeshift.hydronmr.engine.run().
 
-Pins the per-residue T1/T2 results (mean, std, and Pearson correlation
-against the ground-truth reference) for the 7 small/medium ground-truth
-proteins. If these change, either a real bug was introduced or the
-expected values need to be updated deliberately (e.g. after task #4 /
-shell-model work changes the IND=3 results).
+Pins the per-residue T1/T2 results against the ground-truth proteins. If
+these move, either something broke or the expected values need updating
+deliberately.
 
-YJBJ (23001 atoms) is excluded: the current dense O(N^2) mobility-matrix
-approach OOMs on it (needs the shell/minibead model, task #4).
+The ground-truth PDBs aren't in the repo, so these skip unless GT_DIR is
+present; point HYDRONMR_GROUND_TRUTH at it to run them.
+
+YJBJ (23001 atoms) is excluded — the dense O(N^2) mobility matrix OOMs on
+it and needs the shell/minibead model first.
 """
 
 import math
+import os
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from hydronmr.engine import run
+from makeshift.hydronmr.engine import run
 
-ROOT = Path(__file__).resolve().parents[2]
-GT_DIR = ROOT / "GROUND_TRUTH_DONT_OVERWRITE"
+GT_DIR = Path(
+    os.environ.get(
+        "HYDRONMR_GROUND_TRUTH",
+        Path(__file__).resolve().parents[2] / "GROUND_TRUTH_DONT_OVERWRITE",
+    )
+)
 
 # (protein, n_residues, mean T1/T2, std T1/T2)
-# Only CYPA (smallest, 1265 atoms) is exercised here to keep the suite
-# fast; see git history for the full 7-protein table if needed.
+# Only CYPA (smallest, 1265 atoms) runs here, to keep the suite fast. The
+# full 7-protein table is in git history.
 EXPECTED = [
     ("CYPA", 164, 7.116249035121523, 0.23293971322837126),
 ]

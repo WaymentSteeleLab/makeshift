@@ -52,6 +52,7 @@ nav:
       - CPMG processing: guide/cpmg.md
       - HYDRONMR prediction: guide/hydronmr.md
       - TALOS-N prediction: guide/talosn.md
+      - RCI flexibility: guide/rci.md
       - Datasets & structures: guide/datasets.md
   - API reference:
       - Overview: api/index.md
@@ -64,7 +65,10 @@ nav:
       - CPMG: api/cpmg.md
       - HYDRONMR: api/hydronmr.md
       - TALOS-N: api/talosn.md
+      - RCI: api/rci.md
       - Utilities: api/utils.md
+  - Validation:
+      - RCI: rci_validation.md
 
 plugins:
   - search
