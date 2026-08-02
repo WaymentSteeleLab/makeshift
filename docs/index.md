@@ -27,6 +27,7 @@ dependency stack.
 | [`makeshift.relaxation`](api/relaxation.md) | CPMG dispersion pipeline ([`CPMGExperiment`](api/cpmg.md)) and [`RelaxationProfile`](api/relaxation.md) — RelaxDB-style per-residue dynamics from deposited R1/R2/NOE. |
 | [`makeshift.hydronmr`](api/hydronmr.md) | Predict per-residue T1/T2/NOE from a PDB structure. |
 | [`makeshift.talosn`](api/talosn.md) | Predict backbone torsion angles, S² order parameters, and secondary structure from chemical shifts via the NIH TALOS-N binary. |
+| [`makeshift.rci`](api/rci.md) | Predict per-residue backbone flexibility (Random Coil Index) from chemical shifts, in pure Python. |
 | [`makeshift.utils`](api/utils.md) | Dependency-light helpers: dataset/structure fetching, constants. |
 
 ## Where to go next

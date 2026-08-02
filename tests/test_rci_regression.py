@@ -61,21 +61,13 @@ def test_rci_matches_reference_output():
 
 def test_rci_talosn_algorithm_is_pinned():
     """
-    algorithm="talosn" (makeshift.rci._talosn) was validated against the
-    real compiled TALOS-N v4.11 binary two ways: a debug-instrumented
-    rebuild of RCI.cpp confirmed exact intermediate values on a spot
-    check, and a 9-BMRB-entry comparison against TalosN's real predS2.tab
-    output gave pooled r=0.989, median abs S2 diff=0.0019 (remaining
-    error is dominated by TALOS.cpp's calcAverageCS, an unported
-    homology-database nearest-neighbor predictor for isolated missing
-    atoms -- see the "Known remaining gap" note in makeshift/rci/_talosn.py
-    -- not a bug in what is ported).
+    Snapshot test for algorithm="talosn".
 
-    There's no real TALOS-N output committed for this particular fixture
-    (BMRB 4403 / PyJCScorr) to compare against -- the 9 entries used for
-    that validation are gitignored .str downloads -- so this test instead
-    pins the current, already-validated output against a snapshot to
-    catch regressions in the port itself.
+    The real validation for this backend is the 9-entry comparison against
+    the compiled TALOS-N binary written up in docs/rci_validation.md; those
+    entries are gitignored .str downloads and there's no TALOS-N output
+    committed for this fixture, so all this test can do is pin the
+    already-validated output and catch regressions in the port.
     """
     shifts = _parse_shift_loop(DATA_DIR / "PyJCScorr")
     expected = pd.read_csv(DATA_DIR / "PyJCScorr_talosn_expected.csv")

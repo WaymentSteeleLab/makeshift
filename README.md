@@ -41,6 +41,7 @@ peaks.data
 | `makeshift.relaxation` | CPMG dispersion pipeline (`CPMGExperiment`) and `RelaxationProfile` — RelaxDB-style per-residue dynamics from deposited R1/R2/NOE. |
 | `makeshift.hydronmr` | Predict per-residue T1/T2/NOE from a PDB structure (`run`). |
 | `makeshift.talosn` | Predict backbone torsion angles, S2 order parameters, and secondary structure from chemical shifts via the NIH TALOS-N binary (`TalosN`). |
+| `makeshift.rci` | Predict per-residue backbone flexibility from chemical shifts (`RCI`) — Random Coil Index, pure Python, no binary. |
 | `makeshift.utils` | Dependency-light helpers: dataset/structure fetching (`fetch_structure`), constants. |
 
 See `demos/` for worked examples: 

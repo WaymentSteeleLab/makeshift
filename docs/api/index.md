@@ -17,6 +17,7 @@ task-focused walkthroughs, start with the [User guide](../guide/entries.md).
 - [CPMG](cpmg.md) — `CPMGExperiment`.
 - [HYDRONMR](hydronmr.md) — structure-based T1/T2/NOE prediction.
 - [TALOS-N](talosn.md) — shift-based torsion / S² / secondary-structure prediction.
+- [RCI](rci.md) — shift-based per-residue flexibility (Random Coil Index).
 
 ## Utilities
 

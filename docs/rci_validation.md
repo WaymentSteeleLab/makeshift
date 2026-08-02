@@ -131,8 +131,7 @@ found and fixed; see git history for `makeshift/entry.py`,
 
 The residual error is concentrated at Pro/Gly and residues near a
 genuinely missing chemical shift (mean absolute S² diff by residue
-type: Pro 0.034, Gly ~0.011–0.018 depending on the comparison run,
-vs. 0.005–0.016 for everything else). This traces to
+type: Pro 0.034, Gly 0.018, vs. 0.005–0.016 for everything else). This traces to
 `TALOS.cpp::calcAverageCS`: when a residue is missing an atom but its
 immediate neighbors are otherwise complete, TALOS-N doesn't fall back to
 a simple table residual — it searches TALOS-N's own bundled reference
@@ -150,15 +149,33 @@ types it only fires when a shift happens to be genuinely unassigned.
 This has been left unported; the resulting gap is well-characterized and
 documented in `makeshift/rci/_talosn.py`.
 
+## The two backends report S² differently
+
+Worth knowing before comparing the backends to each other: they agree closely
+on RCI, but `S2` is computed from different relations, so the columns are not
+interchangeable.
+
+| | RCI | S² relation |
+|---|---|---|
+| `algorithm="wishart"` | — | `1 − 0.5·ln(1 + 10·RCI)` (Berjanskii & Wishart, as published) |
+| `algorithm="talosn"` | r = 0.997 vs. wishart | `1.003 − 0.4·ln(1 + 17.7·RCI)` (what TALOS.cpp writes) |
+
+On the `PyJCScorr` test case the two RCI traces differ by 0.003 on average,
+while the two S² traces differ by 0.035 — almost all of which is the change of
+relation, not a difference in the underlying prediction. Applying one relation
+to both RCI traces brings the S² gap down to ~0.0004.
+
+The `"wishart"` S² is the one to use for anything downstream. The `"talosn"` S²
+exists so the output can be compared directly against `predS2.tab`.
+
 ## Reproducing this validation
 
-- `tests/test_rci_regression.py` — pins both algorithm backends against
-  fixed expected output (`PyJCScorr` / BMRB 4403); runs in CI, no network
-  or binary required.
-- `demos/rci_algorithm_validation.py` — regenerates the 9-entry, 3-trace
-  comparison figure (`algorithm='wishart'`, `algorithm='talosn'`, and the
-  real wrapped TALOS-N binary) shown below. Requires network access
-  (fetches BMRB entries live) and the TALOS-N binary (auto-installed on
-  first run); not run in CI.
+`tests/test_rci_regression.py` pins both backends against fixed expected output
+(`PyJCScorr` / BMRB 4403). It runs in CI and needs no network or binary.
 
-![RCI algorithm validation](../demos/rci_algorithm_validation.png)
+The 9-entry comparison against the real TALOS-N binary is not automated — it
+needs network access to fetch the entries and a TALOS-N install, and the `.str`
+downloads are gitignored. To repeat it, run each entry through both
+`RCI(algorithm="talosn")` and `talosn.TalosN`, and compare `results["S2"]`
+against the binary's `predS2.tab`, dropping TALOS-N's `9999` no-data rows from
+both sides before computing statistics.

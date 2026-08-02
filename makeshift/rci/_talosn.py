@@ -1,59 +1,26 @@
 """
-Exact port of TALOS-N's own RCI-S2 algorithm (``RCI.cpp``/``TALOS.cpp`` in
-the TALOS-N v4.11 source), as opposed to the ``rci_v_1c.py`` script that
-:mod:`makeshift.rci.engine` otherwise ports. TALOS-N bundles a simplified,
-independently-drifted reimplementation of Wishart's RCI with several bugs
-relative to the original script, all reproduced faithfully here since the
-goal is to match TALOS-N's actual output, not to fix it:
+TALOS-N's own RCI-S2 module (``RCI.cpp``/``TALOS.cpp``, v4.11 source).
 
-- No early-floor (0.1/Hz) clamp on raw deviations before averaging.
-- Simple strict +-1 residue window averaging (no gap-filling/borrowing).
-- ``calcRCI``'s denominator is a constant 5, not the count of atoms with
-  data actually present.
-- Gly always counts as "missing" for the CB slot in ``missCSCount``, on
-  top of (independently of) whatever value is used for it.
-- ``applyEndCorrection``'s N-terminal window uses hardcoded absolute
-  residue numbers 1-4, not relative to the chain's actual first residue.
-- S2 is written to file as ``1.003 - 0.4*ln(1 + 17.7*RCI)``: the internal
-  ``0.4*ln(1+17.7*RCI)`` value (which increases with RCI, i.e. is *not*
-  in the conventional S2 sense) gets inverted by TALOS.cpp before output.
-- An atom that was never observed at all is *not* simply treated as
-  missing data: ``inCS_convert_TALOS2RCI`` synthesizes a deviation for it
-  from TALOS-N's own random-coil-adjustment tables (``randcoil.tab``/
-  ``rcadj.tab``/``rcprev.tab``/``rcnext.tab``, ported to
-  ``makeshift/data/rci_data/talosn_*.csv`` and read via
-  :func:`makeshift.data.tables.get_talosn_rc_tables`) minus RCI's own
-  Schwarzinger-table reference -- a real, usually-nonzero, sequence-
-  dependent number that isn't filtered out downstream (the window-average
-  only skips exact zeros). This matters most for inputs missing most of
-  HA/C/CA/CB (e.g. N/H-only depositions), where it dominates instead of
-  averaging away against plentiful real signal; see
-  :func:`_talosn_rc_reference`.
-- Gly's HA2/HA3 are averaged into one HA value before use (TALOS.cpp's
-  in2_Tab special-case for resName=="G" && atom=="HA"), not just the
-  first-matched row.
+This is a different algorithm from the ``rci_v_1c.py`` script ported in
+:mod:`makeshift.rci.engine` — TALOS-N bundles its own simplified
+reimplementation, which has drifted from the original. The point of this
+port is to match what the compiled binary actually produces, so its quirks
+are reproduced rather than corrected:
 
-Known remaining gap (not yet ported): when a residue has only 1-2 missing
-atoms and its immediate neighbors are also mostly complete, TALOS.cpp's
-``calcAverageCS`` (called from the ANN-input-prep stage, not RCI.cpp
-itself) tries to *predict* a value for the missing atom via a homology-
-weighted nearest-neighbor search against TALOS-N's bundled reference
-protein database, and only falls back to the plain
-``talosn_rc - simpred`` residual above if that search fails
-(``testTriplet`` requires the residue and its neighbors to already be
-fairly complete, so this essentially never engages for sparse N/H-only
-inputs -- where the plain residual is exactly right -- but does engage
-for isolated missing atoms in otherwise-dense depositions). Porting
-``calcAverageCS`` would mean porting that reference database and its
-search/scoring algorithm too; not attempted. This is the dominant source
-of the remaining error, concentrated in Pro/Gly and their immediate
-neighbors (mean abs S2 diff by residue type: Pro 0.033, Gly 0.018, vs.
-0.005-0.016 for everything else).
+    no early floor on raw deviations
+    strict +-1 window averaging, no gap filling
+    calcRCI divides by a constant 5, not the number of atoms present
+    Gly counts as missing a CB on top of whatever CB value is used
+    applyEndCorrection scans residues 1-4 by absolute number
+    unobserved atoms get a synthesized deviation, not zero
+    Gly HA2/HA3 are averaged into one HA before use
 
-Confirmed against a debug-instrumented rebuild of the actual v4.11 source
-under Docker (matching real ``predS2.tab`` output) and validated across 9
-BMRB entries against the real compiled TALOS-N binary (pooled r=0.989,
-median abs S2 diff=0.0019, 78% of residues within 0.01, 96% within 0.05).
+Not ported: TALOS.cpp's ``calcAverageCS`` which predicts an isolated missing 
+shift by searching TALOS-N's bundled reference protein database,
+falling back to the table residual used here only when that search fails.
+Porting it means porting the database and its scoring too. This is the
+dominant remaining difference from the binary, concentrated at Pro and Gly;
+``docs/rci_validation.md`` has the numbers.
 """
 
 import math
@@ -63,12 +30,12 @@ import pandas as pd
 
 from ..data.tables import get_talosn_rc_tables
 
-# AvgCSMatrix / inputCSMatrix order in RCI.cpp; HN is tracked but excluded
-# from calcRCI's sum (uWeight["HN"] == 0.0).
+# AvgCSMatrix / inputCSMatrix order in RCI.cpp. HN is carried through but
+# drops out of the sum, since its weight is zero.
 _ATOM_ORDER = ["HN", "N", "HA", "C", "CA", "CB"]
 _ATOM_TO_MAKESHIFT = {"HN": "H", "N": "N", "HA": "HA", "C": "C", "CA": "CA", "CB": "CB"}
-# talosn_*.csv column names (the same [N,CO,CA,CB,NH,HA] convention as RCI's
-# own wide tables) -> makeshift atom names.
+# talosn_*.csv columns -> makeshift atom names (same [N,CO,CA,CB,NH,HA]
+# convention as RCI's own tables).
 _TABLE_ATOM_TO_MAKESHIFT = {"N": "N", "CO": "C", "CA": "CA", "CB": "CB", "NH": "H", "HA": "HA"}
 _HERTZ = {"HN": 10.0, "N": 1.0, "HA": 10.0, "C": 2.5, "CA": 2.5, "CB": 2.5}
 _UWEIGHT = {"HN": 0.0, "N": 0.59, "HA": 0.85, "C": 0.72, "CA": 0.72, "CB": 0.15}
@@ -83,20 +50,18 @@ _S2_OFFSET = 1.003
 
 
 def _talosn_rc_reference(seq_map, shifts):
-    """``talosCS_RC`` in TALOS.cpp: TALOS-N's own random-coil-adjustment
-    reference (``randcoil + rcadj[self] + rcprev[prev] + rcnext[next]``).
+    """
+    ``talosCS_RC``: TALOS-N's own random coil reference, built as
+    ``randcoil + rcadj[self] + rcprev[prev] + rcnext[next]``.
 
-    This is a separate, simpler table system from RCI's own
-    ``rciCS_RC``/`simpred` (only +-1 neighbor, no +-2), with its own
-    oxidized-Cys code swap at TALOS-N's own >=34.0ppm CB threshold
-    (``RC_Tab``/``ADJ_Tab``/``PREV_Tab``/``NEXT_Tab`` in TALOS.cpp,
-    populated from ``randcoil.tab``/``rcadj.tab``/``rcprev.tab``/
-    ``rcnext.tab`` -- distinct from RCI's 35.0ppm threshold used for
-    `oxidized_cys` in :func:`run_talosn_rci`). ``inCS_convert_TALOS2RCI``
-    uses this value to synthesize a nonzero deviation for atoms that were
-    never observed at all: ``talosCS_RC[atom] - rciCS_RC[atom]``, which
-    (unlike an actually-missing atom) does *not* get skipped by the
-    downstream window-averaging's "value != 0" check.
+    A separate, simpler table system from `simpred` — only +-1 neighbors,
+    and its own oxidized-Cys threshold of 34.0 ppm rather than RCI's 35.0.
+
+    An atom that was never observed doesn't simply drop out: TALOS-N gives
+    it a deviation of ``talosCS_RC - simpred``, which is usually nonzero and
+    sequence dependent, and which the window average below has no way to
+    tell apart from real signal. It matters most for sparse depositions
+    (N/H only), where there is little real signal to average it against.
     """
     tables = get_talosn_rc_tables()
     randcoil, rcadj, rcprev, rcnext = (
@@ -140,12 +105,12 @@ def _talosn_rc_reference(seq_map, shifts):
 
 
 def run_talosn_rci(shifts, seq_map, simpred):
-    """Compute RCI/S2 exactly as TALOS-N's own RCI.cpp + TALOS.cpp do.
+    """
+    RCI and S2 as RCI.cpp + TALOS.cpp compute them.
 
-    `simpred` is the same random-coil-plus-neighbor-correction reference
-    table used by the ``rci_v_1c.py`` port (:func:`makeshift.rci.engine.
-    _build_simpred`); TALOS-N's compiled-in tables were confirmed
-    byte-identical to the Schwarzinger tables this repo ships.
+    `simpred` is the same reference table the ``rci_v_1c.py`` port uses
+    (:func:`makeshift.rci.engine._build_simpred`) — TALOS-N's compiled-in
+    tables are byte-identical to the Schwarzinger tables shipped here.
     """
     first_residue, last_residue = min(seq_map), max(seq_map)
     all_residues = list(range(first_residue, last_residue + 1))
@@ -161,14 +126,11 @@ def run_talosn_rci(shifts, seq_map, simpred):
 
     talosn_rc = _talosn_rc_reference(seq_map, shifts)
 
-    # inCS_convert_TALOS2RCI: raw deviation (no early floor) + a
-    # missing-ness tag tracked independently of whether a random-coil
-    # reference exists (Pro N/HN, Gly CB force the *value* to 0.0 but do
-    # not themselves make the atom "missing"). An atom that was never
-    # observed at all is *not* simply zeroed out -- it gets a synthetic
-    # deviation from TALOS-N's own random-coil reference
-    # (`talosn_rc[atom] - simpred[atom]`), which the window-averaging
-    # below treats as real signal unless it happens to be exactly zero.
+    # inCS_convert_TALOS2RCI: raw deviations, no early floor, plus a
+    # missing-ness tag tracked separately from the value. Pro N/HN and Gly
+    # CB have no reference so their value is 0.0, but that alone doesn't
+    # make them "missing". Atoms never observed get the synthesized
+    # deviation described in _talosn_rc_reference.
     raw_dev = {}
     observed_present = {}
     for atom in _ATOM_ORDER:
@@ -193,15 +155,11 @@ def run_talosn_rci(shifts, seq_map, simpred):
                 continue
             if r in observed:
                 vals = observed[r]
+                # TALOS.cpp averages Gly's HA2/HA3 into a single HA. Guard
+                # this tightly: a deposition with two chains also puts >1 row
+                # on a slot, for every atom type, and those should not be
+                # averaged — take the first, as TALOS-N does.
                 if atom == "HA" and seq_map.get(r) == "G" and len(vals) > 1:
-                    # TALOS.cpp explicitly averages Gly's HA2/HA3 into one
-                    # HA value (in2_Tab special-case for resName=="G" &&
-                    # atom=="HA") -- but some depositions carry duplicate
-                    # full assignment sets (e.g. two chains/entities), which
-                    # also land >1 row on the same (residue, atom) slot for
-                    # every atom type, not just Gly HA2/HA3; only average
-                    # when it's actually the Gly case TALOS-N's code covers,
-                    # not any incidental duplicate.
                     obs_val = sum(vals) / len(vals)
                 else:
                     obs_val = vals[0]
@@ -256,14 +214,25 @@ def run_talosn_rci(shifts, seq_map, simpred):
         rci = (1.0 / s) ** 1.5 if s != 0 else float("inf")
         if rci > _CEILING:
             rci = _CEILING
+        # note the == : a Gly missing everything counts 6, not 5
         if miss_count[r] == 5:
             rci = 0.0
         output_rci[r] = rci / _SCALE
 
     def end_correction(values):
+        """
+        applyEndCorrection: pull the terminal residues up toward the local
+        maximum. The N-terminal scan walks residues 1-4 by absolute number,
+        so it does nothing useful for a chain that starts higher up. Note
+        the ceiling is applied here in scaled units, after the divide above,
+        unlike the wishart path which caps before scaling.
+        """
         result = dict(values)
         max_pos, max_rci = 1, -1.0
         for i in range(1, 5):
+            # skip residues below the chain start, and the degenerate case
+            # where the chain starts exactly at 4 and there is nothing left
+            # of it to correct
             if i < first_residue or (i == first_residue and i == 4):
                 continue
             if i not in miss_count:
@@ -291,6 +260,11 @@ def run_talosn_rci(shifts, seq_map, simpred):
     output_rci = end_correction(output_rci)
 
     def final_smooth(values):
+        """
+        +-1 smoothing over residues that have data. A residue with no
+        usable neighbors gets 9999, TALOS-N's no-data marker in predS2.tab,
+        which is passed through to the results table as-is.
+        """
         result = {}
         def smoothed(r, lo, hi):
             vals = [values[r + k] for k in range(lo, hi + 1)
