@@ -1,0 +1,14 @@
+tmp                           !Name of molecule
+tmp                                     !Name for output file
+in.pdb                             !Strucutural (PBD) file
+2.00,                          !AER, radius of the atomic elements
+-1,              !NSIG
+293.0,           !T (temperature, K)
+0.01,           !ETA (Viscosity of the solvent in poises)
+1,              !Iflag (dipoles) 1 is no H, 2 is explicit H in file
+-2.7126         !Gyromagnetic ratio of N: unit: 10^7 rad.s^-1.T^-1
+1.02            !N-H distance, angstroms
+-172.           !Chemical shift anisotropy, ppm
+1               !Number of values of magnetic field
+14.1          !Magnetic field, teslas
+*                             !End of file
