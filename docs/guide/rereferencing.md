@@ -12,6 +12,7 @@ import makeshift as ms
 cs = ms.ChemicalShifts.from_bmrb(4527)
 cs.reref(method="panav")     # or "lacs"
 print(cs.reref_offsets)      # {'N': ..., 'CA': ..., 'CB': ..., ...}
+print(cs.reref_cona)         # CONA fragment-scan summary (PANAV only)
 ```
 
 Or apply it on load:
@@ -20,17 +21,21 @@ Or apply it on load:
 cs = ms.ChemicalShifts.from_bmrb(4527, reref="lacs")
 ```
 
-`reref_offsets` holds the offset applied to each nucleus, so the correction is
-fully transparent and reversible.
+`reref_offsets` holds the offset applied to each nucleus
+(`corrected = Val + offset`, paper convention `offset ≈ d_ave − d_obs`),
+so the correction is fully transparent and reversible.
 
 ## The two methods
 
-### PANAV 
+### PANAV
 
-**PANAV** ([Wang & Wishart 2005](https://pubmed.ncbi.nlm.nih.gov/15772753/))
-    uses rarely-misreferenced HA shifts to assign secondary structure, then aligns
-    N/CA/CB to curated per-structure reference distributions
-    ([Wang & Jardetzky 2002](https://onlinelibrary.wiley.com/doi/10.1110/ps.3180102)).
+**PANAV** ([Wang & Wishart 2005](https://pubmed.ncbi.nlm.nih.gov/15772753/);
+[Wang, Wang & Wishart 2010](https://pubmed.ncbi.nlm.nih.gov/20446018/))
+assigns secondary structure from HA (PSSI joint probabilities + a short
+density smooth), fits N/CA/CB/C′ offsets as
+`<Δδ> = mean(d_ave − d_obs)`, then refreshes SS twice with trial-adjusted
+C/N. Deviant atoms (6σ) are excluded. Afterward **CONA** scores contiguous
+3–6 residue windows (`cs.reref_cona`).
 
 ```python
 cs.reref(method="panav")
@@ -38,8 +43,8 @@ cs.reref(method="panav")
 
 ### LACS
 **LACS** ([Wang & Markley 2009](https://pmc.ncbi.nlm.nih.gov/articles/PMC2782637/))
-    fits secondary shift vs. CSI so the random-coil regime intercepts at the
-    origin; it covers CA, CB, C′, N, and HN.
+fits secondary shift vs. CSI so the random-coil regime intercepts at the
+origin; it covers CA, CB, C′, N, and HN.
 
 ```python
 cs.reref(method="lacs")

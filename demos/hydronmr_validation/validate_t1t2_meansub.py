@@ -1,11 +1,11 @@
 """
-Figure of merit: makeshift's HYDRONMR port (`makeshift.hydronmr.run`) vs. the
-original Fast-HYDRONMR Fortran binary, run on 7 ground-truth proteins bundled
-in `GROUND_TRUTH_DONT_OVERWRITE/` (AQADK, BLAC, BLVRB, CHI19, CYPA, KRAS, VHR).
+makeshift's HYDRONMR port (`makeshift.hydronmr.run`) vs. the original Fast-HYDRONMR 
+Fortran binary, run AQADK, BLAC, BLVRB, CHI19, CYPA, KRAS, VHR.
+
 YJBJ (23001 atoms) is excluded -- the current dense O(N^2) mobility-matrix
 approach OOMs on it (see makeshift/hydronmr/README.md "Known limitations").
 
-For each protein:
+Files:
   - `GROUND_TRUTH_DONT_OVERWRITE/<protein>/in.pdb` is fed to
     `makeshift.hydronmr.run()`, using the *same* AER/temperature/viscosity/
     field-strength parameters the original Fortran run used (parsed from that

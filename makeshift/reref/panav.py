@@ -1,143 +1,289 @@
 """
-PANAV re-referencing (Wang & Wishart 2005).
+PANAV re-referencing (Wang & Wishart 2005; Wang et al. 2010).
 
-Two-round probabilistic secondary-structure assignment from HA shifts, then
-per-atom offsets relative to the SS-specific reference distribution. No
-regression — pure gaussian scoring plus robust means. Entry point:
-:func:`reref_panav`.
+HA→SS (PSSI joint P_s + 5-residue B/C density smooth), then iterative
+N/CA/CB/C offsets vs panav_distns.csv. Offset = mean(d_ave − d_obs);
+corrected = Val + offset. CONA fragment scan afterward.
 """
 
 import numpy as np
 import pandas as pd
 
 from ..data.tables import get_panav_distns
-from ..utils.constants import _SS
+from ..utils.constants import _AA_3TO1, _SS
 
-_PANAV_REF = get_panav_distns()    # {residue: {ss: {atom: (mean, std)}}}
-
+_REF = get_panav_distns()
 _NO_REF = {("PRO", "N"), ("PRO", "H"), ("GLY", "CB")}
-_PANAV_ATOMS = ("N", "CA", "CB", "C")
+_OFFSET_ATOMS = ("N", "CA", "CB", "C")
+_ALL_ATOMS = ("N", "CA", "CB", "C", "H", "HA")
+_STD = {"C": 175.7, "CA": 56.6, "CB": 34.4, "N": 119.3, "H": 7.93, "HA": 4.41}
+_MIN_N = 25
+_CONA_TOL = 0.1
+_DENSITY_CUT = 0.35  # PSSI: promote to majority type if P > this
 
-def _has_ref(comp_id, atom_id):
-    """True if a usable PANAV reference distribution exists for this atom."""
-    if (comp_id, atom_id) in _NO_REF:
+
+def _ok(aa, atom):
+    if (aa, atom) in _NO_REF:
         return False
     try:
         for ss in _SS:
-            mean, std = _PANAV_REF[comp_id][ss][atom_id]
-            if pd.isna(mean) or pd.isna(std):
+            mu, sig = _REF[aa][ss][atom]
+            if pd.isna(mu) or pd.isna(sig) or sig == 0:
                 return False
         return True
     except KeyError:
         return False
 
 
-def _gaussian(x, mu, sigma):
-    if sigma == 0:
-        return 0.0
-    return (1.0 / (sigma * np.sqrt(2 * np.pi))) * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
+def _gauss(x, mu, sig):
+    return np.exp(-0.5 * ((x - mu) / sig) ** 2) / (sig * np.sqrt(2 * np.pi))
 
 
-def _panav_ss_probs(row):
-    """Most-probable secondary structure for this shift, from the SS-specific
-    reference distributions. Returns (probabilities, ss_label) or (nan, nan)."""
-    if not _has_ref(row["Comp_ID"], row["Atom_ID"]):
-        return np.nan, np.nan
-    scores = [_gaussian(row["Val"], *_PANAV_REF[row["Comp_ID"]][ss][row["Atom_ID"]])
-              for ss in _SS]
-    if not any(scores):
-        return np.nan, np.nan
-    selected = _SS[int(np.argmax(scores))]
-    if row["Atom_ID"] == "HA":
-        mean, std = _PANAV_REF[row["Comp_ID"]][selected][row["Atom_ID"]]
-        if abs(row["Val"] - mean) > 4 * std:
-            return np.nan, np.nan
-    return np.array(scores) / np.sum(scores), selected
+def _ss_prob(aa, shifts, atoms):
+    """
+    Joint P_s over ``atoms`` (normalize-then-product; missing atoms skipped).
+    Returns (best_ss, probs) or (None, None).
+    """
+    raw = {ss: 1.0 for ss in _SS}
+    n = 0
+    for atom in atoms:
+        if atom not in shifts or not _ok(aa, atom):
+            continue
+        g = {ss: _gauss(shifts[atom], *_REF[aa][ss][atom]) for ss in _SS}
+        gsum = sum(g.values())
+        if gsum <= 0:
+            continue
+        n += 1
+        for ss in _SS:
+            raw[ss] *= g[ss] / gsum
+    if n == 0:
+        return None, None
+    tot = sum(raw.values())
+    probs = {ss: raw[ss] / tot for ss in _SS}
+    return max(_SS, key=probs.get), probs
 
 
-def _panav_get_offset(row, corresponding_ha):
-    """Offset for this atom relative to the reference mean for the SS assigned
-    to the residue's HA. Returns (offset, ss) or (nan, nan)."""
-    if not _has_ref(row["Comp_ID"], row["Atom_ID"]) or len(corresponding_ha) == 0:
-        return np.nan, np.nan
-    ss = corresponding_ha.iloc[0]["ss_max"]
-    if pd.isna(ss):
-        return np.nan, np.nan
-    mean, _ = _PANAV_REF[row["Comp_ID"]][ss][row["Atom_ID"]]
-    return row["Val"] - mean, ss
+def _smooth(seq_ids, ss, probs):
+    """5-residue B/C density filter: majority type wins if P > 0.35."""
+    for i in range(len(seq_ids) - 4):
+        win = seq_ids[i:i + 5]
+        if win[-1] - win[0] != 4:
+            continue
+        labels = [ss.get(s) for s in win]
+        if any(lab is None for lab in labels):
+            continue
+        for maj in ("E", "C"):  # strand / coil (paper B / C)
+            if labels.count(maj) / 5.0 <= 0.5:
+                continue
+            for s, lab in zip(win, labels):
+                if lab != maj and probs.get(s, {}).get(maj, 0.0) > _DENSITY_CUT:
+                    ss[s] = maj
 
 
-def _panav_judge_outlier(row):
-    if not _has_ref(row["Comp_ID"], row["Atom_ID"]):
-        return True
-    if pd.isna(row["offset"]):
-        return all(
-            abs(row["Val"] - _PANAV_REF[row["Comp_ID"]][ss][row["Atom_ID"]][0])
-            > 4 * _PANAV_REF[row["Comp_ID"]][ss][row["Atom_ID"]][1]
-            for ss in _SS
-        )
-    mean, std = _PANAV_REF[row["Comp_ID"]][row["ss_max"]][row["Atom_ID"]]
-    return abs(row["offset"]) > 4 * std
+def _residue_prob(aa, shifts):
+    """Best SS joint Gauss product (CONA)."""
+    best = 0.0
+    for ss in _SS:
+        p, n = 1.0, 0
+        for atom, val in shifts.items():
+            if atom not in _ALL_ATOMS or not _ok(aa, atom):
+                continue
+            p *= _gauss(val, *_REF[aa][ss][atom])
+            n += 1
+        if n:
+            best = max(best, p)
+    return best
 
 
-# ── Entry point ──────────────────────────────────────────────────────────────
+def _mean_3sigma(vals):
+    a = np.asarray(vals, float)
+    if len(a) < _MIN_N:
+        return None
+    m, s = a.mean(), a.std()
+    if s > 0:
+        a = a[np.abs(a - m) <= 3 * s]
+    if len(a) < _MIN_N:
+        return None
+    return float(a.mean())
+
 
 def reref_panav(df):
-    """Compute cumulative per-atom PANAV offsets over two rounds.
-    Returns (offsets, check), offsets such that corrected = Val - offset."""
+    """Return ``(offsets, check, cona)``."""
     df = df.copy()
-    df["Atom_ID"] = df["Atom_ID"].replace("HA2", "HA")
-    df["outlier_1"] = False
-    df["outlier_2"] = False
+    df["Atom_ID"] = df["Atom_ID"].replace({"HA2": "HA", "HA3": "HA"})
+    df["Comp_ID"] = df["Comp_ID"].str.upper()
 
-    check = {atom: True for atom in _PANAV_ATOMS}
-    cumulative = {atom: 0.0 for atom in _PANAV_ATOMS}
+    orig = {}
+    for _, r in df.iterrows():
+        atom = r["Atom_ID"]
+        if atom not in _ALL_ATOMS or pd.isna(r["Val"]):
+            continue
+        sid = int(r["Seq_ID"])
+        rec = orig.setdefault(sid, {"aa": r["Comp_ID"], "shifts": {}})
+        rec["aa"] = r["Comp_ID"]
+        v = float(r["Val"])
+        prev = rec["shifts"].get(atom)
+        rec["shifts"][atom] = v if prev is None else 0.5 * (prev + v)
 
-    for round_i in range(2):
-        df[["ss_probs", "ss_max"]] = df.apply(
-            _panav_ss_probs, axis=1, result_type="expand"
-        )
-        ha = df.loc[df.Atom_ID == "HA"]
-        df[["offset", "ss_max"]] = df.apply(
-            lambda r: _panav_get_offset(r, ha.loc[ha.Seq_ID == r["Seq_ID"]]),
-            axis=1, result_type="expand",
-        )
+    seq_ids = sorted(orig)
+    none = {a: None for a in _OFFSET_ATOMS}
+    if not seq_ids:
+        return none, {a: False for a in _OFFSET_ATOMS}, None
 
-        outlier_col = f"outlier_{round_i + 1}"
-        df[outlier_col] = df.apply(_panav_judge_outlier, axis=1)
+    # crude offsets → deviant (6σ from every SS)
+    crude = {}
+    for atom in _ALL_ATOMS:
+        vals = [
+            orig[s]["shifts"][atom]
+            for s in seq_ids
+            if atom in orig[s]["shifts"]
+            and not (atom == "CA" and orig[s]["aa"] == "GLY")
+            and not (atom == "CB" and orig[s]["aa"] in ("ALA", "SER", "THR"))
+        ]
+        crude[atom] = (float(np.mean(vals)) - _STD[atom]) if vals else 0.0
 
-        round_offsets = {}
-        for atom in _PANAV_ATOMS:
-            mask = (df.Atom_ID == atom) & (~df["outlier_1"])
-            if round_i == 1:
-                mask &= ~df["outlier_2"]
-            vals = np.array(df.loc[mask, "offset"], dtype=float)
-
-            if np.isnan(vals).all():
-                round_offsets[atom] = None
-                check[atom] = False
+    deviant = {s: set() for s in seq_ids}
+    for s in seq_ids:
+        aa = orig[s]["aa"]
+        for atom, val in orig[s]["shifts"].items():
+            if not _ok(aa, atom):
                 continue
+            if all(
+                abs(val + crude[atom] - _REF[aa][ss][atom][0])
+                > 6 * _REF[aa][ss][atom][1]
+                for ss in _SS
+            ):
+                deviant[s].add(atom)
 
-            m, s = np.nanmean(vals), np.nanstd(vals)
-            vals[(vals > m + 3 * s) | (vals < m - 3 * s)] = np.nan
-            if (~np.isnan(vals)).sum() < 25:
-                round_offsets[atom] = None
-                check[atom] = False
+    ss = {}
+
+    def assign_ss(cn_off):
+        atoms = ("HA", "N", "CA", "CB", "C") if cn_off is not None else ("HA",)
+        probs = {}
+        for s in seq_ids:
+            sh = dict(orig[s]["shifts"])
+            if cn_off is not None:
+                for atom in _OFFSET_ATOMS:
+                    if cn_off.get(atom) is not None and atom in sh:
+                        sh[atom] = sh[atom] + cn_off[atom]
+            label, p = _ss_prob(orig[s]["aa"], sh, atoms)
+            ss[s], probs[s] = label, (p or {})
+        _smooth(seq_ids, ss, probs)
+
+    def compute_offsets():
+        out, ok = {}, {}
+        for atom in _OFFSET_ATOMS:
+            deltas = []
+            for s in seq_ids:
+                aa, sh = orig[s]["aa"], orig[s]["shifts"]
+                if atom in deviant[s] or atom not in sh or ss.get(s) is None:
+                    continue
+                if not _ok(aa, atom):
+                    continue
+                mu, _ = _REF[aa][ss[s]][atom]
+                deltas.append(mu - sh[atom])
+            off = _mean_3sigma(deltas)
+            out[atom], ok[atom] = (off, True) if off is not None else (None, False)
+        return out, ok
+
+    # HA→SS → offsets; then two rounds with trial-adjusted C/N
+    assign_ss(None)
+    offsets, check = compute_offsets()
+    for _ in range(2):
+        assign_ss(offsets)
+        offsets, check = compute_offsets()
+
+    cal = {
+        s: {
+            "aa": orig[s]["aa"],
+            "shifts": {
+                a: (v + offsets[a] if a in _OFFSET_ATOMS and offsets.get(a) is not None else v)
+                for a, v in orig[s]["shifts"].items()
+            },
+            "ss": ss[s],
+        }
+        for s in seq_ids
+    }
+
+    # CONA: score each 3–6-mer under every same-length window in the protein
+    cona, suggestions = {}, []
+    tot_sel = tot_conf = 0
+    for k in (3, 4, 5, 6):
+        windows = []
+        for i in range(len(seq_ids) - k + 1):
+            ids = seq_ids[i:i + k]
+            if ids[-1] - ids[0] != k - 1:
                 continue
+            n_cacb = sum(
+                ("CA" in cal[s]["shifts"]) + ("CB" in cal[s]["shifts"]) for s in ids
+            )
+            if n_cacb < k:
+                continue
+            aas = [cal[s]["aa"] for s in ids]
+            shs = [cal[s]["shifts"] for s in ids]
+            seq1 = "".join(_AA_3TO1.get(a, "X") for a in aas)
+            windows.append((ids[0], ids[-1], aas, seq1, shs))
 
-            round_offsets[atom] = float(np.nanmean(vals))
+        selected = confirmed = 0
+        for oi, (start, end, _, seq_o, shs_o) in enumerate(windows):
+            selected += 1
+            scores = np.array([
+                float(np.prod([_residue_prob(a, sh) for a, sh in zip(w[2], shs_o)]))
+                for w in windows
+            ])
+            p_max = float(scores.max()) if len(scores) else 0.0
+            j_best = int(np.argmax(scores)) if len(scores) else oi
+            norm = scores / p_max if p_max > 0 else scores
+            if float(norm[oi]) >= 1.0 - _CONA_TOL:
+                confirmed += 1
+            elif j_best != oi:
+                suggestions.append({
+                    "start": int(start),
+                    "end": int(end),
+                    "original": seq_o,
+                    "original_pct": round(100.0 * float(norm[oi]), 2),
+                    "suggested": windows[j_best][3],
+                    "suggested_pct": 100.0,
+                    "suggested_start": int(windows[j_best][0]),
+                    "suggested_end": int(windows[j_best][1]),
+                })
 
-        apply_now = {a: (0.0 if v is None else v) for a, v in round_offsets.items()}
-        df["Val"] = df.apply(
-            lambda r: r["Val"] - apply_now.get(r["Atom_ID"], 0.0), axis=1
-        )
-        for atom in _PANAV_ATOMS:
-            if round_offsets.get(atom) is not None:
-                cumulative[atom] += round_offsets[atom]
+        cona[f"{k}-residue"] = {
+            "selected": selected,
+            "confirmed": confirmed,
+            "score": (100.0 * confirmed / selected) if selected else None,
+        }
+        tot_sel += selected
+        tot_conf += confirmed
 
-        failed = [a for a, ok in check.items() if not ok]
-        df.loc[df["Atom_ID"].isin(failed), outlier_col] = True
+    suspicious = []
+    for s in seq_ids:
+        aa, sh, ssi = cal[s]["aa"], cal[s]["shifts"], cal[s]["ss"]
+        if ssi is None:
+            continue
+        for atom, val in sh.items():
+            if not _ok(aa, atom):
+                continue
+            mu, sig = _REF[aa][ssi][atom]
+            if abs(val - mu) > 4 * sig:
+                suspicious.append(
+                    {"seq_id": int(s), "aa": aa, "atom": atom, "val": val}
+                )
 
-    offsets = {atom: (cumulative[atom] if check[atom] else None)
-               for atom in _PANAV_ATOMS}
-    return offsets, check
+    cona["overall"] = {
+        "selected": tot_sel,
+        "confirmed": tot_conf,
+        "score": (100.0 * tot_conf / tot_sel) if tot_sel else None,
+    }
+    if suggestions:
+        cona["suggestions"] = suggestions
+    if suspicious:
+        cona["suspicious"] = suspicious
+    deviant_list = [
+        {"seq_id": int(s), "aa": orig[s]["aa"], "atom": a}
+        for s, atoms in deviant.items() for a in atoms
+    ]
+    if deviant_list:
+        cona["deviant"] = deviant_list
+
+    return offsets, check, cona

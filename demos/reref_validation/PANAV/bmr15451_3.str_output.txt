@@ -1,0 +1,56 @@
+bmr15451_3.str
+
+3-Resdue Scan: 
+
+MAECVSQAID  INEPIGNLKK  LLEPRLQCSL  DAHEICLQDI  QLDPDRSLFD  QGVKTDGTVQ  LSVQVISYQG  MEPKLNILEI  VKTAETVEW
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+INE(11-13)  59.19%  FDQ(49-51)  100%
+EPI(13-15)  56.39%  QVI(64-66)  100%
+KKL(19-21)  10.15%  VQL(59-61)  100%
+KLL(20-22)  20.14%  QLD(41-43)  100%
+PRL(24-26)  72.57%  PKL(73-75)  100%
+RLQ(25-27)  20.93%  CLQ(36-38)  100%
+VQL(59-61)  22.44%  KKL(19-21)  100%
+YQG(68-70)  19.06%  DQG(50-52)  100%
+
+# of selected frags: 87;   # of confirmed frags: 79; CONA Score:  90.80%
+
+4-Resdue Scan: 
+
+MAECVSQAID  INEPIGNLKK  LLEPRLQCSL  DAHEICLQDI  QLDPDRSLFD  QGVKTDGTVQ  LSVQVISYQG  MEPKLNILEI  VKTAETVEW
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+DINE(10-13)  37.50%  LFDQ(48-51)  100%
+
+# of selected frags: 86;   # of confirmed frags: 85; CONA Score:  98.84%
+
+5-Resdue Scan: 
+
+MAECVSQAID  INEPIGNLKK  LLEPRLQCSL  DAHEICLQDI  QLDPDRSLFD  QGVKTDGTVQ  LSVQVISYQG  MEPKLNILEI  VKTAETVEW
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+
+# of selected frags: 85;   # of confirmed frags: 85; CONA Score:  100.00%
+
+6-Resdue Scan: 
+
+MAECVSQAID  INEPIGNLKK  LLEPRLQCSL  DAHEICLQDI  QLDPDRSLFD  QGVKTDGTVQ  LSVQVISYQG  MEPKLNILEI  VKTAETVEW
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+
+# of selected frags: 84;   # of confirmed frags: 84; CONA Score:  100.00%
+Detected reference offsets 
+CO: -0.16ppm     CA: -0.49ppm     CB: 0.34ppm     N: -0.09ppm     
+
+Number of assignments: 515
+Number of deviant assignments: 1 
+D39  N: 109.718
+ 
+Number of suspicious assignments after ref-calibration when necessary: 1 
+E23  CA: 62.21
+ 

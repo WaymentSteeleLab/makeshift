@@ -5,6 +5,7 @@ examples/*_hydronmr_r2.csv
 .ipynb_checkpoints
 *.nbconvert.ipynb
 .DS_Store
+._*
 *.log
 *.tmp
 *.swp
@@ -12,3 +13,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# Optional local RefDB cache (not required for PANAV)
+makeshift/data/corrdata/
+makeshift/data/refdb/
+

@@ -79,13 +79,17 @@ class ChemicalShifts:
     def reref(self, method):
         """
         Re-reference shifts in place via the LACS or PANAV routine.
+
+        For ``method="panav"``, also stores a CONA fragment-scan summary on
+        ``self.reref_cona`` (3–6 residue window confirmation scores).
         """
         from .reref import compute_offsets, apply_offsets
 
-        offsets, check = compute_offsets(self.data, method)
+        offsets, check, meta = compute_offsets(self.data, method)
         self.reref_method = method
         self.reref_offsets = offsets
         self.reref_check = check
+        self.reref_cona = meta
 
         if not offsets or not any(v is not None for v in offsets.values()):
             warnings.warn(

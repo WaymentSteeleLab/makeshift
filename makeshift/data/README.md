@@ -48,11 +48,8 @@ Random-coil C′ (carbonyl carbon) chemical shifts per amino acid.
 **Columns:** `Atom_name, SS, AA, mean, stdev`
 
 Reference shift distributions per atom, secondary-structure class (C = coil,
-H = helix, E = strand), and amino acid. Used to assign the most probable
-secondary structure to each residue from its HA shift, which drives the PANAV
-offset calculation.
+H = helix, E = strand), and amino acid (Wang & Jardetzky 2002b). Used for
+HA→SS assignment, Wang & Wishart (2005) offsets, and Wang et al. (2010) CONA
+joint-probability scoring.
 
-**Source:** Wang & Wishart (2005).
-
-**Used by:** `get_panav_distns()` — secondary-structure assignment and per-atom
-offset estimation during PANAV re-referencing in `reref/panav.py`.
+**Used by:** `get_panav_distns()` in `reref/panav.py`.

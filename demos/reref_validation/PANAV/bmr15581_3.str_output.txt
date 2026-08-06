@@ -1,0 +1,54 @@
+bmr15581_3.str
+
+3-Resdue Scan: 
+
+PVTETVDGQG  QAWRHHNGFD  FAVIKELKTA  ASQYGATAPY  TLAIVESVAD  NWLTPTDWNT  LVRAVLSGGD  HLLWKSEFFE  NCRDTAKRNQ  QAGNGWDFDM  LTGSGNYSST  DAQMQYDPGL  FAQIQAAATK  AWRKLPVKGD  
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+WRH(13-15)  14.20%  QMQ(113-115)  100%
+RHH(14-16)  19.28%  QMQ(113-115)  100%
+SQY(32-34)  68.57%  SEF(76-78)  100%
+APY(38-40)  87.89%  AVI(22-24)  100%
+DHL(70-72)  65.00%  DML(99-101)  100%
+FFE(78-80)  13.39%  IKE(24-26)  100%
+AWR(131-133)  67.35%  AQM(112-114)  100%
+
+# of selected frags: 138;   # of confirmed frags: 131; CONA Score:  94.93%
+
+4-Resdue Scan: 
+
+PVTETVDGQG  QAWRHHNGFD  FAVIKELKTA  ASQYGATAPY  TLAIVESVAD  NWLTPTDWNT  LVRAVLSGGD  HLLWKSEFFE  NCRDTAKRNQ  QAGNGWDFDM  LTGSGNYSST  DAQMQYDPGL  FAQIQAAATK  AWRKLPVKGD  
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+AWRH(12-15)  14.20%  AQMQ(112-115)  100%
+
+# of selected frags: 137;   # of confirmed frags: 136; CONA Score:  99.27%
+
+5-Resdue Scan: 
+
+PVTETVDGQG  QAWRHHNGFD  FAVIKELKTA  ASQYGATAPY  TLAIVESVAD  NWLTPTDWNT  LVRAVLSGGD  HLLWKSEFFE  NCRDTAKRNQ  QAGNGWDFDM  LTGSGNYSST  DAQMQYDPGL  FAQIQAAATK  AWRKLPVKGD  
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+
+# of selected frags: 136;   # of confirmed frags: 136; CONA Score:  100.00%
+
+6-Resdue Scan: 
+
+PVTETVDGQG  QAWRHHNGFD  FAVIKELKTA  ASQYGATAPY  TLAIVESVAD  NWLTPTDWNT  LVRAVLSGGD  HLLWKSEFFE  NCRDTAKRNQ  QAGNGWDFDM  LTGSGNYSST  DAQMQYDPGL  FAQIQAAATK  AWRKLPVKGD  
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+
+# of selected frags: 135;   # of confirmed frags: 135; CONA Score:  100.00%
+Detected reference offsets 
+CO: -0.26ppm     CA: -0.27ppm     CB: 0.16ppm     N: -0.05ppm     
+
+Number of assignments: 785
+Number of deviant assignments: 0 
+
+Number of suspicious assignments after ref-calibration when necessary: 1 
+P1  C: 170.64
+ 

@@ -1,7 +1,7 @@
 """
-Figure of merit: makeshift's RCI implementation vs. the reference
-implementation (Berjanskii & Wishart 2005, rci_v_1c.py), run on the *exact*
-input/output pair bundled with the reference script itself -- BMRB 4403,
+ makeshift's RCI implementation vs. the reference implementation 
+ (Berjanskii & Wishart 2005, rci_v_1c.py), run on the *exact*
+input/output pair bundled with the reference script -- BMRB 4403,
 the J domain of murine polyomavirus T antigen ("PyJCScorr"), from the
 RCI/ folder distributed alongside rci_v_1c.py.
 

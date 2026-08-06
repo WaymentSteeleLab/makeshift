@@ -1,0 +1,56 @@
+bmr52018_3.str
+
+3-Resdue Scan: 
+
+MGRRLVLYVA  GQTPKSLAAI  SNLRRICEEN  LPGQYEVEVI  DLKQNPRLAK  EHSIVAIPTL  VRELPVPIRK  IIGDLSDKEQ  VLVNLKMDME  
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+RRL(3-5)  44.62%  KMD(86-88)  100%
+KSL(15-17)  43.14%  QVL(80-82)  100%
+QYE(34-36)  6.86%  MDM(87-89)  100%
+YEV(35-37)  72.81%  LKM(85-87)  100%
+KEH(50-52)  65.21%  KEQ(78-80)  100%
+IVA(54-56)  49.64%  YVA(8-10)  100%
+REL(62-64)  34.68%  RRL(3-5)  100%
+DKE(77-79)  76.84%  DME(88-90)  100%
+MDM(87-89)  26.38%  NLK(84-86)  100%
+DME(88-90)  10.72%  LKQ(42-44)  100%
+
+# of selected frags: 88;   # of confirmed frags: 78; CONA Score:  88.64%
+
+4-Resdue Scan: 
+
+MGRRLVLYVA  GQTPKSLAAI  SNLRRICEEN  LPGQYEVEVI  DLKQNPRLAK  EHSIVAIPTL  VRELPVPIRK  IIGDLSDKEQ  VLVNLKMDME  
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+MDME(87-90)  13.29%  NLKM(84-87)  100%
+
+# of selected frags: 87;   # of confirmed frags: 86; CONA Score:  98.85%
+
+5-Resdue Scan: 
+
+MGRRLVLYVA  GQTPKSLAAI  SNLRRICEEN  LPGQYEVEVI  DLKQNPRLAK  EHSIVAIPTL  VRELPVPIRK  IIGDLSDKEQ  VLVNLKMDME  
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+
+# of selected frags: 86;   # of confirmed frags: 86; CONA Score:  100.00%
+
+6-Resdue Scan: 
+
+MGRRLVLYVA  GQTPKSLAAI  SNLRRICEEN  LPGQYEVEVI  DLKQNPRLAK  EHSIVAIPTL  VRELPVPIRK  IIGDLSDKEQ  VLVNLKMDME  
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+
+# of selected frags: 85;   # of confirmed frags: 85; CONA Score:  100.00%
+Detected reference offsets 
+CO: 0.00ppm     CA: -0.38ppm     CB: 0.17ppm     N: 0.27ppm     
+
+Number of assignments: 336
+Number of deviant assignments: 0 
+
+Number of suspicious assignments after ref-calibration when necessary: 0 
+

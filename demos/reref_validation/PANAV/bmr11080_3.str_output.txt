@@ -1,0 +1,50 @@
+bmr11080_3.str
+
+3-Resdue Scan: 
+
+GPMGSMADKI  KCSHILVKKQ  GEALAVQERL  KAGEKFGKLA  KELSIDGGSA  KRDGSLGYFG  RGKMVKPFED  AAFRLQVGEV  SEPVKSEFGY  HVIKRLG
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+KPF(66-68)  66.60%  HVI(91-93)  100%
+VSE(80-82)  35.35%  KSE(85-87)  100%
+YHV(90-92)  20.48%  LQV(75-77)  100%
+
+# of selected frags: 95;   # of confirmed frags: 92; CONA Score:  96.84%
+
+4-Resdue Scan: 
+
+GPMGSMADKI  KCSHILVKKQ  GEALAVQERL  KAGEKFGKLA  KELSIDGGSA  KRDGSLGYFG  RGKMVKPFED  AAFRLQVGEV  SEPVKSEFGY  HVIKRLG
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+KPFE(66-69)  72.74%  HVIK(91-94)  100%
+
+# of selected frags: 94;   # of confirmed frags: 93; CONA Score:  98.94%
+
+5-Resdue Scan: 
+
+GPMGSMADKI  KCSHILVKKQ  GEALAVQERL  KAGEKFGKLA  KELSIDGGSA  KRDGSLGYFG  RGKMVKPFED  AAFRLQVGEV  SEPVKSEFGY  HVIKRLG
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+
+# of selected frags: 93;   # of confirmed frags: 93; CONA Score:  100.00%
+
+6-Resdue Scan: 
+
+GPMGSMADKI  KCSHILVKKQ  GEALAVQERL  KAGEKFGKLA  KELSIDGGSA  KRDGSLGYFG  RGKMVKPFED  AAFRLQVGEV  SEPVKSEFGY  HVIKRLG
+
+Original Assignment and Probability vs Suggested Assignment and Probability 
+
+
+# of selected frags: 92;   # of confirmed frags: 92; CONA Score:  100.00%
+Detected reference offsets 
+CO: 0.00ppm     CA: -0.48ppm     CB: -0.07ppm     N: 0.79ppm     
+
+Number of assignments: 448
+Number of deviant assignments: 0 
+
+Number of suspicious assignments after ref-calibration when necessary: 1 
+V77  CB: 28.55
+ 

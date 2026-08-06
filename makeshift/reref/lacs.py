@@ -2,8 +2,8 @@
 LACS re-referencing (Wang & Markley 2009; Wang et al. 2005).
 
 Per-atom offset from the intercept of secondary shift vs. CSI (CA, CB, C) or
-vs. the previous residue's CSI (N, H), via robust (Huber) and bounded-slope
-fits. 
+vs. the previous residue's CSI (N, H). Offsets use ``offset ≈ d_ave − d_obs``
+(``corrected = Val + offset``).
 """
 
 import numpy as np
@@ -198,5 +198,9 @@ def reref_lacs(df, n_std=_N_STD_OUTLIER):
         )
 
     check = {atom: _fitted(raw.get(atom)) for atom in _LACS_ATOMS}
-    offsets = {atom: (raw[atom] if check[atom] else None) for atom in _LACS_ATOMS}
+    # Fit intercept is bias in secondary shift (≈ d_obs − d_ave). Flip to
+    # paper convention offset = d_ave − d_obs so corrected = Val + offset.
+    offsets = {
+        atom: (-raw[atom] if check[atom] else None) for atom in _LACS_ATOMS
+    }
     return offsets, check

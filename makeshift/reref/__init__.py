@@ -24,12 +24,15 @@ def compute_offsets(df, method, n_std=_N_STD_OUTLIER):
     Returns
     -------
     offsets : dict {atom: float | None}
-        Correction per atom such that ``corrected = Val - offset``; None where
+        Correction per atom such that ``corrected = Val + offset``
+        (paper convention ``offset ≈ d_ave − d_obs``); None where
         fitting failed. LACS atoms: CA, CB, C, N, H. PANAV atoms: N, CA, CB, C.
     check : dict {atom: bool}
         Whether re-referencing succeeded for each atom.
+    meta : dict | None
+        PANAV only — CONA fragment-scan summary (``None`` for LACS).
 
-    Returns ``(None, None)`` if no backbone shifts are present.
+    Returns ``(None, None, None)`` if no backbone shifts are present.
     """
     if method not in ("lacs", "panav"):
         raise ValueError(f"method must be 'lacs' or 'panav', got {method!r}")
@@ -51,9 +54,10 @@ def compute_offsets(df, method, n_std=_N_STD_OUTLIER):
 
     work = work.loc[work.Atom_ID.isin(_BACKBONE)].copy()
     if work.empty:
-        return None, None
+        return None, None, None
 
     if method == "lacs":
-        return reref_lacs(work, n_std=n_std)
+        offsets, check = reref_lacs(work, n_std=n_std)
+        return offsets, check, None
 
     return reref_panav(work)
