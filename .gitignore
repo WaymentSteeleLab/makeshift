@@ -14,7 +14,3 @@ __pycache__/
 dist/
 build/
 
-# Optional local RefDB cache (not required for PANAV)
-makeshift/data/corrdata/
-makeshift/data/refdb/
-
