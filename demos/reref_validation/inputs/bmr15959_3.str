@@ -1,0 +1,1296 @@
+data_15959
+
+#######################
+#  Entry information  #
+#######################
+
+save_entry_information
+   _Entry.Sf_category                    entry_information
+   _Entry.Sf_framecode                   entry_information
+   _Entry.ID                             15959
+   _Entry.Title                         
+;
+Backbone 1H and 15N Chemical Shift Assignments for the Phosphotyrosine Binding Domain of Insulin Receptor Substrate 1 in the Apo and Phosphopeptide Bound Forms
+;
+   _Entry.Type                           macromolecule
+   _Entry.Version_type                   original
+   _Entry.Submission_date                2008-09-18
+   _Entry.Accession_date                 2008-09-18
+   _Entry.Last_release_date              .
+   _Entry.Original_release_date          .
+   _Entry.Origination                    author
+   _Entry.NMR_STAR_version               3.1.1.61
+   _Entry.Original_NMR_STAR_version      3.0.8.116
+   _Entry.Experimental_method            NMR
+   _Entry.Experimental_method_subtype    solution
+   _Entry.Details                        .
+   _Entry.BMRB_internal_directory_name   .
+
+   loop_
+      _Entry_author.Ordinal
+      _Entry_author.Given_name
+      _Entry_author.Family_name
+      _Entry_author.First_initial
+      _Entry_author.Middle_initials
+      _Entry_author.Family_title
+      _Entry_author.Entry_ID
+
+      1 Martin   Stone      . J. . 15959 
+      2 Virginia Jarymowycz . A. . 15959 
+
+   stop_
+
+   loop_
+      _Data_set.Type
+      _Data_set.Count
+      _Data_set.Entry_ID
+
+      assigned_chemical_shifts 1 15959 
+
+   stop_
+
+   loop_
+      _Datum.Type
+      _Datum.Count
+      _Datum.Entry_ID
+
+      '15N chemical shifts' 107 15959 
+      '1H chemical shifts'  107 15959 
+
+   stop_
+
+   loop_
+      _Release.Release_number
+      _Release.Format_type
+      _Release.Format_version
+      _Release.Date
+      _Release.Submission_date
+      _Release.Type
+      _Release.Author
+      _Release.Detail
+      _Release.Entry_ID
+
+      2 . . 2009-03-03 2008-09-18 update   BMRB   'complete entry citation' 15959 
+      1 . . 2008-10-03 2008-09-18 original author 'original release'        15959 
+
+   stop_
+
+   loop_
+      _Related_entries.Database_name
+      _Related_entries.Database_accession_code
+      _Related_entries.Relationship
+      _Related_entries.Entry_ID
+
+      BMRB 7429 'Bound Form' 15959 
+
+   stop_
+
+save_
+
+
+###############
+#  Citations  #
+###############
+
+save_entry_citation
+   _Citation.Sf_category                  citations
+   _Citation.Sf_framecode                 entry_citation
+   _Citation.Entry_ID                     15959
+   _Citation.ID                           1
+   _Citation.Class                       'entry citation'
+   _Citation.CAS_abstract_code            .
+   _Citation.MEDLINE_UI_code              .
+   _Citation.DOI                          .
+   _Citation.PubMed_ID                    19053277
+   _Citation.Full_citation                .
+   _Citation.Title                       'Remote Changes in Dynamics of the Phosphotyrosine-Binding Domain of Insulin Receptor Substrate-1 Induced by Phosphopeptide Binding'
+   _Citation.Status                       published
+   _Citation.Type                         journal
+   _Citation.Journal_abbrev               Biochemistry
+   _Citation.Journal_name_full            .
+   _Citation.Journal_volume               47
+   _Citation.Journal_issue                50
+   _Citation.Journal_ASTM                 .
+   _Citation.Journal_ISSN                 .
+   _Citation.Journal_CSD                  .
+   _Citation.Book_title                   .
+   _Citation.Book_chapter_title           .
+   _Citation.Book_volume                  .
+   _Citation.Book_series                  .
+   _Citation.Book_publisher               .
+   _Citation.Book_publisher_city          .
+   _Citation.Book_ISBN                    .
+   _Citation.Conference_title             .
+   _Citation.Conference_site              .
+   _Citation.Conference_state_province    .
+   _Citation.Conference_country           .
+   _Citation.Conference_start_date        .
+   _Citation.Conference_end_date          .
+   _Citation.Conference_abstract_number   .
+   _Citation.Thesis_institution           .
+   _Citation.Thesis_institution_city      .
+   _Citation.Thesis_institution_country   .
+   _Citation.WWW_URL                      .
+   _Citation.Page_first                   13371
+   _Citation.Page_last                    13382
+   _Citation.Year                         2008
+   _Citation.Details                      .
+
+   loop_
+      _Citation_author.Ordinal
+      _Citation_author.Given_name
+      _Citation_author.Family_name
+      _Citation_author.First_initial
+      _Citation_author.Middle_initials
+      _Citation_author.Family_title
+      _Citation_author.Entry_ID
+      _Citation_author.Citation_ID
+
+      1 Martin   Stone      . J. . 15959 1 
+      2 Virginia Jarymowycz . A. . 15959 1 
+
+   stop_
+
+   loop_
+      _Citation_keyword.Keyword
+      _Citation_keyword.Entry_ID
+      _Citation_keyword.Citation_ID
+
+      'insulin receptor substrate-1'   15959 1 
+       IRS-1                           15959 1 
+      'phosphotyrosine binding domain' 15959 1 
+      'PTB domain'                     15959 1 
+
+   stop_
+
+save_
+
+
+#############################################
+#  Molecular system (assembly) description  #
+#############################################
+
+save_assembly
+   _Assembly.Sf_category                       assembly
+   _Assembly.Sf_framecode                      assembly
+   _Assembly.Entry_ID                          15959
+   _Assembly.ID                                1
+   _Assembly.Name                             'Phosphotyrosine-Binding Domain of Insulin Receptor Substrate-1 Monomer'
+   _Assembly.BMRB_code                         .
+   _Assembly.Number_of_components              .
+   _Assembly.Organic_ligands                   .
+   _Assembly.Metal_ions                        .
+   _Assembly.Non_standard_bonds                .
+   _Assembly.Ambiguous_conformational_states   .
+   _Assembly.Ambiguous_chem_comp_sites         .
+   _Assembly.Molecules_in_chemical_exchange    .
+   _Assembly.Paramagnetic                      no
+   _Assembly.Thiol_state                       .
+   _Assembly.Molecular_mass                    .
+   _Assembly.Enzyme_commission_number          .
+   _Assembly.Details                           .
+   _Assembly.DB_query_date                     .
+   _Assembly.DB_query_revised_last_date        .
+
+   loop_
+      _Entity_assembly.ID
+      _Entity_assembly.Entity_assembly_name
+      _Entity_assembly.Entity_ID
+      _Entity_assembly.Entity_label
+      _Entity_assembly.Asym_ID
+      _Entity_assembly.PDB_chain_ID
+      _Entity_assembly.Experimental_data_reported
+      _Entity_assembly.Physical_state
+      _Entity_assembly.Conformational_isomer
+      _Entity_assembly.Chemical_exchange_state
+      _Entity_assembly.Magnetic_equivalence_group_code
+      _Entity_assembly.Role
+      _Entity_assembly.Details
+      _Entity_assembly.Entry_ID
+      _Entity_assembly.Assembly_ID
+
+      1 Monomer 1 $Phosphotyrosine-Binding_Domain_of_Insulin_Receptor_Substrate-1 A . yes native no no . . . 15959 1 
+
+   stop_
+
+save_
+
+
+    ####################################
+    #  Biological polymers and ligands #
+    ####################################
+
+save_Phosphotyrosine-Binding_Domain_of_Insulin_Receptor_Substrate-1
+   _Entity.Sf_category                       entity
+   _Entity.Sf_framecode                      Phosphotyrosine-Binding_Domain_of_Insulin_Receptor_Substrate-1
+   _Entity.Entry_ID                          15959
+   _Entity.ID                                1
+   _Entity.BMRB_code                         .
+   _Entity.Name                              Phosphotyrosine-Binding_Domain_of_Insulin_Receptor_Substrate-1
+   _Entity.Type                              polymer
+   _Entity.Polymer_common_type               .
+   _Entity.Polymer_type                      polypeptide(L)
+   _Entity.Polymer_type_details              .
+   _Entity.Polymer_strand_ID                 .
+   _Entity.Polymer_seq_one_letter_code_can   .
+   _Entity.Polymer_seq_one_letter_code      
+;
+GPAFKEVWQVILKPKGLGQT
+KNLIGIYRLCLTSKTISFVK
+LNSEAAAVVLQLMNIRRCGH
+SENFFFIEVGRSAVTGPGEF
+WMQVDDSVVAQNMHETILEA
+MRAMSDEFRPR
+;
+   _Entity.Target_identifier                 .
+   _Entity.Polymer_author_defined_seq        .
+   _Entity.Polymer_author_seq_details        .
+   _Entity.Ambiguous_conformational_states   no
+   _Entity.Ambiguous_chem_comp_sites         no
+   _Entity.Nstd_monomer                      no
+   _Entity.Nstd_chirality                    no
+   _Entity.Nstd_linkage                      no
+   _Entity.Nonpolymer_comp_ID                .
+   _Entity.Nonpolymer_comp_label             .
+   _Entity.Number_of_monomers                111
+   _Entity.Number_of_nonpolymer_components   .
+   _Entity.Paramagnetic                      no
+   _Entity.Thiol_state                      'all free'
+   _Entity.Src_method                        .
+   _Entity.Parent_entity_ID                  .
+   _Entity.Fragment                          .
+   _Entity.Mutation                          .
+   _Entity.EC_number                         .
+   _Entity.Calc_isoelectric_point            .
+   _Entity.Formula_weight                    .
+   _Entity.Formula_weight_exptl              .
+   _Entity.Formula_weight_exptl_meth         .
+   _Entity.Details                           .
+   _Entity.DB_query_date                     .
+   _Entity.DB_query_revised_last_date        2015-11-26
+
+   loop_
+      _Entity_db_link.Ordinal
+      _Entity_db_link.Author_supplied
+      _Entity_db_link.Database_code
+      _Entity_db_link.Accession_code
+      _Entity_db_link.Entry_mol_code
+      _Entity_db_link.Entry_mol_name
+      _Entity_db_link.Entry_experimental_method
+      _Entity_db_link.Entry_structure_resolution
+      _Entity_db_link.Entry_relation_type
+      _Entity_db_link.Entry_details
+      _Entity_db_link.Chimera_segment_ID
+      _Entity_db_link.Seq_query_to_submitted_percent
+      _Entity_db_link.Seq_subject_length
+      _Entity_db_link.Seq_identity
+      _Entity_db_link.Seq_positive
+      _Entity_db_link.Seq_homology_expectation_val
+      _Entity_db_link.Seq_align_begin
+      _Entity_db_link.Seq_align_end
+      _Entity_db_link.Seq_difference_details
+      _Entity_db_link.Seq_alignment_details
+      _Entity_db_link.Entry_ID
+      _Entity_db_link.Entity_ID
+
+       1 no PDB  1IRS         . "Irs-1 Ptb Domain Complexed With A Il-4 Receptor Phosphopeptide, Nmr, Minimized Average Structure" . . . . . 100.00  112 100.00 100.00 5.01e-76 . . . . 15959 1 
+       2 no PDB  1QQG         . "Crystal Structure Of The Ph-Ptb Targeting Region Of Irs-1"                                        . . . . . 100.00  264 100.00 100.00 2.27e-74 . . . . 15959 1 
+       3 no DBJ  BAA11026     . "IRS-1(COS) [Chlorocebus aethiops]"                                                                . . . . . 100.00 1251 100.00 100.00 1.83e-70 . . . . 15959 1 
+       4 no DBJ  BAC32308     . "unnamed protein product [Mus musculus]"                                                           . . . . . 100.00 1231 100.00 100.00 1.64e-70 . . . . 15959 1 
+       5 no DBJ  BAE24991     . "unnamed protein product [Mus musculus]"                                                           . . . . . 100.00 1231 100.00 100.00 1.64e-70 . . . . 15959 1 
+       6 no DBJ  BAG10207     . "insulin receptor substrate 1 [synthetic construct]"                                               . . . . . 100.00 1242 100.00 100.00 1.75e-70 . . . . 15959 1 
+       7 no EMBL CAA41264     . "IRS-1 [Rattus norvegicus]"                                                                        . . . . . 100.00 1235 100.00 100.00 1.68e-70 . . . . 15959 1 
+       8 no EMBL CAA49378     . "insulin receptor substrate 1 [Mus musculus]"                                                      . . . . . 100.00 1231 100.00 100.00 1.64e-70 . . . . 15959 1 
+       9 no GB   AAA39335     . "insulin receptor substrate-1 [Mus musculus]"                                                      . . . . . 100.00 1233 100.00 100.00 1.66e-70 . . . . 15959 1 
+      10 no GB   AAB21608     . "hIRS-1 [Homo sapiens]"                                                                            . . . . . 100.00 1243 100.00 100.00 1.76e-70 . . . . 15959 1 
+      11 no GB   AAB27175     . "insulin receptor substrate-1 [Homo sapiens]"                                                      . . . . . 100.00 1242 100.00 100.00 1.75e-70 . . . . 15959 1 
+      12 no GB   AAH53895     . "Insulin receptor substrate 1 [Homo sapiens]"                                                      . . . . . 100.00 1242 100.00 100.00 1.75e-70 . . . . 15959 1 
+      13 no GB   AAI56077     . "Insulin receptor substrate 1, partial [synthetic construct]"                                      . . . . . 100.00 1231 100.00 100.00 1.64e-70 . . . . 15959 1 
+      14 no PRF  1712323A     . "insulin receptor"                                                                                 . . . . . 100.00 1235 100.00 100.00 1.68e-70 . . . . 15959 1 
+      15 no REF  NP_001231418 . "insulin receptor substrate 1 [Sus scrofa]"                                                        . . . . . 100.00 1241 100.00 100.00 1.74e-70 . . . . 15959 1 
+      16 no REF  NP_005535    . "insulin receptor substrate 1 [Homo sapiens]"                                                      . . . . . 100.00 1242 100.00 100.00 1.75e-70 . . . . 15959 1 
+      17 no REF  NP_034700    . "insulin receptor substrate 1 [Mus musculus]"                                                      . . . . . 100.00 1231 100.00 100.00 1.64e-70 . . . . 15959 1 
+      18 no REF  NP_037101    . "insulin receptor substrate 1 [Rattus norvegicus]"                                                 . . . . . 100.00 1235 100.00 100.00 1.68e-70 . . . . 15959 1 
+      19 no REF  XP_001109882 . "PREDICTED: insulin receptor substrate 1-like [Macaca mulatta]"                                    . . . . . 100.00 1252 100.00 100.00 1.84e-70 . . . . 15959 1 
+      20 no SP   P35568       . "RecName: Full=Insulin receptor substrate 1; Short=IRS-1"                                          . . . . . 100.00 1242 100.00 100.00 1.75e-70 . . . . 15959 1 
+      21 no SP   P35569       . "RecName: Full=Insulin receptor substrate 1; Short=IRS-1"                                          . . . . . 100.00 1233 100.00 100.00 1.66e-70 . . . . 15959 1 
+      22 no SP   P35570       . "RecName: Full=Insulin receptor substrate 1; Short=IRS-1; AltName: Full=pp185"                     . . . . . 100.00 1235 100.00 100.00 1.68e-70 . . . . 15959 1 
+      23 no SP   Q28224       . "RecName: Full=Insulin receptor substrate 1; Short=IRS-1"                                          . . . . . 100.00 1251 100.00 100.00 1.83e-70 . . . . 15959 1 
+      24 no TPG  DAA32358     . "TPA: insulin receptor substrate 1 [Bos taurus]"                                                   . . . . . 100.00 1237 100.00 100.00 1.70e-70 . . . . 15959 1 
+
+   stop_
+
+   loop_
+      _Entity_comp_index.ID
+      _Entity_comp_index.Auth_seq_ID
+      _Entity_comp_index.Comp_ID
+      _Entity_comp_index.Comp_label
+      _Entity_comp_index.Entry_ID
+      _Entity_comp_index.Entity_ID
+
+        1 157 GLY . 15959 1 
+        2 158 PRO . 15959 1 
+        3 159 ALA . 15959 1 
+        4 160 PHE . 15959 1 
+        5 161 LYS . 15959 1 
+        6 162 GLU . 15959 1 
+        7 163 VAL . 15959 1 
+        8 164 TRP . 15959 1 
+        9 165 GLN . 15959 1 
+       10 166 VAL . 15959 1 
+       11 167 ILE . 15959 1 
+       12 168 LEU . 15959 1 
+       13 169 LYS . 15959 1 
+       14 170 PRO . 15959 1 
+       15 171 LYS . 15959 1 
+       16 172 GLY . 15959 1 
+       17 173 LEU . 15959 1 
+       18 174 GLY . 15959 1 
+       19 175 GLN . 15959 1 
+       20 176 THR . 15959 1 
+       21 177 LYS . 15959 1 
+       22 178 ASN . 15959 1 
+       23 179 LEU . 15959 1 
+       24 180 ILE . 15959 1 
+       25 181 GLY . 15959 1 
+       26 182 ILE . 15959 1 
+       27 183 TYR . 15959 1 
+       28 184 ARG . 15959 1 
+       29 185 LEU . 15959 1 
+       30 186 CYS . 15959 1 
+       31 187 LEU . 15959 1 
+       32 188 THR . 15959 1 
+       33 189 SER . 15959 1 
+       34 190 LYS . 15959 1 
+       35 191 THR . 15959 1 
+       36 192 ILE . 15959 1 
+       37 193 SER . 15959 1 
+       38 194 PHE . 15959 1 
+       39 195 VAL . 15959 1 
+       40 196 LYS . 15959 1 
+       41 197 LEU . 15959 1 
+       42 198 ASN . 15959 1 
+       43 199 SER . 15959 1 
+       44 200 GLU . 15959 1 
+       45 201 ALA . 15959 1 
+       46 202 ALA . 15959 1 
+       47 203 ALA . 15959 1 
+       48 204 VAL . 15959 1 
+       49 205 VAL . 15959 1 
+       50 206 LEU . 15959 1 
+       51 207 GLN . 15959 1 
+       52 208 LEU . 15959 1 
+       53 209 MET . 15959 1 
+       54 210 ASN . 15959 1 
+       55 211 ILE . 15959 1 
+       56 212 ARG . 15959 1 
+       57 213 ARG . 15959 1 
+       58 214 CYS . 15959 1 
+       59 215 GLY . 15959 1 
+       60 216 HIS . 15959 1 
+       61 217 SER . 15959 1 
+       62 218 GLU . 15959 1 
+       63 219 ASN . 15959 1 
+       64 220 PHE . 15959 1 
+       65 221 PHE . 15959 1 
+       66 222 PHE . 15959 1 
+       67 223 ILE . 15959 1 
+       68 224 GLU . 15959 1 
+       69 225 VAL . 15959 1 
+       70 226 GLY . 15959 1 
+       71 227 ARG . 15959 1 
+       72 228 SER . 15959 1 
+       73 229 ALA . 15959 1 
+       74 230 VAL . 15959 1 
+       75 231 THR . 15959 1 
+       76 232 GLY . 15959 1 
+       77 233 PRO . 15959 1 
+       78 234 GLY . 15959 1 
+       79 235 GLU . 15959 1 
+       80 236 PHE . 15959 1 
+       81 237 TRP . 15959 1 
+       82 238 MET . 15959 1 
+       83 239 GLN . 15959 1 
+       84 240 VAL . 15959 1 
+       85 241 ASP . 15959 1 
+       86 242 ASP . 15959 1 
+       87 243 SER . 15959 1 
+       88 244 VAL . 15959 1 
+       89 245 VAL . 15959 1 
+       90 246 ALA . 15959 1 
+       91 247 GLN . 15959 1 
+       92 248 ASN . 15959 1 
+       93 249 MET . 15959 1 
+       94 250 HIS . 15959 1 
+       95 251 GLU . 15959 1 
+       96 252 THR . 15959 1 
+       97 253 ILE . 15959 1 
+       98 254 LEU . 15959 1 
+       99 255 GLU . 15959 1 
+      100 256 ALA . 15959 1 
+      101 257 MET . 15959 1 
+      102 258 ARG . 15959 1 
+      103 259 ALA . 15959 1 
+      104 260 MET . 15959 1 
+      105 261 SER . 15959 1 
+      106 262 ASP . 15959 1 
+      107 263 GLU . 15959 1 
+      108 264 PHE . 15959 1 
+      109 265 ARG . 15959 1 
+      110 266 PRO . 15959 1 
+      111 267 ARG . 15959 1 
+
+   stop_
+
+   loop_
+      _Entity_poly_seq.Hetero
+      _Entity_poly_seq.Mon_ID
+      _Entity_poly_seq.Num
+      _Entity_poly_seq.Comp_index_ID
+      _Entity_poly_seq.Entry_ID
+      _Entity_poly_seq.Entity_ID
+
+      . GLY   1   1 15959 1 
+      . PRO   2   2 15959 1 
+      . ALA   3   3 15959 1 
+      . PHE   4   4 15959 1 
+      . LYS   5   5 15959 1 
+      . GLU   6   6 15959 1 
+      . VAL   7   7 15959 1 
+      . TRP   8   8 15959 1 
+      . GLN   9   9 15959 1 
+      . VAL  10  10 15959 1 
+      . ILE  11  11 15959 1 
+      . LEU  12  12 15959 1 
+      . LYS  13  13 15959 1 
+      . PRO  14  14 15959 1 
+      . LYS  15  15 15959 1 
+      . GLY  16  16 15959 1 
+      . LEU  17  17 15959 1 
+      . GLY  18  18 15959 1 
+      . GLN  19  19 15959 1 
+      . THR  20  20 15959 1 
+      . LYS  21  21 15959 1 
+      . ASN  22  22 15959 1 
+      . LEU  23  23 15959 1 
+      . ILE  24  24 15959 1 
+      . GLY  25  25 15959 1 
+      . ILE  26  26 15959 1 
+      . TYR  27  27 15959 1 
+      . ARG  28  28 15959 1 
+      . LEU  29  29 15959 1 
+      . CYS  30  30 15959 1 
+      . LEU  31  31 15959 1 
+      . THR  32  32 15959 1 
+      . SER  33  33 15959 1 
+      . LYS  34  34 15959 1 
+      . THR  35  35 15959 1 
+      . ILE  36  36 15959 1 
+      . SER  37  37 15959 1 
+      . PHE  38  38 15959 1 
+      . VAL  39  39 15959 1 
+      . LYS  40  40 15959 1 
+      . LEU  41  41 15959 1 
+      . ASN  42  42 15959 1 
+      . SER  43  43 15959 1 
+      . GLU  44  44 15959 1 
+      . ALA  45  45 15959 1 
+      . ALA  46  46 15959 1 
+      . ALA  47  47 15959 1 
+      . VAL  48  48 15959 1 
+      . VAL  49  49 15959 1 
+      . LEU  50  50 15959 1 
+      . GLN  51  51 15959 1 
+      . LEU  52  52 15959 1 
+      . MET  53  53 15959 1 
+      . ASN  54  54 15959 1 
+      . ILE  55  55 15959 1 
+      . ARG  56  56 15959 1 
+      . ARG  57  57 15959 1 
+      . CYS  58  58 15959 1 
+      . GLY  59  59 15959 1 
+      . HIS  60  60 15959 1 
+      . SER  61  61 15959 1 
+      . GLU  62  62 15959 1 
+      . ASN  63  63 15959 1 
+      . PHE  64  64 15959 1 
+      . PHE  65  65 15959 1 
+      . PHE  66  66 15959 1 
+      . ILE  67  67 15959 1 
+      . GLU  68  68 15959 1 
+      . VAL  69  69 15959 1 
+      . GLY  70  70 15959 1 
+      . ARG  71  71 15959 1 
+      . SER  72  72 15959 1 
+      . ALA  73  73 15959 1 
+      . VAL  74  74 15959 1 
+      . THR  75  75 15959 1 
+      . GLY  76  76 15959 1 
+      . PRO  77  77 15959 1 
+      . GLY  78  78 15959 1 
+      . GLU  79  79 15959 1 
+      . PHE  80  80 15959 1 
+      . TRP  81  81 15959 1 
+      . MET  82  82 15959 1 
+      . GLN  83  83 15959 1 
+      . VAL  84  84 15959 1 
+      . ASP  85  85 15959 1 
+      . ASP  86  86 15959 1 
+      . SER  87  87 15959 1 
+      . VAL  88  88 15959 1 
+      . VAL  89  89 15959 1 
+      . ALA  90  90 15959 1 
+      . GLN  91  91 15959 1 
+      . ASN  92  92 15959 1 
+      . MET  93  93 15959 1 
+      . HIS  94  94 15959 1 
+      . GLU  95  95 15959 1 
+      . THR  96  96 15959 1 
+      . ILE  97  97 15959 1 
+      . LEU  98  98 15959 1 
+      . GLU  99  99 15959 1 
+      . ALA 100 100 15959 1 
+      . MET 101 101 15959 1 
+      . ARG 102 102 15959 1 
+      . ALA 103 103 15959 1 
+      . MET 104 104 15959 1 
+      . SER 105 105 15959 1 
+      . ASP 106 106 15959 1 
+      . GLU 107 107 15959 1 
+      . PHE 108 108 15959 1 
+      . ARG 109 109 15959 1 
+      . PRO 110 110 15959 1 
+      . ARG 111 111 15959 1 
+
+   stop_
+
+save_
+
+
+    ####################
+    #  Natural source  #
+    ####################
+
+save_natural_source
+   _Entity_natural_src_list.Sf_category    natural_source
+   _Entity_natural_src_list.Sf_framecode   natural_source
+   _Entity_natural_src_list.Entry_ID       15959
+   _Entity_natural_src_list.ID             1
+
+   loop_
+      _Entity_natural_src.ID
+      _Entity_natural_src.Entity_ID
+      _Entity_natural_src.Entity_label
+      _Entity_natural_src.Entity_chimera_segment_ID
+      _Entity_natural_src.NCBI_taxonomy_ID
+      _Entity_natural_src.Type
+      _Entity_natural_src.Common
+      _Entity_natural_src.Organism_name_scientific
+      _Entity_natural_src.Organism_name_common
+      _Entity_natural_src.Organism_acronym
+      _Entity_natural_src.ICTVdb_decimal_code
+      _Entity_natural_src.Superkingdom
+      _Entity_natural_src.Kingdom
+      _Entity_natural_src.Genus
+      _Entity_natural_src.Species
+      _Entity_natural_src.Strain
+      _Entity_natural_src.Variant
+      _Entity_natural_src.Subvariant
+      _Entity_natural_src.Organ
+      _Entity_natural_src.Tissue
+      _Entity_natural_src.Tissue_fraction
+      _Entity_natural_src.Cell_line
+      _Entity_natural_src.Cell_type
+      _Entity_natural_src.ATCC_number
+      _Entity_natural_src.Organelle
+      _Entity_natural_src.Cellular_location
+      _Entity_natural_src.Fragment
+      _Entity_natural_src.Fraction
+      _Entity_natural_src.Secretion
+      _Entity_natural_src.Plasmid
+      _Entity_natural_src.Plasmid_details
+      _Entity_natural_src.Gene_mnemonic
+      _Entity_natural_src.Dev_stage
+      _Entity_natural_src.Details
+      _Entity_natural_src.Citation_ID
+      _Entity_natural_src.Citation_label
+      _Entity_natural_src.Entry_ID
+      _Entity_natural_src.Entity_natural_src_list_ID
+
+      1 1 $Phosphotyrosine-Binding_Domain_of_Insulin_Receptor_Substrate-1 . 9606 organism . 'Homo sapiens' Human . . Eukaryota Metazoa Homo sapiens . . . . . . . . . . . . . . . . . . . . . 15959 1 
+
+   stop_
+
+save_
+
+
+    #########################
+    #  Experimental source  #
+    #########################
+
+save_experimental_source
+   _Entity_experimental_src_list.Sf_category    experimental_source
+   _Entity_experimental_src_list.Sf_framecode   experimental_source
+   _Entity_experimental_src_list.Entry_ID       15959
+   _Entity_experimental_src_list.ID             1
+
+   loop_
+      _Entity_experimental_src.ID
+      _Entity_experimental_src.Entity_ID
+      _Entity_experimental_src.Entity_label
+      _Entity_experimental_src.Entity_chimera_segment_ID
+      _Entity_experimental_src.Production_method
+      _Entity_experimental_src.Host_org_scientific_name
+      _Entity_experimental_src.Host_org_name_common
+      _Entity_experimental_src.Host_org_details
+      _Entity_experimental_src.Host_org_NCBI_taxonomy_ID
+      _Entity_experimental_src.Host_org_genus
+      _Entity_experimental_src.Host_org_species
+      _Entity_experimental_src.Host_org_strain
+      _Entity_experimental_src.Host_org_variant
+      _Entity_experimental_src.Host_org_subvariant
+      _Entity_experimental_src.Host_org_organ
+      _Entity_experimental_src.Host_org_tissue
+      _Entity_experimental_src.Host_org_tissue_fraction
+      _Entity_experimental_src.Host_org_cell_line
+      _Entity_experimental_src.Host_org_cell_type
+      _Entity_experimental_src.Host_org_cellular_location
+      _Entity_experimental_src.Host_org_organelle
+      _Entity_experimental_src.Host_org_gene
+      _Entity_experimental_src.Host_org_culture_collection
+      _Entity_experimental_src.Host_org_ATCC_number
+      _Entity_experimental_src.Vector_type
+      _Entity_experimental_src.PDBview_host_org_vector_name
+      _Entity_experimental_src.PDBview_plasmid_name
+      _Entity_experimental_src.Vector_name
+      _Entity_experimental_src.Vector_details
+      _Entity_experimental_src.Vendor_name
+      _Entity_experimental_src.Host_org_dev_stage
+      _Entity_experimental_src.Details
+      _Entity_experimental_src.Citation_ID
+      _Entity_experimental_src.Citation_label
+      _Entity_experimental_src.Entry_ID
+      _Entity_experimental_src.Entity_experimental_src_list_ID
+
+      1 1 $Phosphotyrosine-Binding_Domain_of_Insulin_Receptor_Substrate-1 . 'recombinant technology' 'Escherichia coli' 'E. coli' . 562 Escherichia coli . . . . . . . . . . . . . . . . pET30a . . . . . . 15959 1 
+
+   stop_
+
+save_
+
+
+#####################################
+#  Sample contents and methodology  #
+#####################################
+	 
+    ########################
+    #  Sample description  #
+    ########################
+
+save_PTB_Domain_of_IRS-1_Apo_State
+   _Sample.Sf_category                      sample
+   _Sample.Sf_framecode                     PTB_Domain_of_IRS-1_Apo_State
+   _Sample.Entry_ID                         15959
+   _Sample.ID                               1
+   _Sample.Type                             solution
+   _Sample.Sub_type                         .
+   _Sample.Details                          .
+   _Sample.Aggregate_sample_number          .
+   _Sample.Solvent_system                  '90% H2O/10% D2O'
+   _Sample.Preparation_date                 .
+   _Sample.Preparation_expiration_date      .
+   _Sample.Polycrystallization_protocol     .
+   _Sample.Single_crystal_protocol          .
+   _Sample.Crystal_grow_apparatus           .
+   _Sample.Crystal_grow_atmosphere          .
+   _Sample.Crystal_grow_details             .
+   _Sample.Crystal_grow_method              .
+   _Sample.Crystal_grow_method_cit_ID       .
+   _Sample.Crystal_grow_pH                  .
+   _Sample.Crystal_grow_pH_range            .
+   _Sample.Crystal_grow_pressure            .
+   _Sample.Crystal_grow_pressure_esd        .
+   _Sample.Crystal_grow_seeding             .
+   _Sample.Crystal_grow_seeding_cit_ID      .
+   _Sample.Crystal_grow_temp                .
+   _Sample.Crystal_grow_temp_details        .
+   _Sample.Crystal_grow_temp_esd            .
+   _Sample.Crystal_grow_time                .
+   _Sample.Oriented_sample_prep_protocol    .
+   _Sample.Lyophilization_cryo_protectant   .
+   _Sample.Storage_protocol                 .
+
+   loop_
+      _Sample_component.ID
+      _Sample_component.Mol_common_name
+      _Sample_component.Isotopic_labeling
+      _Sample_component.Assembly_ID
+      _Sample_component.Assembly_label
+      _Sample_component.Entity_ID
+      _Sample_component.Entity_label
+      _Sample_component.Product_ID
+      _Sample_component.Type
+      _Sample_component.Concentration_val
+      _Sample_component.Concentration_val_min
+      _Sample_component.Concentration_val_max
+      _Sample_component.Concentration_val_units
+      _Sample_component.Concentration_val_err
+      _Sample_component.Vendor
+      _Sample_component.Vendor_product_name
+      _Sample_component.Vendor_product_code
+      _Sample_component.Entry_ID
+      _Sample_component.Sample_ID
+
+      1 'Phosphotyrosine-Binding Domain of Insulin Receptor Substrate-1' '[U-95% 13C]' . . 1 $Phosphotyrosine-Binding_Domain_of_Insulin_Receptor_Substrate-1 . . 200 . . uM . . . . 15959 1 
+
+   stop_
+
+save_
+
+
+#######################
+#  Sample conditions  #
+#######################
+
+save_PTB_Domain_of_IRS-1_Apo_Sample_Conditions
+   _Sample_condition_list.Sf_category    sample_conditions
+   _Sample_condition_list.Sf_framecode   PTB_Domain_of_IRS-1_Apo_Sample_Conditions
+   _Sample_condition_list.Entry_ID       15959
+   _Sample_condition_list.ID             1
+   _Sample_condition_list.Details        .
+
+   loop_
+      _Sample_condition_variable.Type
+      _Sample_condition_variable.Val
+      _Sample_condition_variable.Val_err
+      _Sample_condition_variable.Val_units
+      _Sample_condition_variable.Entry_ID
+      _Sample_condition_variable.Sample_condition_list_ID
+
+      'ionic strength'  50   . mM  15959 1 
+       pH                6.5 . pH  15959 1 
+       pressure          1   . atm 15959 1 
+       temperature     303   . K   15959 1 
+
+   stop_
+
+save_
+
+
+############################
+#  Computer software used  #
+############################
+
+save_Felix
+   _Software.Sf_category    software
+   _Software.Sf_framecode   Felix
+   _Software.Entry_ID       15959
+   _Software.ID             1
+   _Software.Name           FELIX
+   _Software.Version        .
+   _Software.Details        .
+
+   loop_
+      _Vendor.Name
+      _Vendor.Address
+      _Vendor.Electronic_address
+      _Vendor.Entry_ID
+      _Vendor.Software_ID
+
+      'Accelrys Software Inc.' . . 15959 1 
+
+   stop_
+
+   loop_
+      _Task.Task
+      _Task.Entry_ID
+      _Task.Software_ID
+
+      processing 15959 1 
+
+   stop_
+
+save_
+
+
+#########################
+#  Experimental detail  #
+#########################
+
+    ##################################
+    #  NMR Spectrometer definitions  #
+    ##################################
+
+save_spectrometer_1
+   _NMR_spectrometer.Sf_category      NMR_spectrometer
+   _NMR_spectrometer.Sf_framecode     spectrometer_1
+   _NMR_spectrometer.Entry_ID         15959
+   _NMR_spectrometer.ID               1
+   _NMR_spectrometer.Details          .
+   _NMR_spectrometer.Manufacturer     Varian
+   _NMR_spectrometer.Model            INOVA
+   _NMR_spectrometer.Serial_number    .
+   _NMR_spectrometer.Field_strength   600
+
+save_
+
+
+save_NMR_spectrometer_list
+   _NMR_spectrometer_list.Sf_category    NMR_spectrometer_list
+   _NMR_spectrometer_list.Sf_framecode   NMR_spectrometer_list
+   _NMR_spectrometer_list.Entry_ID       15959
+   _NMR_spectrometer_list.ID             1
+
+   loop_
+      _NMR_spectrometer_view.ID
+      _NMR_spectrometer_view.Name
+      _NMR_spectrometer_view.Manufacturer
+      _NMR_spectrometer_view.Model
+      _NMR_spectrometer_view.Serial_number
+      _NMR_spectrometer_view.Field_strength
+      _NMR_spectrometer_view.Details
+      _NMR_spectrometer_view.Citation_ID
+      _NMR_spectrometer_view.Citation_label
+      _NMR_spectrometer_view.Entry_ID
+      _NMR_spectrometer_view.NMR_spectrometer_list_ID
+
+      1 spectrometer_1 Varian INOVA . 600 . . . 15959 1 
+
+   stop_
+
+save_
+
+
+    #############################
+    #  NMR applied experiments  #
+    #############################
+
+save_experiment_list
+   _Experiment_list.Sf_category    experiment_list
+   _Experiment_list.Sf_framecode   experiment_list
+   _Experiment_list.Entry_ID       15959
+   _Experiment_list.ID             1
+   _Experiment_list.Details        .
+
+   loop_
+      _Experiment.ID
+      _Experiment.Name
+      _Experiment.Raw_data_flag
+      _Experiment.NMR_spec_expt_ID
+      _Experiment.NMR_spec_expt_label
+      _Experiment.MS_expt_ID
+      _Experiment.MS_expt_label
+      _Experiment.SAXS_expt_ID
+      _Experiment.SAXS_expt_label
+      _Experiment.FRET_expt_ID
+      _Experiment.FRET_expt_label
+      _Experiment.EMR_expt_ID
+      _Experiment.EMR_expt_label
+      _Experiment.Sample_ID
+      _Experiment.Sample_label
+      _Experiment.Sample_state
+      _Experiment.Sample_volume
+      _Experiment.Sample_volume_units
+      _Experiment.Sample_condition_list_ID
+      _Experiment.Sample_condition_list_label
+      _Experiment.Sample_spinning_rate
+      _Experiment.Sample_angle
+      _Experiment.NMR_tube_type
+      _Experiment.NMR_spectrometer_ID
+      _Experiment.NMR_spectrometer_label
+      _Experiment.NMR_spectrometer_probe_ID
+      _Experiment.NMR_spectrometer_probe_label
+      _Experiment.NMR_spectral_processing_ID
+      _Experiment.NMR_spectral_processing_label
+      _Experiment.Mass_spectrometer_ID
+      _Experiment.Mass_spectrometer_label
+      _Experiment.Xray_instrument_ID
+      _Experiment.Xray_instrument_label
+      _Experiment.Fluorescence_instrument_ID
+      _Experiment.Fluorescence_instrument_label
+      _Experiment.EMR_instrument_ID
+      _Experiment.EMR_instrument_label
+      _Experiment.Chromatographic_system_ID
+      _Experiment.Chromatographic_system_label
+      _Experiment.Chromatographic_column_ID
+      _Experiment.Chromatographic_column_label
+      _Experiment.Entry_ID
+      _Experiment.Experiment_list_ID
+
+      1 '3D HNCACB'     no . . . . . . . . . . 1 $PTB_Domain_of_IRS-1_Apo_State isotropic . . 1 $PTB_Domain_of_IRS-1_Apo_Sample_Conditions . . . 1 $spectrometer_1 . . . . . . . . . . . . . . . . 15959 1 
+      2 '3D CBCA(CO)NH' no . . . . . . . . . . 1 $PTB_Domain_of_IRS-1_Apo_State isotropic . . 1 $PTB_Domain_of_IRS-1_Apo_Sample_Conditions . . . 1 $spectrometer_1 . . . . . . . . . . . . . . . . 15959 1 
+
+   stop_
+
+save_
+
+
+####################
+#  NMR parameters  #
+####################
+
+    ##############################
+    #  Assigned chemical shifts  #
+    ##############################
+
+	################################
+	#  Chemical shift referencing  #
+	################################
+
+save_chem_shift_reference_1
+   _Chem_shift_reference.Sf_category    chem_shift_reference
+   _Chem_shift_reference.Sf_framecode   chem_shift_reference_1
+   _Chem_shift_reference.Entry_ID       15959
+   _Chem_shift_reference.ID             1
+   _Chem_shift_reference.Details        .
+
+   loop_
+      _Chem_shift_ref.Atom_type
+      _Chem_shift_ref.Atom_isotope_number
+      _Chem_shift_ref.Mol_common_name
+      _Chem_shift_ref.Atom_group
+      _Chem_shift_ref.Concentration_val
+      _Chem_shift_ref.Concentration_units
+      _Chem_shift_ref.Solvent
+      _Chem_shift_ref.Rank
+      _Chem_shift_ref.Chem_shift_units
+      _Chem_shift_ref.Chem_shift_val
+      _Chem_shift_ref.Ref_method
+      _Chem_shift_ref.Ref_type
+      _Chem_shift_ref.Indirect_shift_ratio
+      _Chem_shift_ref.External_ref_loc
+      _Chem_shift_ref.External_ref_sample_geometry
+      _Chem_shift_ref.External_ref_axis
+      _Chem_shift_ref.Indirect_shift_ratio_cit_ID
+      _Chem_shift_ref.Indirect_shift_ratio_cit_label
+      _Chem_shift_ref.Ref_correction_type
+      _Chem_shift_ref.Correction_val
+      _Chem_shift_ref.Correction_val_cit_ID
+      _Chem_shift_ref.Correction_val_cit_label
+      _Chem_shift_ref.Entry_ID
+      _Chem_shift_ref.Chem_shift_reference_ID
+
+      H  1 DSS 'methyl protons' . . . . ppm 0 external direct   1.0         . . . . . . . . . 15959 1 
+      N 15 DSS 'methyl protons' . . . . ppm 0 external indirect 0.101329118 . . . . . . . . . 15959 1 
+
+   stop_
+
+save_
+
+
+     ###################################
+     #  Assigned chemical shift lists  #
+     ###################################
+
+###################################################################
+#       Chemical Shift Ambiguity Index Value Definitions          #
+#                                                                 #
+# The values other than 1 are used for those atoms with different #
+# chemical shifts that cannot be assigned to stereospecific atoms #
+# or to specific residues or chains.                              #
+#                                                                 #
+#   Index Value            Definition                             #
+#                                                                 #
+#      1             Unique (including isolated methyl protons,   #
+#                         geminal atoms, and geminal methyl       #
+#                         groups with identical chemical shifts)  #
+#                         (e.g. ILE HD11, HD12, HD13 protons)     #
+#      2             Ambiguity of geminal atoms or geminal methyl #
+#                         proton groups (e.g. ASP HB2 and HB3     #
+#                         protons, LEU CD1 and CD2 carbons, or    #
+#                         LEU HD11, HD12, HD13 and HD21, HD22,    #
+#                         HD23 methyl protons)                    #
+#      3             Aromatic atoms on opposite sides of          #
+#                         symmetrical rings (e.g. TYR HE1 and HE2 #
+#                         protons)                                #
+#      4             Intraresidue ambiguities (e.g. LYS HG and    #
+#                         HD protons or TRP HZ2 and HZ3 protons)  #
+#      5             Interresidue ambiguities (LYS 12 vs. LYS 27) #
+#      6             Intermolecular ambiguities (e.g. ASP 31 CA   #
+#                         in monomer 1 and ASP 31 CA in monomer 2 #
+#                         of an asymmetrical homodimer, duplex    #
+#                         DNA assignments, or other assignments   #
+#                         that may apply to atoms in one or more  #
+#                         molecule in the molecular assembly)     #
+#      9             Ambiguous, specific ambiguity not defined    #
+#                                                                 #
+###################################################################
+save_PTB_Domain_of_IRS-1_Apo
+   _Assigned_chem_shift_list.Sf_category                   assigned_chemical_shifts
+   _Assigned_chem_shift_list.Sf_framecode                  PTB_Domain_of_IRS-1_Apo
+   _Assigned_chem_shift_list.Entry_ID                      15959
+   _Assigned_chem_shift_list.ID                            1
+   _Assigned_chem_shift_list.Sample_condition_list_ID      1
+   _Assigned_chem_shift_list.Sample_condition_list_label  $PTB_Domain_of_IRS-1_Apo_Sample_Conditions
+   _Assigned_chem_shift_list.Chem_shift_reference_ID       1
+   _Assigned_chem_shift_list.Chem_shift_reference_label   $chem_shift_reference_1
+   _Assigned_chem_shift_list.Chem_shift_1H_err             .
+   _Assigned_chem_shift_list.Chem_shift_13C_err            .
+   _Assigned_chem_shift_list.Chem_shift_15N_err            .
+   _Assigned_chem_shift_list.Chem_shift_31P_err            .
+   _Assigned_chem_shift_list.Chem_shift_2H_err             .
+   _Assigned_chem_shift_list.Chem_shift_19F_err            .
+   _Assigned_chem_shift_list.Error_derivation_method       .
+   _Assigned_chem_shift_list.Details                       .
+   _Assigned_chem_shift_list.Text_data_format              .
+   _Assigned_chem_shift_list.Text_data                     .
+
+   loop_
+      _Chem_shift_experiment.Experiment_ID
+      _Chem_shift_experiment.Experiment_name
+      _Chem_shift_experiment.Sample_ID
+      _Chem_shift_experiment.Sample_label
+      _Chem_shift_experiment.Sample_state
+      _Chem_shift_experiment.Entry_ID
+      _Chem_shift_experiment.Assigned_chem_shift_list_ID
+
+      1 '3D HNCACB'     . . . 15959 1 
+      2 '3D CBCA(CO)NH' . . . 15959 1 
+
+   stop_
+
+   loop_
+      _Atom_chem_shift.ID
+      _Atom_chem_shift.Assembly_atom_ID
+      _Atom_chem_shift.Entity_assembly_ID
+      _Atom_chem_shift.Entity_ID
+      _Atom_chem_shift.Comp_index_ID
+      _Atom_chem_shift.Seq_ID
+      _Atom_chem_shift.Comp_ID
+      _Atom_chem_shift.Atom_ID
+      _Atom_chem_shift.Atom_type
+      _Atom_chem_shift.Atom_isotope_number
+      _Atom_chem_shift.Val
+      _Atom_chem_shift.Val_err
+      _Atom_chem_shift.Assign_fig_of_merit
+      _Atom_chem_shift.Ambiguity_code
+      _Atom_chem_shift.Occupancy
+      _Atom_chem_shift.Resonance_ID
+      _Atom_chem_shift.Auth_entity_assembly_ID
+      _Atom_chem_shift.Auth_asym_ID
+      _Atom_chem_shift.Auth_seq_ID
+      _Atom_chem_shift.Auth_comp_ID
+      _Atom_chem_shift.Auth_atom_ID
+      _Atom_chem_shift.Details
+      _Atom_chem_shift.Entry_ID
+      _Atom_chem_shift.Assigned_chem_shift_list_ID
+
+        1 . 1 1   3   3 ALA H   H  1   8.179 0.002 . 1 . . . . 159 ALA H   . 15959 1 
+        2 . 1 1   3   3 ALA N   N 15 123.613 0.059 . 1 . . . . 159 ALA N   . 15959 1 
+        3 . 1 1   4   4 PHE H   H  1   7.804 0.002 . 1 . . . . 160 PHE H   . 15959 1 
+        4 . 1 1   4   4 PHE N   N 15 118.541 0.059 . 1 . . . . 160 PHE N   . 15959 1 
+        5 . 1 1   5   5 LYS H   H  1   8.55  0.002 . 1 . . . . 161 LYS H   . 15959 1 
+        6 . 1 1   5   5 LYS N   N 15 123.975 0.059 . 1 . . . . 161 LYS N   . 15959 1 
+        7 . 1 1   6   6 GLU H   H  1   7.607 0.002 . 1 . . . . 162 GLU H   . 15959 1 
+        8 . 1 1   6   6 GLU N   N 15 117.885 0.059 . 1 . . . . 162 GLU N   . 15959 1 
+        9 . 1 1   7   7 VAL H   H  1   7.759 0.002 . 1 . . . . 163 VAL H   . 15959 1 
+       10 . 1 1   7   7 VAL N   N 15 120.318 0.059 . 1 . . . . 163 VAL N   . 15959 1 
+       11 . 1 1   8   8 TRP H   H  1   8.892 0.002 . 1 . . . . 164 TRP H   . 15959 1 
+       12 . 1 1   8   8 TRP HE1 H  1  10.018 0.002 . 1 . . . . 164 TRP HE1 . 15959 1 
+       13 . 1 1   8   8 TRP N   N 15 125.174 0.059 . 1 . . . . 164 TRP N   . 15959 1 
+       14 . 1 1   8   8 TRP NE1 N 15 129.384 0.059 . 1 . . . . 164 TRP NE1 . 15959 1 
+       15 . 1 1   9   9 GLN H   H  1   9.058 0.002 . 1 . . . . 165 GLN H   . 15959 1 
+       16 . 1 1   9   9 GLN N   N 15 123.97  0.059 . 1 . . . . 165 GLN N   . 15959 1 
+       17 . 1 1  10  10 VAL H   H  1   9.348 0.002 . 1 . . . . 166 VAL H   . 15959 1 
+       18 . 1 1  10  10 VAL N   N 15 119.364 0.059 . 1 . . . . 166 VAL N   . 15959 1 
+       19 . 1 1  11  11 ILE H   H  1   8.636 0.002 . 1 . . . . 167 ILE H   . 15959 1 
+       20 . 1 1  11  11 ILE N   N 15 119.718 0.059 . 1 . . . . 167 ILE N   . 15959 1 
+       21 . 1 1  12  12 LEU H   H  1   9.494 0.002 . 1 . . . . 168 LEU H   . 15959 1 
+       22 . 1 1  12  12 LEU N   N 15 130.652 0.059 . 1 . . . . 168 LEU N   . 15959 1 
+       23 . 1 1  13  13 LYS H   H  1   8.699 0.002 . 1 . . . . 169 LYS H   . 15959 1 
+       24 . 1 1  13  13 LYS N   N 15 123.202 0.059 . 1 . . . . 169 LYS N   . 15959 1 
+       25 . 1 1  15  15 LYS H   H  1   8.029 0.002 . 1 . . . . 171 LYS H   . 15959 1 
+       26 . 1 1  15  15 LYS N   N 15 122.251 0.059 . 1 . . . . 171 LYS N   . 15959 1 
+       27 . 1 1  17  17 LEU H   H  1   9.252 0.002 . 1 . . . . 173 LEU H   . 15959 1 
+       28 . 1 1  17  17 LEU N   N 15 126.934 0.059 . 1 . . . . 173 LEU N   . 15959 1 
+       29 . 1 1  18  18 GLY H   H  1   7.938 0.002 . 1 . . . . 174 GLY H   . 15959 1 
+       30 . 1 1  18  18 GLY N   N 15 106.005 0.059 . 1 . . . . 174 GLY N   . 15959 1 
+       31 . 1 1  19  19 GLN H   H  1   7.271 0.002 . 1 . . . . 175 GLN H   . 15959 1 
+       32 . 1 1  19  19 GLN N   N 15 117.67  0.059 . 1 . . . . 175 GLN N   . 15959 1 
+       33 . 1 1  20  20 THR H   H  1   7.969 0.002 . 1 . . . . 176 THR H   . 15959 1 
+       34 . 1 1  20  20 THR N   N 15 112.794 0.059 . 1 . . . . 176 THR N   . 15959 1 
+       35 . 1 1  21  21 LYS H   H  1   8.276 0.002 . 1 . . . . 177 LYS H   . 15959 1 
+       36 . 1 1  21  21 LYS N   N 15 116.624 0.059 . 1 . . . . 177 LYS N   . 15959 1 
+       37 . 1 1  22  22 ASN H   H  1   7.567 0.002 . 1 . . . . 178 ASN H   . 15959 1 
+       38 . 1 1  22  22 ASN N   N 15 117.852 0.059 . 1 . . . . 178 ASN N   . 15959 1 
+       39 . 1 1  23  23 LEU H   H  1   8.642 0.002 . 1 . . . . 179 LEU H   . 15959 1 
+       40 . 1 1  23  23 LEU N   N 15 123.604 0.059 . 1 . . . . 179 LEU N   . 15959 1 
+       41 . 1 1  24  24 ILE H   H  1   7.237 0.002 . 1 . . . . 180 ILE H   . 15959 1 
+       42 . 1 1  24  24 ILE N   N 15 115.524 0.059 . 1 . . . . 180 ILE N   . 15959 1 
+       43 . 1 1  25  25 GLY H   H  1   8.537 0.002 . 1 . . . . 181 GLY H   . 15959 1 
+       44 . 1 1  25  25 GLY N   N 15 113.168 0.059 . 1 . . . . 181 GLY N   . 15959 1 
+       45 . 1 1  26  26 ILE H   H  1   8.397 0.002 . 1 . . . . 182 ILE H   . 15959 1 
+       46 . 1 1  26  26 ILE N   N 15 121.667 0.059 . 1 . . . . 182 ILE N   . 15959 1 
+       47 . 1 1  27  27 TYR H   H  1   9.287 0.002 . 1 . . . . 183 TYR H   . 15959 1 
+       48 . 1 1  27  27 TYR N   N 15 127.822 0.059 . 1 . . . . 183 TYR N   . 15959 1 
+       49 . 1 1  28  28 ARG H   H  1   9.452 0.002 . 1 . . . . 184 ARG H   . 15959 1 
+       50 . 1 1  28  28 ARG N   N 15 118.435 0.059 . 1 . . . . 184 ARG N   . 15959 1 
+       51 . 1 1  29  29 LEU H   H  1   9.576 0.002 . 1 . . . . 185 LEU H   . 15959 1 
+       52 . 1 1  29  29 LEU N   N 15 128.382 0.059 . 1 . . . . 185 LEU N   . 15959 1 
+       53 . 1 1  30  30 CYS H   H  1   8.912 0.002 . 1 . . . . 186 CYS H   . 15959 1 
+       54 . 1 1  30  30 CYS N   N 15 123.848 0.059 . 1 . . . . 186 CYS N   . 15959 1 
+       55 . 1 1  31  31 LEU H   H  1   9.15  0.002 . 1 . . . . 187 LEU H   . 15959 1 
+       56 . 1 1  31  31 LEU N   N 15 130.955 0.059 . 1 . . . . 187 LEU N   . 15959 1 
+       57 . 1 1  32  32 THR H   H  1   8.986 0.002 . 1 . . . . 188 THR H   . 15959 1 
+       58 . 1 1  32  32 THR N   N 15 118.286 0.059 . 1 . . . . 188 THR N   . 15959 1 
+       59 . 1 1  33  33 SER H   H  1   8.495 0.002 . 1 . . . . 189 SER H   . 15959 1 
+       60 . 1 1  33  33 SER N   N 15 109.742 0.059 . 1 . . . . 189 SER N   . 15959 1 
+       61 . 1 1  34  34 LYS H   H  1   7.798 0.002 . 1 . . . . 190 LYS H   . 15959 1 
+       62 . 1 1  34  34 LYS N   N 15 114.06  0.059 . 1 . . . . 190 LYS N   . 15959 1 
+       63 . 1 1  35  35 THR H   H  1   7.834 0.002 . 1 . . . . 191 THR H   . 15959 1 
+       64 . 1 1  35  35 THR N   N 15 110.301 0.059 . 1 . . . . 191 THR N   . 15959 1 
+       65 . 1 1  36  36 ILE H   H  1   8.922 0.002 . 1 . . . . 192 ILE H   . 15959 1 
+       66 . 1 1  36  36 ILE N   N 15 116.76  0.059 . 1 . . . . 192 ILE N   . 15959 1 
+       67 . 1 1  37  37 SER H   H  1   8.69  0.002 . 1 . . . . 193 SER H   . 15959 1 
+       68 . 1 1  37  37 SER N   N 15 118.785 0.059 . 1 . . . . 193 SER N   . 15959 1 
+       69 . 1 1  38  38 PHE H   H  1   8.396 0.002 . 1 . . . . 194 PHE H   . 15959 1 
+       70 . 1 1  38  38 PHE N   N 15 120.802 0.059 . 1 . . . . 194 PHE N   . 15959 1 
+       71 . 1 1  39  39 VAL H   H  1   9.413 0.002 . 1 . . . . 195 VAL H   . 15959 1 
+       72 . 1 1  39  39 VAL N   N 15 125.345 0.059 . 1 . . . . 195 VAL N   . 15959 1 
+       73 . 1 1  40  40 LYS H   H  1   9.547 0.002 . 1 . . . . 196 LYS H   . 15959 1 
+       74 . 1 1  40  40 LYS N   N 15 131.757 0.059 . 1 . . . . 196 LYS N   . 15959 1 
+       75 . 1 1  41  41 LEU H   H  1   7.874 0.002 . 1 . . . . 197 LEU H   . 15959 1 
+       76 . 1 1  41  41 LEU N   N 15 123.385 0.059 . 1 . . . . 197 LEU N   . 15959 1 
+       77 . 1 1  42  42 ASN H   H  1   8.585 0.002 . 1 . . . . 198 ASN H   . 15959 1 
+       78 . 1 1  42  42 ASN N   N 15 116.187 0.059 . 1 . . . . 198 ASN N   . 15959 1 
+       79 . 1 1  43  43 SER H   H  1   7.718 0.002 . 1 . . . . 199 SER H   . 15959 1 
+       80 . 1 1  43  43 SER N   N 15 113.398 0.059 . 1 . . . . 199 SER N   . 15959 1 
+       81 . 1 1  44  44 GLU H   H  1   8.449 0.002 . 1 . . . . 200 GLU H   . 15959 1 
+       82 . 1 1  44  44 GLU N   N 15 120.642 0.059 . 1 . . . . 200 GLU N   . 15959 1 
+       83 . 1 1  45  45 ALA H   H  1   7.985 0.002 . 1 . . . . 201 ALA H   . 15959 1 
+       84 . 1 1  45  45 ALA N   N 15 122.779 0.059 . 1 . . . . 201 ALA N   . 15959 1 
+       85 . 1 1  46  46 ALA H   H  1   8.681 0.002 . 1 . . . . 202 ALA H   . 15959 1 
+       86 . 1 1  46  46 ALA N   N 15 124.236 0.059 . 1 . . . . 202 ALA N   . 15959 1 
+       87 . 1 1  47  47 ALA H   H  1   9.014 0.002 . 1 . . . . 203 ALA H   . 15959 1 
+       88 . 1 1  47  47 ALA N   N 15 126.724 0.059 . 1 . . . . 203 ALA N   . 15959 1 
+       89 . 1 1  48  48 VAL H   H  1   7.387 0.002 . 1 . . . . 204 VAL H   . 15959 1 
+       90 . 1 1  48  48 VAL N   N 15 114.025 0.059 . 1 . . . . 204 VAL N   . 15959 1 
+       91 . 1 1  49  49 VAL H   H  1   8.387 0.002 . 1 . . . . 205 VAL H   . 15959 1 
+       92 . 1 1  49  49 VAL N   N 15 128.12  0.059 . 1 . . . . 205 VAL N   . 15959 1 
+       93 . 1 1  50  50 LEU H   H  1   9.406 0.002 . 1 . . . . 206 LEU H   . 15959 1 
+       94 . 1 1  50  50 LEU N   N 15 126.589 0.059 . 1 . . . . 206 LEU N   . 15959 1 
+       95 . 1 1  51  51 GLN H   H  1   9.045 0.002 . 1 . . . . 207 GLN H   . 15959 1 
+       96 . 1 1  51  51 GLN N   N 15 122.492 0.059 . 1 . . . . 207 GLN N   . 15959 1 
+       97 . 1 1  52  52 LEU H   H  1   8.436 0.002 . 1 . . . . 208 LEU H   . 15959 1 
+       98 . 1 1  52  52 LEU N   N 15 125.392 0.059 . 1 . . . . 208 LEU N   . 15959 1 
+       99 . 1 1  53  53 MET H   H  1   8.339 0.002 . 1 . . . . 209 MET H   . 15959 1 
+      100 . 1 1  53  53 MET N   N 15 112.983 0.059 . 1 . . . . 209 MET N   . 15959 1 
+      101 . 1 1  54  54 ASN H   H  1   7.828 0.002 . 1 . . . . 210 ASN H   . 15959 1 
+      102 . 1 1  54  54 ASN N   N 15 114.818 0.059 . 1 . . . . 210 ASN N   . 15959 1 
+      103 . 1 1  55  55 ILE H   H  1   7.603 0.002 . 1 . . . . 211 ILE H   . 15959 1 
+      104 . 1 1  55  55 ILE N   N 15 121.36  0.059 . 1 . . . . 211 ILE N   . 15959 1 
+      105 . 1 1  56  56 ARG H   H  1   9.131 0.002 . 1 . . . . 212 ARG H   . 15959 1 
+      106 . 1 1  56  56 ARG N   N 15 127.36  0.059 . 1 . . . . 212 ARG N   . 15959 1 
+      107 . 1 1  57  57 ARG H   H  1   7.743 0.002 . 1 . . . . 213 ARG H   . 15959 1 
+      108 . 1 1  57  57 ARG N   N 15 114.41  0.059 . 1 . . . . 213 ARG N   . 15959 1 
+      109 . 1 1  58  58 CYS H   H  1   8.527 0.002 . 1 . . . . 214 CYS H   . 15959 1 
+      110 . 1 1  58  58 CYS N   N 15 116.469 0.059 . 1 . . . . 214 CYS N   . 15959 1 
+      111 . 1 1  59  59 GLY H   H  1   6.809 0.002 . 1 . . . . 215 GLY H   . 15959 1 
+      112 . 1 1  59  59 GLY N   N 15 105.402 0.059 . 1 . . . . 215 GLY N   . 15959 1 
+      113 . 1 1  60  60 HIS H   H  1   8.05  0.002 . 1 . . . . 216 HIS H   . 15959 1 
+      114 . 1 1  60  60 HIS N   N 15 112.735 0.059 . 1 . . . . 216 HIS N   . 15959 1 
+      115 . 1 1  61  61 SER H   H  1   8.778 0.002 . 1 . . . . 217 SER H   . 15959 1 
+      116 . 1 1  61  61 SER N   N 15 116.413 0.059 . 1 . . . . 217 SER N   . 15959 1 
+      117 . 1 1  62  62 GLU H   H  1   9.45  0.002 . 1 . . . . 218 GLU H   . 15959 1 
+      118 . 1 1  62  62 GLU N   N 15 125.555 0.059 . 1 . . . . 218 GLU N   . 15959 1 
+      119 . 1 1  63  63 ASN H   H  1   8.517 0.002 . 1 . . . . 219 ASN H   . 15959 1 
+      120 . 1 1  63  63 ASN N   N 15 118.443 0.059 . 1 . . . . 219 ASN N   . 15959 1 
+      121 . 1 1  64  64 PHE H   H  1   8.654 0.002 . 1 . . . . 220 PHE H   . 15959 1 
+      122 . 1 1  64  64 PHE N   N 15 117.229 0.059 . 1 . . . . 220 PHE N   . 15959 1 
+      123 . 1 1  65  65 PHE H   H  1   9.398 0.002 . 1 . . . . 221 PHE H   . 15959 1 
+      124 . 1 1  65  65 PHE N   N 15 122.995 0.059 . 1 . . . . 221 PHE N   . 15959 1 
+      125 . 1 1  66  66 PHE H   H  1   7.578 0.002 . 1 . . . . 222 PHE H   . 15959 1 
+      126 . 1 1  66  66 PHE N   N 15 124.054 0.059 . 1 . . . . 222 PHE N   . 15959 1 
+      127 . 1 1  67  67 ILE H   H  1   8.059 0.002 . 1 . . . . 223 ILE H   . 15959 1 
+      128 . 1 1  67  67 ILE N   N 15 113.358 0.059 . 1 . . . . 223 ILE N   . 15959 1 
+      129 . 1 1  68  68 GLU H   H  1   9.023 0.002 . 1 . . . . 224 GLU H   . 15959 1 
+      130 . 1 1  68  68 GLU N   N 15 125.851 0.059 . 1 . . . . 224 GLU N   . 15959 1 
+      131 . 1 1  69  69 VAL H   H  1   9.556 0.002 . 1 . . . . 225 VAL H   . 15959 1 
+      132 . 1 1  69  69 VAL N   N 15 122.536 0.059 . 1 . . . . 225 VAL N   . 15959 1 
+      133 . 1 1  70  70 GLY H   H  1   8.586 0.002 . 1 . . . . 226 GLY H   . 15959 1 
+      134 . 1 1  70  70 GLY N   N 15 109.678 0.059 . 1 . . . . 226 GLY N   . 15959 1 
+      135 . 1 1  71  71 ARG H   H  1   8.424 0.002 . 1 . . . . 227 ARG H   . 15959 1 
+      136 . 1 1  71  71 ARG N   N 15 115.394 0.059 . 1 . . . . 227 ARG N   . 15959 1 
+      137 . 1 1  72  72 SER H   H  1   8.294 0.002 . 1 . . . . 228 SER H   . 15959 1 
+      138 . 1 1  72  72 SER N   N 15 112.781 0.059 . 1 . . . . 228 SER N   . 15959 1 
+      139 . 1 1  73  73 ALA H   H  1   7.439 0.002 . 1 . . . . 229 ALA H   . 15959 1 
+      140 . 1 1  73  73 ALA N   N 15 122.552 0.059 . 1 . . . . 229 ALA N   . 15959 1 
+      141 . 1 1  74  74 VAL H   H  1   8.912 0.002 . 1 . . . . 230 VAL H   . 15959 1 
+      142 . 1 1  74  74 VAL N   N 15 122.138 0.059 . 1 . . . . 230 VAL N   . 15959 1 
+      143 . 1 1  75  75 THR H   H  1   6.917 0.002 . 1 . . . . 231 THR H   . 15959 1 
+      144 . 1 1  75  75 THR N   N 15 106.727 0.059 . 1 . . . . 231 THR N   . 15959 1 
+      145 . 1 1  76  76 GLY H   H  1   7.67  0.002 . 1 . . . . 232 GLY H   . 15959 1 
+      146 . 1 1  76  76 GLY N   N 15 109.422 0.059 . 1 . . . . 232 GLY N   . 15959 1 
+      147 . 1 1  78  78 GLY H   H  1   7.808 0.002 . 1 . . . . 234 GLY H   . 15959 1 
+      148 . 1 1  78  78 GLY N   N 15 106.689 0.059 . 1 . . . . 234 GLY N   . 15959 1 
+      149 . 1 1  79  79 GLU H   H  1   8.621 0.002 . 1 . . . . 235 GLU H   . 15959 1 
+      150 . 1 1  79  79 GLU N   N 15 116.816 0.059 . 1 . . . . 235 GLU N   . 15959 1 
+      151 . 1 1  80  80 PHE H   H  1   9.016 0.002 . 1 . . . . 236 PHE H   . 15959 1 
+      152 . 1 1  80  80 PHE N   N 15 118.286 0.059 . 1 . . . . 236 PHE N   . 15959 1 
+      153 . 1 1  81  81 TRP H   H  1  10.235 0.002 . 1 . . . . 237 TRP H   . 15959 1 
+      154 . 1 1  81  81 TRP HE1 H  1  10.647 0.002 . 1 . . . . 237 TRP HE1 . 15959 1 
+      155 . 1 1  81  81 TRP N   N 15 123.144 0.059 . 1 . . . . 237 TRP N   . 15959 1 
+      156 . 1 1  81  81 TRP NE1 N 15 132.12  0.059 . 1 . . . . 237 TRP NE1 . 15959 1 
+      157 . 1 1  82  82 MET H   H  1   9.454 0.002 . 1 . . . . 238 MET H   . 15959 1 
+      158 . 1 1  82  82 MET N   N 15 119.719 0.059 . 1 . . . . 238 MET N   . 15959 1 
+      159 . 1 1  83  83 GLN H   H  1   9.536 0.002 . 1 . . . . 239 GLN H   . 15959 1 
+      160 . 1 1  83  83 GLN N   N 15 124.017 0.059 . 1 . . . . 239 GLN N   . 15959 1 
+      161 . 1 1  84  84 VAL H   H  1   8.633 0.002 . 1 . . . . 240 VAL H   . 15959 1 
+      162 . 1 1  84  84 VAL N   N 15 118.979 0.059 . 1 . . . . 240 VAL N   . 15959 1 
+      163 . 1 1  85  85 ASP H   H  1   8.52  0.002 . 1 . . . . 241 ASP H   . 15959 1 
+      164 . 1 1  85  85 ASP N   N 15 116.981 0.059 . 1 . . . . 241 ASP N   . 15959 1 
+      165 . 1 1  86  86 ASP H   H  1   7.212 0.002 . 1 . . . . 242 ASP H   . 15959 1 
+      166 . 1 1  86  86 ASP N   N 15 109.534 0.059 . 1 . . . . 242 ASP N   . 15959 1 
+      167 . 1 1  87  87 SER H   H  1   8.626 0.002 . 1 . . . . 243 SER H   . 15959 1 
+      168 . 1 1  87  87 SER N   N 15 114.253 0.059 . 1 . . . . 243 SER N   . 15959 1 
+      169 . 1 1  88  88 VAL H   H  1   8.209 0.002 . 1 . . . . 244 VAL H   . 15959 1 
+      170 . 1 1  88  88 VAL N   N 15 127.138 0.059 . 1 . . . . 244 VAL N   . 15959 1 
+      171 . 1 1  89  89 VAL H   H  1   8.461 0.002 . 1 . . . . 245 VAL H   . 15959 1 
+      172 . 1 1  89  89 VAL N   N 15 122.099 0.059 . 1 . . . . 245 VAL N   . 15959 1 
+      173 . 1 1  90  90 ALA H   H  1   7.258 0.002 . 1 . . . . 246 ALA H   . 15959 1 
+      174 . 1 1  90  90 ALA N   N 15 120.439 0.059 . 1 . . . . 246 ALA N   . 15959 1 
+      175 . 1 1  91  91 GLN H   H  1   7.54  0.002 . 1 . . . . 247 GLN H   . 15959 1 
+      176 . 1 1  91  91 GLN N   N 15 116.622 0.059 . 1 . . . . 247 GLN N   . 15959 1 
+      177 . 1 1  92  92 ASN H   H  1   8.269 0.002 . 1 . . . . 248 ASN H   . 15959 1 
+      178 . 1 1  92  92 ASN N   N 15 119.592 0.059 . 1 . . . . 248 ASN N   . 15959 1 
+      179 . 1 1  93  93 MET H   H  1   8.538 0.002 . 1 . . . . 249 MET H   . 15959 1 
+      180 . 1 1  93  93 MET N   N 15 122.987 0.059 . 1 . . . . 249 MET N   . 15959 1 
+      181 . 1 1  94  94 HIS H   H  1   7.229 0.002 . 1 . . . . 250 HIS H   . 15959 1 
+      182 . 1 1  94  94 HIS N   N 15 117.95  0.059 . 1 . . . . 250 HIS N   . 15959 1 
+      183 . 1 1  95  95 GLU H   H  1   8.355 0.002 . 1 . . . . 251 GLU H   . 15959 1 
+      184 . 1 1  95  95 GLU N   N 15 116.508 0.059 . 1 . . . . 251 GLU N   . 15959 1 
+      185 . 1 1  96  96 THR H   H  1   8.317 0.002 . 1 . . . . 252 THR H   . 15959 1 
+      186 . 1 1  96  96 THR N   N 15 116.36  0.059 . 1 . . . . 252 THR N   . 15959 1 
+      187 . 1 1  97  97 ILE H   H  1   8.52  0.002 . 1 . . . . 253 ILE H   . 15959 1 
+      188 . 1 1  97  97 ILE N   N 15 123.979 0.059 . 1 . . . . 253 ILE N   . 15959 1 
+      189 . 1 1  98  98 LEU H   H  1   8.305 0.002 . 1 . . . . 254 LEU H   . 15959 1 
+      190 . 1 1  98  98 LEU N   N 15 120.653 0.059 . 1 . . . . 254 LEU N   . 15959 1 
+      191 . 1 1  99  99 GLU H   H  1   7.782 0.002 . 1 . . . . 255 GLU H   . 15959 1 
+      192 . 1 1  99  99 GLU N   N 15 119.008 0.059 . 1 . . . . 255 GLU N   . 15959 1 
+      193 . 1 1 100 100 ALA H   H  1   7.836 0.002 . 1 . . . . 256 ALA H   . 15959 1 
+      194 . 1 1 100 100 ALA N   N 15 123.078 0.059 . 1 . . . . 256 ALA N   . 15959 1 
+      195 . 1 1 101 101 MET H   H  1   8.582 0.002 . 1 . . . . 257 MET H   . 15959 1 
+      196 . 1 1 101 101 MET N   N 15 118.495 0.059 . 1 . . . . 257 MET N   . 15959 1 
+      197 . 1 1 102 102 ARG H   H  1   8.327 0.002 . 1 . . . . 258 ARG H   . 15959 1 
+      198 . 1 1 102 102 ARG N   N 15 120.858 0.059 . 1 . . . . 258 ARG N   . 15959 1 
+      199 . 1 1 103 103 ALA H   H  1   7.939 0.002 . 1 . . . . 259 ALA H   . 15959 1 
+      200 . 1 1 103 103 ALA N   N 15 120.655 0.059 . 1 . . . . 259 ALA N   . 15959 1 
+      201 . 1 1 104 104 MET H   H  1   7.489 0.002 . 1 . . . . 260 MET H   . 15959 1 
+      202 . 1 1 104 104 MET N   N 15 116.248 0.059 . 1 . . . . 260 MET N   . 15959 1 
+      203 . 1 1 105 105 SER H   H  1   7.925 0.002 . 1 . . . . 261 SER H   . 15959 1 
+      204 . 1 1 105 105 SER N   N 15 114.858 0.059 . 1 . . . . 261 SER N   . 15959 1 
+      205 . 1 1 106 106 ASP H   H  1   8.281 0.002 . 1 . . . . 262 ASP H   . 15959 1 
+      206 . 1 1 106 106 ASP N   N 15 122.616 0.059 . 1 . . . . 262 ASP N   . 15959 1 
+      207 . 1 1 107 107 GLU H   H  1   8.11  0.002 . 1 . . . . 263 GLU H   . 15959 1 
+      208 . 1 1 107 107 GLU N   N 15 119.925 0.059 . 1 . . . . 263 GLU N   . 15959 1 
+      209 . 1 1 108 108 PHE H   H  1   7.977 0.002 . 1 . . . . 264 PHE H   . 15959 1 
+      210 . 1 1 108 108 PHE N   N 15 119.13  0.059 . 1 . . . . 264 PHE N   . 15959 1 
+      211 . 1 1 109 109 ARG H   H  1   7.743 0.002 . 1 . . . . 265 ARG H   . 15959 1 
+      212 . 1 1 109 109 ARG N   N 15 123.803 0.059 . 1 . . . . 265 ARG N   . 15959 1 
+      213 . 1 1 111 111 ARG H   H  1   7.994 0.002 . 1 . . . . 267 ARG H   . 15959 1 
+      214 . 1 1 111 111 ARG N   N 15 126.676 0.059 . 1 . . . . 267 ARG N   . 15959 1 
+
+   stop_
+
+save_
+
