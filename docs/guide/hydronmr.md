@@ -2,10 +2,28 @@
 
 `makeshift.hydronmr` is a pure-Python port of Fast-HYDRONMR: it predicts
 per-residue NMR relaxation (T1, T2, T1/T2, NOE) from a protein PDB structure by
-computing a rigid-body diffusion tensor. It's the engine behind the rigid-body
-comparison in a [relaxation profile](relaxation.md).
+computing a rigid-body diffusion tensor.
 
-## Quick start
+**Typical use** is not calling `run()` directly — it is the engine behind
+[`RelaxationProfile.add_rigid_prediction()`](relaxation.md). Build a profile
+with a [`PeakList`](peaklists.md), add the rigid prediction, then `label()` and
+`plot()`:
+
+```python
+from makeshift import PeakList
+from makeshift.relaxation import RelaxationProfile
+
+pl = PeakList.from_bmrb(19151)
+prof = RelaxationProfile.from_bmrb(25013, peaklist=pl)
+prof.add_rigid_prediction(source='afdb')
+prof.label()
+prof.plot("R2_R1")
+```
+
+The rest of this page documents the low-level `run()` API for when you only
+need structure → T1/T2/NOE (e.g. validation or a custom pipeline).
+
+## Low-level: `run()` on a PDB
 
 ```python
 from makeshift.hydronmr import run

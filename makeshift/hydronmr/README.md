@@ -4,7 +4,25 @@ Python port of Fast-HYDRONMR: predicts per-residue NMR relaxation (T1, T2,
 T1/T2, NOE) from a protein PDB structure. Lives in the `makeshift` package as
 `makeshift.hydronmr`.
 
-## Quick start
+**Typical use** is via `RelaxationProfile` (PeakList → rigid prediction →
+`label` → `plot`). See the [relaxation guide](../../docs/guide/relaxation.md)
+or:
+
+```python
+from makeshift import PeakList
+from makeshift.relaxation import RelaxationProfile
+
+pl = PeakList.from_bmrb(19151)
+prof = RelaxationProfile.from_bmrb(25013, peaklist=pl)
+prof.add_rigid_prediction()                 # or source="rcsb" / "afdb", or a PDB id / path
+prof.label()
+prof.plot("R2_R1")
+```
+
+Structure choice (`source=`, explicit ids) is documented in the
+[relaxation guide](../../docs/guide/relaxation.md).
+
+## Low-level: `run()` on a PDB
 
 ```python
 from makeshift.hydronmr import run

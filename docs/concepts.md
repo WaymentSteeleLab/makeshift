@@ -90,9 +90,13 @@ cs = ms.ChemicalShifts.from_entry(entry, reref="lacs")
 peaks = cs.peaklist()
 
 # 4. Go further (relax dynamics, CPMG, structure prediction, etc.)
+from makeshift import PeakList
 from makeshift.relaxation import RelaxationProfile
-prof = RelaxationProfile.from_entry(entry)
-prof.add_rigid_prediction()
+
+pl = PeakList.from_bmrb(19151)
+prof = RelaxationProfile.from_entry(entry, peaklist=pl)
+prof.add_rigid_prediction(source='afdb')
+prof.label()
 prof.plot("R2_R1")
 ```
 

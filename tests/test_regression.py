@@ -28,9 +28,6 @@ GT_DIR = Path(
     )
 )
 
-# (protein, n_residues, mean T1/T2, std T1/T2)
-# Only CYPA (smallest, 1265 atoms) runs here, to keep the suite fast. The
-# full 7-protein table is in git history.
 EXPECTED = [
     ("CYPA", 164, 7.116249035121523, 0.23293971322837126),
 ]

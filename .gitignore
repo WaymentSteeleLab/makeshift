@@ -1,7 +1,6 @@
 internal/
 examples/*json.zip
 examples/*_hydronmr_r2.csv
-*.str
 .ipynb_checkpoints
 *.nbconvert.ipynb
 .DS_Store

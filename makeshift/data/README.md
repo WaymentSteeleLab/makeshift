@@ -53,3 +53,17 @@ HA→SS assignment, Wang & Wishart (2005) offsets, and Wang et al. (2010) CONA
 joint-probability scoring.
 
 **Used by:** `get_panav_distns()` in `reref/panav.py`.
+
+## `refdb/`
+
+Optional Wishart [RefDB](https://refdb.wishartlab.com/) cache shipped with the
+package (~45 MB):
+
+| File | Contents |
+|------|----------|
+| `RefDB-{C,H,N}.db.txt` | SHIFTY backbone dumps |
+| `refdb_backbone.csv` | Joined per-residue backbone table |
+| `refdb_frags.npz` | Prebuilt fragment library |
+
+Not loaded by default (PANAV uses `panav_distns.csv`). Available under
+`makeshift/data/refdb/` for experiments that need RefDB.

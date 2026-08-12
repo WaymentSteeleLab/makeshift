@@ -94,22 +94,34 @@ entry.data_loop("spectral_density_values", "_Spectral_density")  # anything else
 ```
 
 `RelaxationProfile` assembles R1/R2/NOE into the R₂/R₁ observable, compares it to
-a HYDRONMR rigid-body prediction, and labels each residue by motional regime:
+a HYDRONMR rigid-body prediction, and labels each residue by motional regime.
+Pass a [`PeakList`](https://makeshift-docs.readthedocs.io/en/latest/guide/peaklists.html)
+so missing peaks are marked (`.`) instead of treated as dynamics:
 
 ```python
+from makeshift import PeakList
 from makeshift.relaxation import RelaxationProfile
 
-prof = RelaxationProfile.from_bmrb(25013)   # pulls T1/T2/NOE, aligns to the sequence
-prof.add_rigid_prediction()                 # structure: deposited PDB → RCSB, else AlphaFold → AFDB
-print(prof.label())                         # per-residue motion string
+pl = PeakList.from_bmrb(19151)
+prof = RelaxationProfile.from_bmrb(25013, peaklist=pl)  # T1/T2/NOE, aligned to sequence
+prof.add_rigid_prediction()                              # HYDRONMR; see source= below
+prof.label(rex_n_std=1.0, noe_cut=0.65)                  # per-residue motion tokens
 prof.plot("R2_R1")
 ```
 
-The structure for the rigid prediction can be a local PDB, a PDB id (fetched
-from RCSB), or a UniProt accession (fetched from AlphaFold DB) — e.g.
-`add_rigid_prediction("1WRP")`, `("P0DP23")`, or `("model.pdb")`; with no
-argument it uses the entry's own cited PDB or AlphaFold model. makeshift does not
-predict structure itself.
+For the rigid prediction, pass a structure or let the entry choose one:
+
+```python
+prof.add_rigid_prediction()                 # auto: entry PDB → else AlphaFold
+prof.add_rigid_prediction(source="rcsb")    # force deposited PDB cited by the entry
+prof.add_rigid_prediction(source="afdb")    # force AlphaFold / UniProt cited by the entry
+prof.add_rigid_prediction("1WRP")           # specific PDB id
+prof.add_rigid_prediction("P0DP23")         # UniProt accession (AlphaFold DB)
+prof.add_rigid_prediction("model.pdb")      # local file
+```
+
+`source` is `"auto"` | `"rcsb"` | `"afdb"` | `"file"`. makeshift does not predict
+structure itself — see the [relaxation guide](https://makeshift-docs.readthedocs.io/en/latest/guide/relaxation.html).
 
 Label tokens: `A` ordered, `^` µs–ms exchange (elevated R₂/R₁), `v` ps–ns motion
 (hetNOE ≤ 0.65), `b` both, `.` peak missing, `t` disordered terminus, `p` proline.

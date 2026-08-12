@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "makeshift-nmr"
-version = "0.1.41"
+version = "0.1.43"
 description = "open-source Python package for accessing and analyzing NMR data"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -39,6 +39,7 @@ dependencies = [
     "seaborn",
     "nmrglue",
     "tqdm",
+    "PyYAML",
 ]
 
 [project.optional-dependencies]
@@ -54,4 +55,9 @@ Issues = "https://github.com/WaymentSteeleLab/makeshift/issues"
 include = ["makeshift*"]
 
 [tool.setuptools.package-data]
-makeshift = ["data/*.csv", "data/rci_data/*.csv"]
+makeshift = [
+    "data/*.csv",
+    "data/rci_data/*.csv",
+    "data/refdb/*",
+    "hydronmr/config.yml",
+]
