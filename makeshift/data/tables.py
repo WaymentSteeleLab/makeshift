@@ -43,6 +43,21 @@ def get_c_prime_rc():
     return dict(zip(df['residue'], df['value'].astype(float)))
 
 
+def get_csi_wishart():
+    """
+    Wishart CSI reference ranges. Returns {residue: {atom: (center, half_width)}}.
+
+    ¹Hα from Wishart, Sykes & Richards (1992); ¹³Cα/β/′ from Wishart & Sykes
+    (1994). Oxidized Cys is stored under residue code ``CYSO``.
+    """
+    df = pd.read_csv(_DATA / 'csi_wishart.csv', comment='#')
+    out = {}
+    for _, row in df.iterrows():
+        res, atom = row['residue'], row['atom']
+        out.setdefault(res, {})[atom] = (float(row['center']), float(row['half_width']))
+    return out
+
+
 _RCI_DATA = _DATA / 'rci_data'
 
 # Valid choices for get_rci_tables(neighbor_table=...). Each is a distinct

@@ -3,8 +3,8 @@
 CSV tables loaded by `makeshift/data/tables.py` and cached as module-level
 dicts. To update a table, edit the CSV — no code changes needed.
 
-The loaders are `get_random_coil`, `get_bmrb_stats`, `get_c_prime_rc`, and
-`get_panav_distns`.
+The loaders are `get_random_coil`, `get_bmrb_stats`, `get_c_prime_rc`,
+`get_csi_wishart`, and `get_panav_distns`.
 
 ## `random_coil.csv`
 
@@ -17,7 +17,7 @@ GLY, N/H for PRO) and load as `np.nan`.
 **Source:** Wishart & Sykes (1994).
 
 **Used by:** `get_random_coil()` — secondary-shift calculation (observed −
-random coil) in `chemshift.py` (CSI) and `reref/lacs.py` (LACS fitting).
+random coil) in `chemshift.py` and `reref/lacs.py` (LACS fitting).
 
 ## `bmrb_stats.csv`
 
@@ -53,6 +53,16 @@ HA→SS assignment, Wang & Wishart (2005) offsets, and Wang et al. (2010) CONA
 joint-probability scoring.
 
 **Used by:** `get_panav_distns()` in `reref/panav.py`.
+
+## `csi_wishart.csv`
+
+**Columns:** `residue, atom, center, half_width`
+
+Classic Chemical-Shift Index reference ranges (center ± half-width). Atoms
+`HA` (Wishart, Sykes & Richards 1992), and `CA` / `CB` / `C` (Wishart & Sykes
+1994, relative to TSP). Oxidized cysteine is stored as residue `CYSO`.
+
+**Used by:** `get_csi_wishart()` — `makeshift.csi` / `ChemicalShifts.add_csi(method=...)`.
 
 ## `refdb/`
 

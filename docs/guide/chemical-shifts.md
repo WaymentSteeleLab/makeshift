@@ -38,8 +38,8 @@ cs.data
 | `Atom_type` | Element |
 | `Val` | Shift (ppm) |
 
-After `calc_csi=True` (or `cs.add_csi()`), two more columns appear: `csi_raw`
-(secondary shift) and `csi` (the discretised ±1/0 index).
+After `calc_csi=True` (or `cs.add_csi()`), Wishart CSI columns appear —
+see [Chemical-shift index](#chemical-shift-index) below.
 
 ## Re-referencing
 
@@ -54,11 +54,25 @@ The two methods and when to prefer each are covered in
 ## Chemical-shift index
 
 ```python
-cs.add_csi()   # adds csi_raw and csi columns in place; returns self
+cs.add_csi()                         # default: wishart_94 (consensus)
+cs.add_csi(method="wishart_92")      # ¹Hα only (Wishart et al. 1992)
+cs.add_csi(method="wishart_94_ca")   # 13Ca only (Wishart & Sykes 1994)
+cs.add_csi(method="wishart_94_cb")   # 13Cb (strand-only)
+cs.add_csi(method="wishart_94_c")    # 13C'
 ```
 
-CSI compares each backbone shift to random-coil values to flag helix/strand
-propensity per residue — the basis PANAV uses to pick a reference distribution.
+Or in one shot: `ChemicalShifts.from_bmrb(4527, calc_csi=True)` /
+`calc_csi="wishart_92"`.
+
+| `method` | What it does |
+|---|---|
+| `"wishart_94"` (default) | HA+CA+CB+C′ indices (`csi_ha` …), density-filtered SS, majority consensus `ss` / `csi` |
+| `"wishart_92"` | 1Ha CSI (1992) |
+| `"wishart_94_ha"` / `"_ca"` / `"_cb"` / `"_c"` | Single-nucleus 1994 protocol |
+
+Ranges are in `csi_wishart.csv`. Per-residue detail is on `cs.csi_table`.
+makeshift does **not** implement CSI 2.0 / 3.0. LACS re-referencing uses its
+own continuous CA−CB secondary shift, separate from this API.
 
 ## From shifts to peaks
 

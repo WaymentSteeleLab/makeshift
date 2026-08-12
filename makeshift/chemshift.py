@@ -50,7 +50,8 @@ class ChemicalShifts:
         if reref in ("panav", "lacs"):
             obj.reref(method=reref)
         if calc_csi:
-            obj.add_csi()
+            method = calc_csi if isinstance(calc_csi, str) else "wishart_94"
+            obj.add_csi(method=method)
         return obj
 
     @classmethod
@@ -103,9 +104,17 @@ class ChemicalShifts:
         self.data = apply_offsets(self.data, offsets)
         return self
 
-    # chemical shift index
+    # chemical shift index (Wishart); CA−CB helpers below also feed LACS
 
     _RANDOM_COIL = None
+    _CSI_METHODS = {
+        "wishart_92": ("HA",),
+        "wishart_94": None,          # all nuclei + consensus
+        "wishart_94_ha": ("HA",),
+        "wishart_94_ca": ("CA",),
+        "wishart_94_cb": ("CB",),
+        "wishart_94_c": ("C",),
+    }
 
     @classmethod
     def _rc(cls, comp_id, atom_id):
@@ -124,7 +133,7 @@ class ChemicalShifts:
         return val - rc
 
     def _csi_raw(self, row, strict=False):
-        """(CA - CB) secondary shift for one residue; CA-only fallback."""
+        """(CA − CB) secondary shift per residue — used by LACS fitting."""
         res = self.data.loc[self.data["Seq_ID"] == row["Seq_ID"]]
         ca = res[res["Atom_ID"] == "CA"]
         cb = res[res["Atom_ID"] == "CB"]
@@ -136,32 +145,75 @@ class ChemicalShifts:
             return ca_sec
         return np.nan
 
-    @staticmethod
-    def _csi_index(value, comp_id, helix=0.7, strand=-0.7, gly=0.7):
-        if np.isnan(value):
-            return np.nan
-        if value >= helix:
-            return 1.0
-        if value <= strand:
-            return -1.0
-        if comp_id == "GLY":
-            if value >= gly:
-                return 1.0
-            if value <= -gly:
-                return -1.0
-        return 0.0
+    def add_csi(self, method="wishart_94", assign_ss=True):
+        """
+        Add Wishart chemical-shift index columns in place; returns self.
 
-    def add_csi(self):
-        """Add ``csi_raw`` and ``csi`` columns in place; returns self."""
-        atoms = self.data["Atom_ID"].unique()
-        if "CA" not in atoms or "CB" not in atoms:
-            warnings.warn("CA and/or CB missing from Atom_ID; cannot calculate CSI",
-                          UserWarning)
-            return self
-        self.data["csi_raw"] = self.data.apply(self._csi_raw, axis=1)
-        self.data["csi"] = self.data.apply(
-            lambda r: self._csi_index(r["csi_raw"], r["Comp_ID"]), axis=1
-        ).astype(float)
+        Parameters
+        ----------
+        method : str
+            ``'wishart_92'`` — 1Ha CSI (Wishart, Sykes & Richards 1992).
+
+            ``'wishart_94'`` (default) — HA + CA + CB + C' indices with
+            density-filtered secondary structure and majority-rules consensus
+            (Wishart & Sykes 1994).
+
+            ``'wishart_94_ha'`` / ``'_ca'`` / ``'_cb'`` / ``'_c'`` — single-nucleus
+            1994 protocol (CB is strand-only).
+        assign_ss : bool
+            Run the stage-2 density filter (and consensus for ``wishart_94``).
+
+        Notes
+        -----
+        Ternary signs: HA +1 = strand / -1 = helix; CA and C' +1 = helix /
+        -1 = strand; CB +1 = strand only. Consensus ``ss`` is H / E / C;
+        ``csi`` mirrors that as +1 / -1 / 0. Per-residue detail is on
+        ``self.csi_table``.
+
+        LACS re-referencing does **not** use this method — it computes its own
+        continuous CA-CB secondary shift via ``_csi_raw``.
+        """
+        method = str(method).lower()
+        if method not in self._CSI_METHODS:
+            raise ValueError(
+                f"unknown CSI method {method!r}; "
+                f"choose from {tuple(self._CSI_METHODS)}"
+            )
+        self.csi_method = method
+
+        from . import csi as wishart_csi
+
+        atoms = self._CSI_METHODS[method]
+        if atoms is None:
+            atoms = wishart_csi._WISHART_ATOMS
+        table = wishart_csi.wishart_table(
+            self.data, atoms=atoms, assign_ss=assign_ss
+        )
+        self.csi_table = table
+        by_seq = table.set_index("Seq_ID")
+
+        if method == "wishart_94":
+            for col in ("HA", "CA", "CB", "C"):
+                if col in by_seq.columns:
+                    self.data[f"csi_{col.lower()}"] = self.data["Seq_ID"].map(
+                        by_seq[col]
+                    )
+            if "ss" in by_seq.columns:
+                self.data["ss"] = self.data["Seq_ID"].map(by_seq["ss"])
+            if "csi" in by_seq.columns:
+                self.data["csi"] = self.data["Seq_ID"].map(by_seq["csi"])
+            if "CA_raw" in by_seq.columns:
+                self.data["csi_raw"] = self.data["Seq_ID"].map(by_seq["CA_raw"])
+        else:
+            atom = atoms[0]
+            self.data["csi"] = self.data["Seq_ID"].map(by_seq[atom])
+            raw_col = f"{atom}_raw"
+            self.data["csi_raw"] = (
+                self.data["Seq_ID"].map(by_seq[raw_col])
+                if raw_col in by_seq.columns else np.nan
+            )
+            if assign_ss and "ss" in by_seq.columns:
+                self.data["ss"] = self.data["Seq_ID"].map(by_seq["ss"])
         return self
 
     def __repr__(self):
