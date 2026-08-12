@@ -70,9 +70,11 @@ Or in one shot: `ChemicalShifts.from_bmrb(4527, calc_csi=True)` /
 | `"wishart_92"` | 1Ha CSI (1992) |
 | `"wishart_94_ha"` / `"_ca"` / `"_cb"` / `"_c"` | Single-nucleus 1994 protocol |
 
-Ranges are in `csi_wishart.csv`. Per-residue detail is on `cs.csi_table`.
-makeshift does **not** implement CSI 2.0 / 3.0. LACS re-referencing uses its
-own continuous CA−CB secondary shift, separate from this API.
+Pass `raw=True` to also store continuous `observed − center` deviations
+(`csi_raw` / `{atom}_raw`). Ranges are in `csi_wishart.csv`. Per-residue
+detail is on `cs.csi_table`. makeshift does **not** implement CSI 2.0 / 3.0.
+LACS re-referencing uses its own continuous CA−CB secondary shift, separate
+from this API.
 
 ## From shifts to peaks
 

@@ -24,8 +24,8 @@ cs.sequences()     # one row per entity: ID, polymer type, sequence
 
 # Re-reference shifts
 cs = ms.ChemicalShifts.from_bmrb(4527, reref="lacs", calc_csi=True)
-#    calc_csi=True → wishart_94 (HA/CA/CB/C′ + consensus SS);
-#    or calc_csi="wishart_92" for ¹Hα only
+#    calc_csi=True -> wishart_94 (HA/CA/CB/C′ + consensus SS);
+#    or calc_csi="wishart_92" for 1Ha only
 cs.reref_offsets   # {atom: offset applied}
 
 # Build an assigned peak list (e.g. for an HSQC)

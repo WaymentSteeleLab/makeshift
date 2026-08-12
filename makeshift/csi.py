@@ -81,13 +81,15 @@ def _atom_value(res_rows, atom):
     return float(hit.iloc[0]["Val"])
 
 
-def residue_indices(data, atoms=_WISHART_ATOMS):
+def residue_indices(data, atoms=_WISHART_ATOMS, raw=False):
     """
-    Per-residue Wishart ternary indices.
+    Per-residue Wishart ternary indices (-1 / 0 / +1).
 
     Returns a DataFrame with columns Seq_ID, Comp_ID, and one column per
     requested atom (HA / CA / CB / C). Glycine's missing CB is proxied by
     its HA index (Wishart & Sykes 1994, Table 2 footnote).
+
+    If ``raw=True``, also adds ``{atom}_raw`` = observed - center (ppm).
     """
     tables = get_csi_wishart()
     atoms = tuple(a.upper() for a in atoms)
@@ -100,11 +102,16 @@ def residue_indices(data, atoms=_WISHART_ATOMS):
             val = _atom_value(res, atom)
             center, hw = _lookup_range(comp, atom, tables, cb_val=cb_val)
             entry[atom] = ternary_index(val, center, hw)
-            entry[f"{atom}_raw"] = val - center if np.isfinite(val) and np.isfinite(center) else np.nan
+            if raw:
+                entry[f"{atom}_raw"] = (
+                    val - center
+                    if np.isfinite(val) and np.isfinite(center) else np.nan
+                )
         # Gly has no CB — proxy with HA CSI
         if "CB" in atoms and comp == "GLY" and not np.isfinite(entry.get("CB", np.nan)):
             entry["CB"] = entry.get("HA", np.nan)
-            entry["CB_raw"] = entry.get("HA_raw", np.nan)
+            if raw:
+                entry["CB_raw"] = entry.get("HA_raw", np.nan)
         rows.append(entry)
     return pd.DataFrame(rows)
 
@@ -224,13 +231,14 @@ def consensus_ss(ss_by_nucleus, min_voters=3):
     return out
 
 
-def wishart_table(data, atoms=_WISHART_ATOMS, assign_ss=True):
+def wishart_table(data, atoms=_WISHART_ATOMS, assign_ss=True, raw=False):
     """
     Full Wishart CSI table: ternary indices, optional per-nucleus SS, consensus.
 
-    Returns one row per ``Seq_ID``.
+    Returns one row per ``Seq_ID``. Pass ``raw=True`` to also include
+    ``{atom}_raw`` ppm deviations from the Wishart centers.
     """
-    idx = residue_indices(data, atoms=atoms)
+    idx = residue_indices(data, atoms=atoms, raw=raw)
     if not assign_ss:
         return idx
 
@@ -261,6 +269,6 @@ def wishart_table(data, atoms=_WISHART_ATOMS, assign_ss=True):
     else:
         idx["ss"] = ["C"] * len(idx)
 
-    # ternary view of consensus for plotting / column parity with LACS CSI
+    # ternary view of consensus for plotting
     idx["csi"] = [{"H": 1.0, "E": -1.0, "C": 0.0}[s] for s in idx["ss"]]
     return idx

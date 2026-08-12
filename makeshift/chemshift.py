@@ -145,9 +145,13 @@ class ChemicalShifts:
             return ca_sec
         return np.nan
 
-    def add_csi(self, method="wishart_94", assign_ss=True):
+    def add_csi(self, method="wishart_94", assign_ss=True, raw=False):
         """
         Add Wishart chemical-shift index columns in place; returns self.
+
+        Default columns are ternary (-1 / 0 / +1). Pass ``raw=True`` to also
+        store ppm deviations from the Wishart centers (``csi_raw`` /
+        ``{atom}_raw`` on ``csi_table``).
 
         Parameters
         ----------
@@ -162,6 +166,8 @@ class ChemicalShifts:
             1994 protocol (CB is strand-only).
         assign_ss : bool
             Run the stage-2 density filter (and consensus for ``wishart_94``).
+        raw : bool
+            If True, also add continuous ``observed − center`` deviations.
 
         Notes
         -----
@@ -187,7 +193,7 @@ class ChemicalShifts:
         if atoms is None:
             atoms = wishart_csi._WISHART_ATOMS
         table = wishart_csi.wishart_table(
-            self.data, atoms=atoms, assign_ss=assign_ss
+            self.data, atoms=atoms, assign_ss=assign_ss, raw=raw
         )
         self.csi_table = table
         by_seq = table.set_index("Seq_ID")
@@ -202,16 +208,15 @@ class ChemicalShifts:
                 self.data["ss"] = self.data["Seq_ID"].map(by_seq["ss"])
             if "csi" in by_seq.columns:
                 self.data["csi"] = self.data["Seq_ID"].map(by_seq["csi"])
-            if "CA_raw" in by_seq.columns:
+            if raw and "CA_raw" in by_seq.columns:
                 self.data["csi_raw"] = self.data["Seq_ID"].map(by_seq["CA_raw"])
         else:
             atom = atoms[0]
             self.data["csi"] = self.data["Seq_ID"].map(by_seq[atom])
-            raw_col = f"{atom}_raw"
-            self.data["csi_raw"] = (
-                self.data["Seq_ID"].map(by_seq[raw_col])
-                if raw_col in by_seq.columns else np.nan
-            )
+            if raw:
+                raw_col = f"{atom}_raw"
+                if raw_col in by_seq.columns:
+                    self.data["csi_raw"] = self.data["Seq_ID"].map(by_seq[raw_col])
             if assign_ss and "ss" in by_seq.columns:
                 self.data["ss"] = self.data["Seq_ID"].map(by_seq["ss"])
         return self
