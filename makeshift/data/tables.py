@@ -43,6 +43,27 @@ def get_c_prime_rc():
     return dict(zip(df['residue'], df['value'].astype(float)))
 
 
+def get_rc_pre_pro():
+    """
+    Wishart et al. 1995 Table 5 — CA/CB/C' random coil when followed by Pro.
+    Returns {residue: {atom: float}}.
+    """
+    df = pd.read_csv(_DATA / 'rc_pre_pro.csv', comment='#')
+    out = {}
+    for _, row in df.iterrows():
+        out.setdefault(row['residue'], {})[row['atom']] = float(row['value'])
+    return out
+
+
+def get_rc_n_prev():
+    """
+    Wishart et al. 1995 Table 8 — 15N of Ala when preceded by each residue.
+    Returns {prev_residue: float}. Used by LACS for the N i−1 correction.
+    """
+    df = pd.read_csv(_DATA / 'rc_n_prev.csv', comment='#')
+    return dict(zip(df['prev_residue'], df['N_ala'].astype(float)))
+
+
 def get_csi_wishart():
     """
     Wishart CSI reference ranges. Returns {residue: {atom: (center, half_width)}}.

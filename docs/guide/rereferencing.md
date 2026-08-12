@@ -42,9 +42,13 @@ cs.reref(method="panav")
 ```
 
 ### LACS
-**LACS** ([Wang & Markley 2009](https://pmc.ncbi.nlm.nih.gov/articles/PMC2782637/))
-fits secondary shift vs. CSI so the random-coil regime intercepts at the
-origin; it covers CA, CB, C′, N, and HN.
+**LACS** ([Wang et al. 2005](https://pubmed.ncbi.nlm.nih.gov/16041479/);
+[Wang & Markley 2009](https://pmc.ncbi.nlm.nih.gov/articles/PMC2782637/))
+fits secondary shift vs. CSI (CA−CB) so the random-coil regime intercepts at
+the origin; it covers CA, CB, C′, N, and HN. Coil baselines include
+nearest-neighbor corrections from official LACS (BMRB / Liya Wang): Wishart
+Table 5 pre-Pro for CA/CB/C′, and Wishart Table 8 i−1 correction for N. The N/H
+fit excludes GLY/CYS/PRO on **residue i−1** .
 
 ```python
 cs.reref(method="lacs")

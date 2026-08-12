@@ -4,7 +4,7 @@ CSV tables loaded by `makeshift/data/tables.py` and cached as module-level
 dicts. To update a table, edit the CSV — no code changes needed.
 
 The loaders are `get_random_coil`, `get_bmrb_stats`, `get_c_prime_rc`,
-`get_csi_wishart`, and `get_panav_distns`.
+`get_rc_pre_pro`, `get_rc_n_prev`, `get_csi_wishart`, and `get_panav_distns`.
 
 ## `random_coil.csv`
 
@@ -42,6 +42,25 @@ Random-coil C′ (carbonyl carbon) chemical shifts per amino acid.
 
 **Used by:** `get_c_prime_rc()` — C′ secondary shift during LACS fitting in
 `reref/lacs.py` (C′ uses its own random-coil reference, separate from CA/CB).
+
+## `rc_pre_pro.csv`
+
+**Columns:** `residue, atom, value`
+
+Wishart et al. 1995 Table 5 — CA/CB/C′ random-coil shifts when residue *i* is
+followed by proline (Gly-Gly-X-Pro-Gly-Gly).
+
+**Used by:** `get_rc_pre_pro()` — LACS secondary shifts before Pro. Matches
+official LACS (`ord.m` procorr for CA/CB/CO); Wang 2005 text only names CA/CB.
+
+## `rc_n_prev.csv`
+
+**Columns:** `prev_residue, N_ala`
+
+Wishart et al. 1995 Table 8 — ¹⁵N of alanine when preceded by each residue.
+Wang & Markley 2009 apply this to all residue types for the N i−1 correction.
+
+**Used by:** `get_rc_n_prev()` — LACS N secondary shifts.
 
 ## `panav_distns.csv`
 

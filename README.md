@@ -63,9 +63,11 @@ two methods:
   uses rarely-misreferenced HA shifts to assign secondary structure, then aligns
   N/CA/CB to curated per-structure reference distributions
   ([Wang & Jardetzky 2002](https://onlinelibrary.wiley.com/doi/10.1110/ps.3180102)).
-- **LACS** ([Wang & Markley 2009](https://pmc.ncbi.nlm.nih.gov/articles/PMC2782637/)) —
+- **LACS** ([Wang et al. 2005](https://pubmed.ncbi.nlm.nih.gov/16041479/);
+  [Wang & Markley 2009](https://pmc.ncbi.nlm.nih.gov/articles/PMC2782637/)) —
   fits secondary shift vs. CSI so the random-coil regime intercepts at the origin;
-  covers CA, CB, C′, N, and HN.
+  covers CA, CB, C′, N, HN. Neighbor coil corrections follow official BMRB LACS
+  (Wishart Table 5 pre-Pro for CA/CB/C′, Table 8 for N).
 
 ```python
 cs = ms.ChemicalShifts.from_bmrb(4527)
