@@ -1,0 +1,24 @@
+prev_residue,N_ala
+# Wishart et al. 1995 Table 8 — 15N of Ala when preceded by X
+# (Gly-Gly-X-Ala-Gly-Gly). Wang & Markley 2009 apply this to all
+# residue types as a simplifying assumption for Δδ15Ncoil.
+ALA,123.2
+ARG,125.4
+ASN,124.7
+ASP,124.8
+CYS,126.7
+GLN,125.3
+GLU,125.2
+GLY,124.0
+HIS,125.8
+ILE,128.2
+LEU,125.0
+LYS,125.6
+MET,125.1
+PHE,126.4
+PRO,124.4
+SER,125.9
+THR,126.4
+TRP,126.8
+TYR,126.8
+VAL,127.9
