@@ -9,7 +9,7 @@ from .panav import reref_panav
 __all__ = ["compute_offsets", "apply_offsets"]
 
 
-def compute_offsets(df, method, n_std=_N_STD_OUTLIER):
+def compute_offsets(df, method, n_std=_N_STD_OUTLIER, cona=True):
     """
     Fit per-atom re-referencing offsets for a long-format shift table.
 
@@ -20,6 +20,9 @@ def compute_offsets(df, method, n_std=_N_STD_OUTLIER):
     method : {'lacs', 'panav'}
     n_std : int
         LACS only — BMRB-statistics outlier threshold (default 4).
+    cona : bool
+        PANAV only — run the CONA fragment scan after offsets (default True).
+        CONA does not change offsets; set False when only offsets are needed.
 
     Returns
     -------
@@ -30,7 +33,8 @@ def compute_offsets(df, method, n_std=_N_STD_OUTLIER):
     check : dict {atom: bool}
         Whether re-referencing succeeded for each atom.
     meta : dict | None
-        PANAV only — CONA fragment-scan summary (``None`` for LACS).
+        PANAV only — CONA fragment-scan summary (``None`` for LACS, or when
+        ``cona=False``).
 
     Returns ``(None, None, None)`` if no backbone shifts are present.
     """
@@ -60,4 +64,4 @@ def compute_offsets(df, method, n_std=_N_STD_OUTLIER):
         offsets, check = reref_lacs(work, n_std=n_std)
         return offsets, check, None
 
-    return reref_panav(work)
+    return reref_panav(work, cona=cona)

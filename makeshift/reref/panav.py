@@ -2,8 +2,9 @@
 PANAV re-referencing (Wang & Wishart 2005; Wang et al. 2010).
 
 HA→SS (PSSI joint P_s + 5-residue B/C density smooth), then iterative
-N/CA/CB/C offsets vs panav_distns.csv. Offset = mean(d_ave − d_obs);
-corrected = Val + offset. CONA fragment scan afterward.
+N/CA/CB/C offsets vs panav_distns.csv. Offset = mean(d_ave - d_obs);
+corrected = Val + offset. Optional CONA fragment scan afterward (does not
+change offsets).
 """
 
 import numpy as np
@@ -107,8 +108,12 @@ def _mean_3sigma(vals):
     return float(a.mean())
 
 
-def reref_panav(df):
-    """Return ``(offsets, check, cona)``."""
+def reref_panav(df, cona=True):
+    """Return ``(offsets, check, cona_meta)``.
+
+    CONA runs after offsets are fit and does not change them. Pass
+    ``cona=False`` to skip the fragment scan (faster when only offsets matter).
+    """
     df = df.copy()
     df["Atom_ID"] = df["Atom_ID"].replace({"HA2": "HA", "HA3": "HA"})
     df["Comp_ID"] = df["Comp_ID"].str.upper()
@@ -205,8 +210,12 @@ def reref_panav(df):
         for s in seq_ids
     }
 
-    # CONA: score each 3–6-mer under every same-length window in the protein
-    cona, suggestions = {}, []
+    # CONA: score each 3–6-mer under every same-length window in the protein.
+    # Runs after offsets are final — skipping it does not change offsets.
+    if not cona:
+        return offsets, check, None
+
+    cona_meta, suggestions = {}, []
     tot_sel = tot_conf = 0
     for k in (3, 4, 5, 6):
         windows = []
@@ -248,7 +257,7 @@ def reref_panav(df):
                     "suggested_end": int(windows[j_best][1]),
                 })
 
-        cona[f"{k}-residue"] = {
+        cona_meta[f"{k}-residue"] = {
             "selected": selected,
             "confirmed": confirmed,
             "score": (100.0 * confirmed / selected) if selected else None,
@@ -270,20 +279,20 @@ def reref_panav(df):
                     {"seq_id": int(s), "aa": aa, "atom": atom, "val": val}
                 )
 
-    cona["overall"] = {
+    cona_meta["overall"] = {
         "selected": tot_sel,
         "confirmed": tot_conf,
         "score": (100.0 * tot_conf / tot_sel) if tot_sel else None,
     }
     if suggestions:
-        cona["suggestions"] = suggestions
+        cona_meta["suggestions"] = suggestions
     if suspicious:
-        cona["suspicious"] = suspicious
+        cona_meta["suspicious"] = suspicious
     deviant_list = [
         {"seq_id": int(s), "aa": orig[s]["aa"], "atom": a}
         for s, atoms in deviant.items() for a in atoms
     ]
     if deviant_list:
-        cona["deviant"] = deviant_list
+        cona_meta["deviant"] = deviant_list
 
-    return offsets, check, cona
+    return offsets, check, cona_meta

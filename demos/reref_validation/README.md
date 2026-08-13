@@ -1,7 +1,8 @@
 # Re-referencing validation
 
 Live comparison of makeshift LACS / PANAV offsets against BMRB-hosted
-references. Nothing is cached on disk except the output figure.
+references. Progress is **resumable**: each finished entry is appended to
+`reref_validation_results.jsonl`, so a killed/rerun job skips those ids.
 
 | Method | BMRB source |
 |--------|-------------|
@@ -10,24 +11,26 @@ references. Nothing is cached on disk except the output figure.
 | Shifts | `ChemicalShifts.from_bmrb(..., keep_download=False)` |
 
 ```bash
-# quick default set (9 RCI proteins)
-python demos/reref_validation/reref_validation.py
+# corpus run (resumes automatically if results JSONL exists)
+python demos/reref_validation/reref_validation.py --all --prefilter-lacs --workers 48
 
-# every macromolecule entry that has a LACS.str (~hours, LACS only — fast path)
+# same command again → skips finished ids, continues the rest
+python demos/reref_validation/reref_validation.py --all --workers 48
+
+# LACS only (much faster)
 python demos/reref_validation/reref_validation.py --all --methods lacs --workers 16
 
-# every macromolecule entry, LACS + PANAV (PANAV validate is slow; many hours)
-python demos/reref_validation/reref_validation.py --all --prefilter-lacs --workers 12
-
-# custom id list
-python demos/reref_validation/reref_validation.py --ids-file my_ids.txt --workers 8
+# ignore prior results (use a new --results path for a clean file)
+python demos/reref_validation/reref_validation.py --all --no-resume --results /tmp/fresh.jsonl
 ```
 
-`--all` pulls ~18k ids from `api.bmrb.io/v2/list_entries?database=macromolecules`.
-`--prefilter-lacs` HEAD-scans for `LACS.str` first (recommended for corpus runs).
-`--methods lacs` skips the slow PANAV validate API.
+**On-disk artifacts** (beside this script by default):
 
-Writes `reref_validation.png`: LACS row (CA, CB, CO) and PANAV row
-(N, CA, CB, CO), Makeshift on x, BMRB on y.
+| File | Role |
+|------|------|
+| `bmrb_all_ids.txt` | Cached entry list for `--all` |
+| `reref_validation_results.jsonl` | Per-entry offsets (resume source of truth) |
+| `reref_validation.png` | Paper figure: LACS (3, centered) over PANAV (4) |
+| `reref_validation_rows.tsv` | Flat table for plotting / Excel |
 
-N is compared for PANAV only — BMRB `LACS.str` does not deposit N/HN.
+`--refresh-ids` rebuilds the id list. `--no-resume` does not skip finished ids.
