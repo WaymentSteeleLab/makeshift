@@ -71,6 +71,9 @@ class RelaxationProfile:
     sequence : str
         One-letter sequence the data is aligned to.
     entry_id, entity_id : identifiers carried for reference.
+    tau_scale : the calibrated diffusion-tensor timescale correction (see
+        `add_rigid_prediction`/`fit_order_parameters`), None until one of
+        those has run.
     """
  
     def __init__(self, table, sequence, entry_id=None, entity_id=None, entry=None):
@@ -80,6 +83,7 @@ class RelaxationProfile:
         self.entity_id = entity_id
         self.entry = entry
         self.scale_factor = None
+        self.tau_scale = None
  
     # construction
  
@@ -311,54 +315,156 @@ class RelaxationProfile:
                     continue
         return None
 
+    def _residue_geometry(self, g, pdb_path, chain=None):
+        """
+        For every residue with data and a matched N-H bond vector: its
+        Woessner mode amplitudes/taus (`mode_amplitudes`, unscaled) and
+        its table row. Returns {position -> (amplitudes, taus, row)},
+        shared by `add_rigid_prediction` and `fit_order_parameters` so
+        both work from identical per-residue tumbling geometry.
+        """
+        from ..hydronmr.physics.nmr import mode_amplitudes
+        from ..hydronmr.physics.pdb import nh_bond_vectors, parse_pdb_atoms
+
+        nh_vectors = nh_bond_vectors(parse_pdb_atoms(pdb_path))
+        if chain is not None:
+            nh_vectors = {k: v for k, v in nh_vectors.items() if k[0] == chain}
+        vec_by_seqid = {}
+        for (c, resseq), v in nh_vectors.items():
+            vec_by_seqid.setdefault(resseq, v)
+
+        geometry = {}
+        for pos, (_, row) in enumerate(self.table.iterrows()):
+            if not row.get("has_data", False):
+                continue
+            v = vec_by_seqid.get(int(row["Seq_ID"]))
+            if v is None:
+                continue
+            geometry[pos] = (*mode_amplitudes(g, v), row)
+        return geometry
+
+    def _calibration_subset(self, geometry, noe_cut):
+        """
+        (amplitudes, taus, R1, R1_err, R2, R2_err) tuples for the
+        presumed-rigid residues (NOE > `noe_cut`) used to calibrate
+        `model_free.calibrate_tau_scale`; falls back to every residue
+        with R1/R2 data (with a warning) if fewer than 3 qualify.
+        """
+        def usable(row):
+            return (row.get("R1") is not None and np.isfinite(row.get("R1"))
+                    and row.get("R2") is not None and np.isfinite(row.get("R2")))
+
+        calibration = [
+            (amplitudes, taus, row.get("R1"), row.get("R1_err"),
+             row.get("R2"), row.get("R2_err"))
+            for amplitudes, taus, row in geometry.values()
+            if usable(row) and row.get("NOE") is not None
+            and np.isfinite(row.get("NOE")) and row.get("NOE") > noe_cut
+        ]
+        if len(calibration) < 3:
+            calibration = [
+                (amplitudes, taus, row.get("R1"), row.get("R1_err"),
+                 row.get("R2"), row.get("R2_err"))
+                for amplitudes, taus, row in geometry.values() if usable(row)
+            ]
+            warnings.warn(
+                f"fewer than 3 residues with NOE > {noe_cut}; calibrating "
+                "the diffusion-tensor timescale against all residues with "
+                "R1/R2 data instead (less reliable if many are flexible).",
+                UserWarning,
+            )
+        return calibration
+
     # rigid-body prediction
  
     def add_rigid_prediction(self, pdb=None, source="auto", config=None,
-                             chain=None, noe_cut=0.65, **fetch_kw):
+                             chain=None, noe_cut=0.65, field_mhz=None,
+                             **fetch_kw):
         """
-        Run HYDRONMR on a structure and scale its rigid R2/R1 (T1_over_T2) to the
-        observed data, so elevated R2/R1 stands out as exchange.
- 
+        Run HYDRONMR on a structure to get a rigid-body R2/R1 (T1_over_T2)
+        and NOE prediction per residue, so elevated R2/R1 stands out as
+        exchange.
+
         `pdb` may be a local file, a 4-character PDB id (fetched from RCSB), or a
         UniProt accession (fetched from AlphaFold DB) — pass `source=` to force
-        one. 
-        
+        one.
+
         If `pdb` is None, the entry's own deposited PDB code is used when it
         cites one; otherwise this raises (makeshift does not predict structure).
- 
-        The scale factor is fit by least squares on ordered residues (hetNOE
-        above `noe_cut` where available), mirroring classify.fit_R2_rigid. Adds
-        `scaled_R2_R1_pred` and `NOE_pred`; residues outside the modeled region
-        keep NaN.
+
+        Before predicting, a single global timescale correction (all five
+        Woessner modes' tau_k -> k*tau_k) is calibrated against the
+        presumed-rigid subset (NOE > `noe_cut`) via
+        `model_free.calibrate_tau_scale` — the same calibration
+        `fit_order_parameters` uses, so both methods agree on one rigid-body
+        baseline rather than each fitting an independent correction. (The
+        bead model's diffusion-tensor anisotropy *shape* is validated
+        elsewhere, demos/hydronmr_validation; its absolute timescale is a
+        known approximation — see makeshift/hydronmr/physics/structure.py.)
+        A small residual multiplicative correction on the ratio specifically
+        (`self.scale_factor`, expected close to 1.0 now that the timescale
+        itself is calibrated) is still fit on top, mirroring the previous
+        behavior and absorbing whatever the timescale-only correction
+        doesn't reach.
+
+        `field_mhz` is the 1H spectrometer frequency to predict at; if not
+        given, it's read from the entry's own heteronucl_T1_relaxation
+        saveframe when available, else the structure's rigid prediction
+        falls back to HYDRONMR's own default config field.
+
+        Adds `scaled_R2_R1_pred` and `NOE_pred`; residues outside the
+        modeled region keep NaN. Sets `self.tau_scale` and
+        `self.scale_factor`.
         """
         from ..hydronmr import run as run_hydronmr
+        from ..hydronmr.physics.nmr import dipolesnmr
+        from . import model_free
 
         pdb_path = self._resolve_pdb(pdb, source, **fetch_kw)
         result = run_hydronmr(pdb_path, config_path=config) if config \
             else run_hydronmr(pdb_path)
-        hydro = result.to_dataframe()
-        if chain is not None:
-            hydro = hydro[hydro["chain"] == chain]
-        hydro = hydro.rename(columns={"seqpos": "Seq_ID"})
- 
-        t = self.table.merge(
-            hydro[["Seq_ID", "T1_over_T2", "NOE"]].rename(
-                columns={"T1_over_T2": "_pred_ratio", "NOE": "NOE_pred"}),
-            on="Seq_ID", how="left")
- 
+        g = result.state
+
+        if field_mhz is None:
+            field_mhz = self._detect_field_mhz()
+        if field_mhz is not None:
+            b0_tesla = 2.0 * np.pi * field_mhz * 1.0e6 / abs(g.gamma_h)
+            dipolesnmr(g, b0_tesla=b0_tesla, gamma_h=g.gamma_h, gamma_x=g.gamma_x,
+                      r_nh_angstrom=g.r_nh * 1.0e10, csa_ppm=g.csa * 1.0e6)
+
+        geometry = self._residue_geometry(g, pdb_path, chain=chain)
+        calibration = self._calibration_subset(geometry, noe_cut)
+        self.tau_scale = model_free.calibrate_tau_scale(
+            calibration, g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x)
+
+        n = len(self.table)
+        ratio_pred = np.full(n, np.nan)
+        noe_pred = np.full(n, np.nan)
+        for pos, (amplitudes, taus, row) in geometry.items():
+            taus_scaled = [tau * self.tau_scale for tau in taus]
+            r1p, r2p, noep = model_free.relaxation_rates(
+                g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x,
+                amplitudes, taus_scaled, S2=1.0, tau_e=0.0)
+            ratio_pred[pos] = r2p / r1p
+            noe_pred[pos] = noep
+
+        t = self.table.copy()
+        t["_pred_ratio"] = ratio_pred
+        t["NOE_pred"] = noe_pred
+
         ordered = (t["_pred_ratio"].notna() & t["R2_R1"].notna()
                    & ((t["NOE"] > noe_cut) | t["NOE"].isna()))
         n_match = int((t["_pred_ratio"].notna() & t["R2_R1"].notna()).sum())
         pred = t.loc[ordered, "_pred_ratio"]
         obs = t.loc[ordered, "R2_R1"]
         self.scale_factor = float((obs * pred).sum() / (pred ** 2).sum())
- 
+
         t["scaled_R2_R1_pred"] = self.scale_factor * t["_pred_ratio"]
         t = t.drop(columns="_pred_ratio")
         self.table = t
         print(f"  HYDRONMR: {n_match} residues matched structure to data, "
-              f"scale factor {self.scale_factor:.3f} "
-              f"({int(ordered.sum())} ordered residues used)")
+              f"tau_scale {self.tau_scale:.3f}, residual ratio scale "
+              f"{self.scale_factor:.3f} ({int(ordered.sum())} ordered residues used)")
         return self
 
     # model-free order parameters
@@ -415,8 +521,7 @@ class RelaxationProfile:
         Sets `self.tau_scale` to the calibrated timescale correction.
         """
         from ..hydronmr import run as run_hydronmr
-        from ..hydronmr.physics.nmr import mode_amplitudes, dipolesnmr
-        from ..hydronmr.physics.pdb import nh_bond_vectors, parse_pdb_atoms
+        from ..hydronmr.physics.nmr import dipolesnmr
         from . import model_free
 
         pdb_path = self._resolve_pdb(pdb, source, **fetch_kw)
@@ -435,54 +540,13 @@ class RelaxationProfile:
         dipolesnmr(g, b0_tesla=b0_tesla, gamma_h=g.gamma_h, gamma_x=g.gamma_x,
                   r_nh_angstrom=g.r_nh * 1.0e10, csa_ppm=g.csa * 1.0e6)
 
-        nh_vectors = nh_bond_vectors(parse_pdb_atoms(pdb_path))
-        if chain is not None:
-            nh_vectors = {k: v for k, v in nh_vectors.items() if k[0] == chain}
-        vec_by_seqid = {}
-        for (c, resseq), v in nh_vectors.items():
-            vec_by_seqid.setdefault(resseq, v)
-
-        # pass 1: gather per-residue (amplitudes, raw taus) geometry for
-        # every residue with data and a matched N-H vector.
-        t = self.table.copy()
-        n = len(t)
-        geometry = {}   # pos -> (amplitudes, taus, row)
-        for pos, (_, row) in enumerate(t.iterrows()):
-            if not row.get("has_data", False):
-                continue
-            v = vec_by_seqid.get(int(row["Seq_ID"]))
-            if v is None:
-                continue
-            amplitudes, taus = mode_amplitudes(g, v)
-            geometry[pos] = (amplitudes, taus, row)
-
-        calibration = [
-            (amplitudes, taus, row.get("R1"), row.get("R1_err"),
-             row.get("R2"), row.get("R2_err"))
-            for amplitudes, taus, row in geometry.values()
-            if row.get("NOE") is not None and np.isfinite(row.get("NOE"))
-            and row.get("NOE") > noe_cut
-            and row.get("R1") is not None and np.isfinite(row.get("R1"))
-            and row.get("R2") is not None and np.isfinite(row.get("R2"))
-        ]
-        if len(calibration) < 3:
-            calibration = [
-                (amplitudes, taus, row.get("R1"), row.get("R1_err"),
-                 row.get("R2"), row.get("R2_err"))
-                for amplitudes, taus, row in geometry.values()
-                if row.get("R1") is not None and np.isfinite(row.get("R1"))
-                and row.get("R2") is not None and np.isfinite(row.get("R2"))
-            ]
-            warnings.warn(
-                f"fewer than 3 residues with NOE > {noe_cut}; calibrating "
-                "the diffusion-tensor timescale against all residues with "
-                "R1/R2 data instead (less reliable if many are flexible).",
-                UserWarning,
-            )
+        geometry = self._residue_geometry(g, pdb_path, chain=chain)
+        calibration = self._calibration_subset(geometry, noe_cut)
         self.tau_scale = model_free.calibrate_tau_scale(
             calibration, g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x)
 
-        # pass 2: fit each residue with the calibrated taus.
+        t = self.table.copy()
+        n = len(t)
         S2 = np.full(n, np.nan)
         S2_err = np.full(n, np.nan)
         mf_model = np.array([None] * n, dtype=object)
