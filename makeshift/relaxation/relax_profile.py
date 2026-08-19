@@ -250,6 +250,67 @@ class RelaxationProfile:
                 continue
         return out
  
+    # structure resolution (shared by add_rigid_prediction and
+    # fit_order_parameters)
+
+    def _resolve_pdb(self, pdb, source, **fetch_kw):
+        """
+        Resolve `pdb` to a local structure file path. `pdb` may be a local
+        file, a 4-character PDB id (fetched from RCSB), or a UniProt
+        accession (fetched from AlphaFold DB) — pass `source=` to force
+        one. If `pdb` is None, the entry's own deposited PDB code is used
+        when it cites one; otherwise this raises (makeshift does not
+        predict structure).
+        """
+        from ..utils.structures import fetch_structure
+
+        if pdb is None:
+            pdb_ids = self.entry.get_pdb_ids() if self.entry is not None else []
+            af_ids = self.entry.get_alphafold_ids() if self.entry is not None else []
+            if source == "rcsb":
+                if not pdb_ids:
+                    raise ValueError("entry cites no PDB; pass pdb=<PDB id | path>")
+                pdb = pdb_ids[0]
+            elif source == "afdb":
+                if not af_ids:
+                    raise ValueError("entry cites no AlphaFold/UniProt accession; "
+                                     "pass pdb=<UniProt accession | path>")
+                pdb = af_ids[0]
+            elif pdb_ids:                    # source == "auto": prefer deposited PDB
+                pdb, source = pdb_ids[0], "rcsb"
+            elif af_ids:                     # else fall back to AlphaFold
+                pdb, source = af_ids[0], "afdb"
+            else:
+                raise ValueError(
+                    "no structure given and the entry cites no PDB or "
+                    "AlphaFold/UniProt accession; pass pdb=<path | PDB id | "
+                    "UniProt accession> (experimental or predicted)"
+                )
+            print(f"  no pdb given; using {source} structure {pdb}")
+
+        return fetch_structure(pdb, source=source, **fetch_kw)
+
+    def _detect_field_mhz(self):
+        """
+        The entry's 1H spectrometer frequency (MHz), read from its own
+        heteronucl_T1_relaxation saveframe (`Spectrometer_frequency_1H`).
+        Returns None if unavailable.
+        """
+        if self.entry is None:
+            return None
+        try:
+            sfs = self.entry.saveframe("heteronucl_T1_relaxation")
+        except Exception:
+            return None
+        for sf in sfs.values():
+            val = sf.get("Spectrometer_frequency_1H")
+            if val not in (None, ".", "?"):
+                try:
+                    return float(val)
+                except (TypeError, ValueError):
+                    continue
+        return None
+
     # rigid-body prediction
  
     def add_rigid_prediction(self, pdb=None, source="auto", config=None,
@@ -271,34 +332,8 @@ class RelaxationProfile:
         keep NaN.
         """
         from ..hydronmr import run as run_hydronmr
-        from ..utils.structures import fetch_structure
- 
-        if pdb is None:
-            pdb_ids = self.entry.get_pdb_ids() if self.entry is not None else []
-            af_ids = self.entry.get_alphafold_ids() if self.entry is not None else []
-            if source == "rcsb":
-                if not pdb_ids:
-                    raise ValueError("entry cites no PDB; pass pdb=<PDB id | path>")
-                pdb = pdb_ids[0]
-            elif source == "afdb":
-                if not af_ids:
-                    raise ValueError("entry cites no AlphaFold/UniProt accession; "
-                                     "pass pdb=<UniProt accession | path>")
-                pdb = af_ids[0]
-            elif pdb_ids:                    # source == "auto": prefer deposited PDB
-                pdb, source = pdb_ids[0], "rcsb"
-            elif af_ids:                     # else fall back to AlphaFold
-                pdb, source = af_ids[0], "afdb"
-            else:
-                raise ValueError(
-                    "no structure given and the entry cites no PDB or "
-                    "AlphaFold/UniProt accession; pass pdb=<path | PDB id | "
-                    "UniProt accession> (experimental or predicted) to enable "
-                    "exchange labeling"
-                )
-            print(f"  no pdb given; using {source} structure {pdb}")
- 
-        pdb_path = fetch_structure(pdb, source=source, **fetch_kw)
+
+        pdb_path = self._resolve_pdb(pdb, source, **fetch_kw)
         result = run_hydronmr(pdb_path, config_path=config) if config \
             else run_hydronmr(pdb_path)
         hydro = result.to_dataframe()
@@ -325,7 +360,173 @@ class RelaxationProfile:
               f"scale factor {self.scale_factor:.3f} "
               f"({int(ordered.sum())} ordered residues used)")
         return self
- 
+
+    # model-free order parameters
+
+    def fit_order_parameters(self, pdb=None, source="auto", chain=None,
+                             field_mhz=None, config=None, sigma_flag=2.0,
+                             noe_cut=0.65, **fetch_kw):
+        """
+        Fit per-residue S^2 (Models 1-3: S2 alone, S2+tau_e, S2+Rex) from
+        this profile's R1/R2/NOE, reusing the same anisotropic rotational
+        diffusion tensor and per-residue Woessner mode decomposition
+        already used for the HYDRONMR rigid-body prediction (see
+        `add_rigid_prediction`) -- internal motion is layered on top of
+        that existing per-residue anisotropic-tumbling spectral density
+        rather than assuming isotropic tumbling.
+
+        Before fitting, a single global timescale correction (all five
+        modes' tau_k -> k*tau_k, same k for every residue) is calibrated
+        against the presumed-rigid subset (NOE > `noe_cut`) via
+        `model_free.calibrate_tau_scale`. The bead model's tumbling
+        *anisotropy shape* is validated elsewhere (demos/hydronmr_validation)
+        to track the true diffusion tensor well, but its *absolute*
+        timescale is a known approximation (see
+        makeshift/hydronmr/physics/structure.py) -- `add_rigid_prediction`
+        already corrects the analogous offset for its R2/R1 ratio; this
+        does the same for R1 and NOE, which the ratio-only correction
+        doesn't reach, before any residue's S2 is fit.
+
+        Models 4/5 (S2+tau_e+Rex, or S2f+S2s+tau_e) are not fit: against
+        only R1/R2/NOE at a single field they are exactly- or
+        over-parameterized and, in practice, ill-conditioned. Model
+        selection among 1/2/3 follows from which residual each extra
+        parameter physically explains, not a nested F-test/SSE cascade:
+        a NOE deficit relative to the parameter-free rigid-tumbling
+        prediction implicates tau_e (-> Model 2, since NOE is exactly
+        independent of S2 when tau_e=0); an R2 excess beyond what the
+        R1-derived S2 already explains implicates exchange (-> Model 3).
+        Residues showing both signals are outside this two-parameter
+        scope and are labeled "ambiguous" rather than forced into either
+        model.
+
+        `pdb`/`source` are as in `add_rigid_prediction`. `field_mhz` is
+        the 1H spectrometer frequency the relaxation data were recorded
+        at; if not given, it's read from the entry's own
+        heteronucl_T1_relaxation saveframe and this raises if that isn't
+        available (pass it explicitly for data not sourced from
+        `from_entry`/`from_bmrb`, or for entries lacking that tag).
+        `sigma_flag` sets how many (error-propagated) standard deviations
+        a NOE/R2 residual must exceed to flag tau_e/Rex.
+
+        Adds columns: S2, S2_err, mf_model ("1"/"2"/"3"/"ambiguous"),
+        tau_e_ps, Rex, NOE_pred_rigid, noe_flag, r2_flag. Residues with no
+        R1 or no matched structural N-H vector keep mf_model=None / S2=NaN.
+        Sets `self.tau_scale` to the calibrated timescale correction.
+        """
+        from ..hydronmr import run as run_hydronmr
+        from ..hydronmr.physics.nmr import mode_amplitudes, dipolesnmr
+        from ..hydronmr.physics.pdb import nh_bond_vectors, parse_pdb_atoms
+        from . import model_free
+
+        pdb_path = self._resolve_pdb(pdb, source, **fetch_kw)
+        result = run_hydronmr(pdb_path, config_path=config) if config \
+            else run_hydronmr(pdb_path)
+        g = result.state
+
+        if field_mhz is None:
+            field_mhz = self._detect_field_mhz()
+            if field_mhz is None:
+                raise ValueError(
+                    "could not determine the spectrometer field from the "
+                    "entry; pass field_mhz=<1H frequency in MHz> explicitly"
+                )
+        b0_tesla = 2.0 * np.pi * field_mhz * 1.0e6 / abs(g.gamma_h)
+        dipolesnmr(g, b0_tesla=b0_tesla, gamma_h=g.gamma_h, gamma_x=g.gamma_x,
+                  r_nh_angstrom=g.r_nh * 1.0e10, csa_ppm=g.csa * 1.0e6)
+
+        nh_vectors = nh_bond_vectors(parse_pdb_atoms(pdb_path))
+        if chain is not None:
+            nh_vectors = {k: v for k, v in nh_vectors.items() if k[0] == chain}
+        vec_by_seqid = {}
+        for (c, resseq), v in nh_vectors.items():
+            vec_by_seqid.setdefault(resseq, v)
+
+        # pass 1: gather per-residue (amplitudes, raw taus) geometry for
+        # every residue with data and a matched N-H vector.
+        t = self.table.copy()
+        n = len(t)
+        geometry = {}   # pos -> (amplitudes, taus, row)
+        for pos, (_, row) in enumerate(t.iterrows()):
+            if not row.get("has_data", False):
+                continue
+            v = vec_by_seqid.get(int(row["Seq_ID"]))
+            if v is None:
+                continue
+            amplitudes, taus = mode_amplitudes(g, v)
+            geometry[pos] = (amplitudes, taus, row)
+
+        calibration = [
+            (amplitudes, taus, row.get("R1"), row.get("R1_err"),
+             row.get("R2"), row.get("R2_err"))
+            for amplitudes, taus, row in geometry.values()
+            if row.get("NOE") is not None and np.isfinite(row.get("NOE"))
+            and row.get("NOE") > noe_cut
+            and row.get("R1") is not None and np.isfinite(row.get("R1"))
+            and row.get("R2") is not None and np.isfinite(row.get("R2"))
+        ]
+        if len(calibration) < 3:
+            calibration = [
+                (amplitudes, taus, row.get("R1"), row.get("R1_err"),
+                 row.get("R2"), row.get("R2_err"))
+                for amplitudes, taus, row in geometry.values()
+                if row.get("R1") is not None and np.isfinite(row.get("R1"))
+                and row.get("R2") is not None and np.isfinite(row.get("R2"))
+            ]
+            warnings.warn(
+                f"fewer than 3 residues with NOE > {noe_cut}; calibrating "
+                "the diffusion-tensor timescale against all residues with "
+                "R1/R2 data instead (less reliable if many are flexible).",
+                UserWarning,
+            )
+        self.tau_scale = model_free.calibrate_tau_scale(
+            calibration, g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x)
+
+        # pass 2: fit each residue with the calibrated taus.
+        S2 = np.full(n, np.nan)
+        S2_err = np.full(n, np.nan)
+        mf_model = np.array([None] * n, dtype=object)
+        tau_e_ps = np.full(n, np.nan)
+        Rex = np.full(n, np.nan)
+        noe_pred_rigid = np.full(n, np.nan)
+        noe_flag = np.zeros(n, dtype=bool)
+        r2_flag = np.zeros(n, dtype=bool)
+
+        for pos, (amplitudes, taus, row) in geometry.items():
+            taus_scaled = [tau * self.tau_scale for tau in taus]
+            fit = model_free.fit_residue(
+                row.get("R1"), row.get("R1_err"),
+                row.get("R2"), row.get("R2_err"),
+                row.get("NOE"), row.get("NOE_err"),
+                amplitudes, taus_scaled, g.d2, g.c2, g.gamma_h, g.gamma_x,
+                g.omega_h, g.omega_x, sigma_flag=sigma_flag)
+            if fit.model is None:
+                continue
+            S2[pos] = fit.S2
+            S2_err[pos] = fit.S2_err
+            mf_model[pos] = fit.model
+            tau_e_ps[pos] = fit.tau_e_ps
+            Rex[pos] = fit.Rex
+            noe_pred_rigid[pos] = fit.NOE_pred_rigid
+            noe_flag[pos] = fit.noe_flag
+            r2_flag[pos] = fit.r2_flag
+
+        t["S2"] = S2
+        t["S2_err"] = S2_err
+        t["mf_model"] = mf_model
+        t["tau_e_ps"] = tau_e_ps
+        t["Rex"] = Rex
+        t["NOE_pred_rigid"] = noe_pred_rigid
+        t["noe_flag"] = noe_flag
+        t["r2_flag"] = r2_flag
+        self.table = t
+
+        counts = pd.Series([m for m in mf_model if m is not None]).value_counts().to_dict()
+        print(f"  order-parameter fit at {field_mhz:.1f} MHz "
+              f"(tau_scale={self.tau_scale:.3f}, {len(calibration)} "
+              f"calibration residues): {sum(counts.values())} residues fit {counts}")
+        return self
+
     # labeling
  
     def label(self, rex_n_std=1.0, noe_cut=0.65):

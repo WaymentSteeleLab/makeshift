@@ -169,18 +169,18 @@ def nmrcalcul(g: "HydronmrState"):
           f"NOE = {g.noe:.4f}")
 
 
-def per_residue_t1t2(g: "HydronmrState", nh_unit_vector_pdb_frame: np.ndarray):
-    """Per-residue T1/T2/NOE using the full 5-term anisotropic
-    spectral density (Woessner 1962), instead of the single
-    isotropic harmonic-mean tau used by nmrcalcul().
+def mode_amplitudes(g: "HydronmrState", nh_unit_vector_pdb_frame: np.ndarray):
+    """Woessner (1962) mode amplitudes A0..A4 and the matching correlation
+    times g.rot_tau for one N-H bond, given the diffusion tensor already
+    diagonalized by rotani() (g.rot_eigvecs, g.dx/dy/dz, g.dav, g.aniso_delta).
 
-    `nh_unit_vector_pdb_frame` is the N-H bond unit vector in the
-    same (PDB) coordinate frame as g.bead_positions. It is projected
-    onto the principal axes of g.dt_rot (g.rot_eigvecs, set by
-    rotani()) to get direction cosines (l1,l2,l3) along (Dx,Dy,Dz).
+    `nh_unit_vector_pdb_frame` is the N-H bond unit vector in the same
+    (PDB) coordinate frame as g.bead_positions. It is projected onto the
+    principal axes of g.dt_rot to get direction cosines (l1,l2,l3) along
+    (Dx,Dy,Dz).
 
-    Amplitudes (Woessner), exact formulas ported from nmrela_
-    (hex-rays.txt:18221+, the cn_5[]/an_6[] computation):
+    Exact formulas ported from nmrela_ (hex-rays.txt:18221+, the
+    cn_5[]/an_6[] computation):
         A1 = 3 l1^2 l3^2     paired with tau index 1 (1/(4Dy+Dx+Dz))
         A2 = 3 l2^2 l3^2     paired with tau index 2 (1/(4Dx+Dy+Dz))
         A3 = 3 l1^2 l2^2     paired with tau index 3 (1/(4Dz+Dx+Dy))
@@ -191,6 +191,9 @@ def per_residue_t1t2(g: "HydronmrState", nh_unit_vector_pdb_frame: np.ndarray):
         A0 = (3/4)(fp + gp)  paired with tau index 0 (1/(6Dav-2Delta))
         A4 = (3/4)(fp - gp)  paired with tau index 4 (1/(6Dav+2Delta))
     A0..A4 sum to 1 (validated against nmrela_'s `scn_19` sanity check).
+
+    Returns (amplitudes, taus): amplitudes is a list of 5 floats, taus is
+    g.rot_tau (5 correlation times, in the same order).
     """
     vecs = g.rot_eigvecs  # columns = eigenvectors, descending eigenvalue order
     # rotani() assigned dz=vals[0], dx=vals[1], dy=vals[2]
@@ -217,8 +220,16 @@ def per_residue_t1t2(g: "HydronmrState", nh_unit_vector_pdb_frame: np.ndarray):
     A0_ = 0.75 * (fp + gp)  # tau index 0 (1/(6Dav-2Delta))
     A4_ = 0.75 * (fp - gp)  # tau index 4 (1/(6Dav+2Delta))
 
-    amplitudes = [A0_, A1_, A2_, A3_, A4_]
-    taus = g.rot_tau
+    return [A0_, A1_, A2_, A3_, A4_], g.rot_tau
+
+
+def per_residue_t1t2(g: "HydronmrState", nh_unit_vector_pdb_frame: np.ndarray):
+    """Per-residue T1/T2/NOE using the full 5-term anisotropic
+    spectral density (Woessner 1962), instead of the single
+    isotropic harmonic-mean tau used by nmrcalcul(). See
+    `mode_amplitudes` for the amplitude/direction-cosine derivation.
+    """
+    amplitudes, taus = mode_amplitudes(g, nh_unit_vector_pdb_frame)
 
     wh, wx = g.omega_h, g.omega_x
 
