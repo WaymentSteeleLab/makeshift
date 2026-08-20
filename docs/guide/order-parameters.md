@@ -10,10 +10,9 @@ anisotropic-tumbling physics for free from the same rigid-body diffusion
 tensor [`add_rigid_prediction()`](relaxation.md#the-rigid-body-prediction)
 already computes via [HYDRONMR](hydronmr.md).
 
-## Why not just run Modelfree4?
+## How does this compare to running fast-ModelFree?
 
-Because most of what it does isn't needed here, and some of what it needs
-isn't there. Full model-free analysis fits a nested hierarchy of five
+Full model-free analysis fits a nested hierarchy of five
 models (S²; S²+τₑ; S²+Rₑₓ; S²+τₑ+Rₑₓ; S²f+S²s+τₑ) and picks the simplest
 one an F-test can't reject. Models 4 and 5 have three free parameters —
 against R1/R2/NOE at a single field, that's exactly- or over-parameterized,
