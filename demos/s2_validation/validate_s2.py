@@ -168,11 +168,20 @@ def main():
         res["r_dep"], res["rmse_dep"], res["n_dep"] = _corr(res["fit_s2"], res["dep_s2"])
         res["r_rci_w"], res["rmse_rci_w"], res["n_rci_w"] = _corr(res["fit_s2"], res["rci_w_s2"])
         res["r_rci_t"], res["rmse_rci_t"], res["n_rci_t"] = _corr(res["fit_s2"], res["rci_t_s2"])
+        # deposited BMRB S2 vs. RCI, independent of our own fit -- tells
+        # you whether RCI's weaker correlation above is RCI being a noisier
+        # proxy in general, or something specific to the relaxation fit.
+        res["r_dep_rci_w"], res["rmse_dep_rci_w"], res["n_dep_rci_w"] = \
+            _corr(res["dep_s2"], res["rci_w_s2"])
+        res["r_dep_rci_t"], res["rmse_dep_rci_t"], res["n_dep_rci_t"] = \
+            _corr(res["dep_s2"], res["rci_t_s2"])
         results.append(res)
-        print(f"BMRB {bid}: vs deposited N={res['n_dep']} r={res['r_dep']:.3f} "
-              f"rmse={res['rmse_dep']:.3f}  |  vs RCI(wishart) N={res['n_rci_w']} "
-              f"r={res['r_rci_w']:.3f}  |  vs RCI(talosn) N={res['n_rci_t']} "
-              f"r={res['r_rci_t']:.3f}")
+        print(f"BMRB {bid}: fit vs dep N={res['n_dep']} r={res['r_dep']:.3f} "
+              f"rmse={res['rmse_dep']:.3f}  |  fit vs RCI(wishart) N={res['n_rci_w']} "
+              f"r={res['r_rci_w']:.3f}  |  fit vs RCI(talosn) N={res['n_rci_t']} "
+              f"r={res['r_rci_t']:.3f}  |  dep vs RCI(wishart) N={res['n_dep_rci_w']} "
+              f"r={res['r_dep_rci_w']:.3f}  |  dep vs RCI(talosn) N={res['n_dep_rci_t']} "
+              f"r={res['r_dep_rci_t']:.3f}")
 
     all_fit = np.concatenate([r["fit_s2"] for r in results])
     all_dep = np.concatenate([r["dep_s2"] for r in results])
@@ -182,24 +191,34 @@ def main():
     overall_r, overall_rmse, overall_n = _corr(all_fit, all_dep)
     overall_r_w, overall_rmse_w, overall_n_w = _corr(all_fit, all_rci_w)
     overall_r_t, overall_rmse_t, overall_n_t = _corr(all_fit, all_rci_t)
+    overall_r_dep_w, overall_rmse_dep_w, overall_n_dep_w = _corr(all_dep, all_rci_w)
+    overall_r_dep_t, overall_rmse_dep_t, overall_n_dep_t = _corr(all_dep, all_rci_t)
     n_with_shifts = sum(1 for r in results if r["has_shifts"])
-    print(f"\nOverall vs deposited BMRB S2: N={overall_n} entries={len(results)} "
+    print(f"\nOverall fit vs deposited BMRB S2: N={overall_n} entries={len(results)} "
           f"Pearson r={overall_r:.3f} RMSE={overall_rmse:.3f}")
-    print(f"Overall vs RCI(wishart) S2:   N={overall_n_w} entries_with_shifts="
+    print(f"Overall fit vs RCI(wishart) S2:   N={overall_n_w} entries_with_shifts="
           f"{n_with_shifts} Pearson r={overall_r_w:.3f} RMSE={overall_rmse_w:.3f}")
-    print(f"Overall vs RCI(talosn) S2:    N={overall_n_t} entries_with_shifts="
+    print(f"Overall fit vs RCI(talosn) S2:    N={overall_n_t} entries_with_shifts="
           f"{n_with_shifts} Pearson r={overall_r_t:.3f} RMSE={overall_rmse_t:.3f}")
+    print(f"Overall dep vs RCI(wishart) S2:   N={overall_n_dep_w} entries_with_shifts="
+          f"{n_with_shifts} Pearson r={overall_r_dep_w:.3f} RMSE={overall_rmse_dep_w:.3f}")
+    print(f"Overall dep vs RCI(talosn) S2:    N={overall_n_dep_t} entries_with_shifts="
+          f"{n_with_shifts} Pearson r={overall_r_dep_t:.3f} RMSE={overall_rmse_dep_t:.3f}")
 
     with open(RESULTS_CSV, "w") as fh:
         fh.write("bmrb_id,title,field_mhz,n_dep,r_dep,rmse_dep,"
                  "n_rci_wishart,r_rci_wishart,rmse_rci_wishart,"
-                 "n_rci_talosn,r_rci_talosn,rmse_rci_talosn\n")
+                 "n_rci_talosn,r_rci_talosn,rmse_rci_talosn,"
+                 "n_dep_rci_wishart,r_dep_rci_wishart,rmse_dep_rci_wishart,"
+                 "n_dep_rci_talosn,r_dep_rci_talosn,rmse_dep_rci_talosn\n")
         for res in results:
             title = (res["title"] or "").replace(",", ";")
             fh.write(f"{res['bmrb_id']},{title},{res['field_mhz']},"
                      f"{res['n_dep']},{res['r_dep']:.4f},{res['rmse_dep']:.4f},"
                      f"{res['n_rci_w']},{res['r_rci_w']:.4f},{res['rmse_rci_w']:.4f},"
-                     f"{res['n_rci_t']},{res['r_rci_t']:.4f},{res['rmse_rci_t']:.4f}\n")
+                     f"{res['n_rci_t']},{res['r_rci_t']:.4f},{res['rmse_rci_t']:.4f},"
+                     f"{res['n_dep_rci_w']},{res['r_dep_rci_w']:.4f},{res['rmse_dep_rci_w']:.4f},"
+                     f"{res['n_dep_rci_t']},{res['r_dep_rci_t']:.4f},{res['rmse_dep_rci_t']:.4f}\n")
     print(f"saved {RESULTS_CSV}")
 
     with open(PAIRS_CSV, "w") as fh:
@@ -271,23 +290,33 @@ def main():
 
     # fit S2 vs. RCI-derived S2 (independent, chemical-shift-only signal),
     # both backends pooled across every entry with its own deposited shifts
-    fig3, (ax_w, ax_t) = plt.subplots(1, 2, figsize=(11, 5.2))
-    for ax, arr, r, rmse, n, label in (
-        (ax_w, all_rci_w, overall_r_w, overall_rmse_w, overall_n_w, "wishart"),
-        (ax_t, all_rci_t, overall_r_t, overall_rmse_t, overall_n_t, "talosn"),
-    ):
-        mask = np.isfinite(arr)
-        ax.scatter(arr[mask], all_fit[mask], s=8, alpha=0.35, color="teal")
+    fig3, axes3 = plt.subplots(2, 2, figsize=(11, 10))
+    panels = (
+        (axes3[0, 0], all_rci_w, all_fit, overall_r_w, overall_rmse_w, overall_n_w,
+         "wishart", "makeshift fit S2 (relaxation)", "vs. fit"),
+        (axes3[0, 1], all_rci_t, all_fit, overall_r_t, overall_rmse_t, overall_n_t,
+         "talosn", "makeshift fit S2 (relaxation)", "vs. fit"),
+        (axes3[1, 0], all_rci_w, all_dep, overall_r_dep_w, overall_rmse_dep_w, overall_n_dep_w,
+         "wishart", "deposited S2 (BMRB)", "vs. deposited"),
+        (axes3[1, 1], all_rci_t, all_dep, overall_r_dep_t, overall_rmse_dep_t, overall_n_dep_t,
+         "talosn", "deposited S2 (BMRB)", "vs. deposited"),
+    )
+    for ax, x_arr, y_arr, r, rmse, n, label, ylabel, title_prefix in panels:
+        mask = np.isfinite(x_arr) & np.isfinite(y_arr)
+        color = "teal" if "fit" in ylabel else "darkorange"
+        ax.scatter(x_arr[mask], y_arr[mask], s=8, alpha=0.35, color=color)
         ax.plot([0, 1], [0, 1], color="0.5", lw=1, ls="--", zorder=0)
         ax.set_xlim(0, 1.05)
         ax.set_ylim(0, 1.05)
         ax.set_xlabel(f"RCI(algorithm='{label}') S2")
-        ax.set_ylabel("makeshift fit S2 (relaxation)")
-        ax.set_title(f"vs. RCI '{label}' (N={n}, {n_with_shifts} entries, "
-                     f"r={r:.3f}, RMSE={rmse:.3f})")
-    fig3.suptitle("Relaxation-fit S2 vs. chemical-shift-only RCI S2 "
-                  "(independent signal, same entries)", fontsize=11)
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"{title_prefix} RCI '{label}'\nN={n}, {n_with_shifts} entries, "
+                     f"r={r:.3f}, RMSE={rmse:.3f}", fontsize=10)
+    fig3.suptitle("Chemical-shift-only RCI S2 vs. relaxation-fit S2 (top) and "
+                  "vs. deposited BMRB S2 (bottom) -- same entries, same residues",
+                  fontsize=11)
     fig3.tight_layout(rect=[0, 0, 1, 0.96])
+    fig3.subplots_adjust(wspace=0.28, hspace=0.4)
     fig3.savefig(RCI_FILE, dpi=150)
     print(f"saved {RCI_FILE}")
 
