@@ -41,9 +41,27 @@ and why, grouped by root cause:
         analysis) -- outside the single monomer/single-field regime this
         fit targets.
 
-  Unresolved (fetched, fit ran, but agreement is weak/negative and no
-  specific cause was confirmed -- flagged rather than silently included):
-    5841, 6243, 11080, 26507.
+  Low dynamic range (Pearson r is a poor metric here, not a bad fit):
+    11080 -- Pin (CsPin): RMSE 0.064, no systematic bias (mean fit-dep
+        -0.018) -- as good as many entries in ENTRIES -- but deposited S2
+        sits almost entirely in a 0.85-0.92 IQR window (this domain is
+        just uniformly rigid), so residue-to-residue noise dominates the
+        tiny true variance and Pearson r comes out at 0.38 despite good
+        absolute agreement. Confirmed by checking (not by units --
+        deposited T1/T2 are unambiguously tagged "s-1" and need no
+        makeshift.relaxation.fixes override). Excluded by the r>=0.5
+        threshold used to build ENTRIES, not because the fit is wrong.
+    6243 -- azurin: same narrow-IQR signature (0.79-0.85) with somewhat
+        more scatter (RMSE 0.139); plausibly the same effect, not
+        independently confirmed to the same degree as 11080.
+
+  Unresolved (fetched, fit ran, agreement is weak/negative, and -- unlike
+  11080/6243 above -- there's a real systematic problem, not just a
+  narrow-range metric artifact):
+    5841 -- FHA domain: RMSE 0.281 with a large systematic bias (fit runs
+        ~0.11 low on average); genuinely wrong, cause not confirmed.
+    26507 -- Psalmotoxin-1/ASIC1a: only N=21 residues, r is statistically
+        unstable at that size; not confirmed either way.
 
 Produces validate_s2.png: a pooled fit-vs-deposited S2 scatter across all
 41 entries (colored by assigned model) and a per-entry Pearson r summary,
@@ -60,7 +78,9 @@ from makeshift.entry import NMRStarEntry
 from makeshift.relaxation import RelaxationProfile
 
 OUTPUT_FILE = Path(__file__).parent / "validate_s2.png"
+GRID_FILE = Path(__file__).parent / "validate_s2_grid.png"
 RESULTS_CSV = Path(__file__).parent / "validate_s2_results.csv"
+PAIRS_CSV = Path(__file__).parent / "validate_s2_pairs.csv"
 
 ENTRIES = [4245, 4267, 4364, 4365, 4366, 4390, 4689, 4970, 5153, 5154, 5330,
            5331, 5549, 5550, 5991, 6470, 6474, 6577, 6838, 15445, 15451,
@@ -79,10 +99,15 @@ EXCLUDED = {
     15097: "multi-domain construct with flexible linker",
     25852: "multi-domain construct (CaM) with flexible linker",
     26511: "obligate homodimer; also a two-field-designed study",
-    5841: "unresolved -- weak/negative correlation, cause not confirmed",
-    6243: "unresolved -- weak correlation, cause not confirmed",
-    11080: "unresolved -- weak correlation, cause not confirmed",
-    26507: "unresolved -- weak correlation, cause not confirmed",
+    11080: "low dynamic range: RMSE 0.064 (good), but deposited S2 IQR is "
+           "only 0.85-0.92, so Pearson r (0.38) is a poor metric here -- "
+           "not a units issue, checked directly",
+    6243: "same narrow-range signature as 11080 (IQR 0.79-0.85, RMSE "
+          "0.139), plausibly the same effect but not confirmed",
+    5841: "unresolved -- large systematic bias (fit ~0.11 low on "
+          "average, RMSE 0.281), a real problem, cause not confirmed",
+    26507: "unresolved -- only N=21, r is statistically unstable at "
+           "that size, not confirmed either way",
 }
 
 
@@ -99,16 +124,27 @@ def compare_entry(bmrb_id):
     dep_by_seqid = dict(zip(deposited["Seq_ID"].astype(int), deposited["S2"]))
 
     t = prof.table.dropna(subset=["S2"])
-    fit_s2, dep_s2, models = [], [], []
+    seq_id, fit_s2, dep_s2, models = [], [], [], []
     for _, row in t.iterrows():
-        s2_dep = dep_by_seqid.get(int(row["Seq_ID"]))
+        sid = int(row["Seq_ID"])
+        s2_dep = dep_by_seqid.get(sid)
         if s2_dep is None:
             continue
+        seq_id.append(sid)
         fit_s2.append(row["S2"])
         dep_s2.append(s2_dep)
         models.append(row["mf_model"])
 
-    return dict(bmrb_id=bmrb_id, entry_id=entry.entry_id,
+    title = None
+    try:
+        title = entry.get_entry_title()
+        if title:
+            title = " ".join(title.split())
+    except Exception:
+        pass
+
+    return dict(bmrb_id=bmrb_id, entry_id=entry.entry_id, title=title,
+                field_mhz=prof.field_mhz, seq_id=np.array(seq_id),
                 fit_s2=np.array(fit_s2), dep_s2=np.array(dep_s2), models=models)
 
 
@@ -135,10 +171,19 @@ def main():
           f"Pearson r={overall_r:.3f} RMSE={overall_rmse:.3f}")
 
     with open(RESULTS_CSV, "w") as fh:
-        fh.write("bmrb_id,n,pearson_r,rmse\n")
+        fh.write("bmrb_id,title,field_mhz,n,pearson_r,rmse\n")
         for res in results:
-            fh.write(f"{res['bmrb_id']},{res['n']},{res['r']:.4f},{res['rmse']:.4f}\n")
+            title = (res["title"] or "").replace(",", ";")
+            fh.write(f"{res['bmrb_id']},{title},{res['field_mhz']},{res['n']},"
+                     f"{res['r']:.4f},{res['rmse']:.4f}\n")
     print(f"saved {RESULTS_CSV}")
+
+    with open(PAIRS_CSV, "w") as fh:
+        fh.write("bmrb_id,seq_id,fit_s2,dep_s2,mf_model\n")
+        for res in results:
+            for sid, f, d, m in zip(res["seq_id"], res["fit_s2"], res["dep_s2"], res["models"]):
+                fh.write(f"{res['bmrb_id']},{sid},{f:.4f},{d:.4f},{m}\n")
+    print(f"saved {PAIRS_CSV}")
 
     fig, (ax_scatter, ax_bar) = plt.subplots(
         1, 2, figsize=(13, 6), gridspec_kw={"width_ratios": [1, 1.3]})
@@ -169,6 +214,32 @@ def main():
     fig.tight_layout()
     fig.savefig(OUTPUT_FILE, dpi=150)
     print(f"saved {OUTPUT_FILE}")
+
+    # one small scatter panel per protein, sorted best-to-worst by r
+    ordered = sorted(results, key=lambda r: -r["r"])
+    ncols = 6
+    nrows = -(-len(ordered) // ncols)
+    fig2, axes2 = plt.subplots(nrows, ncols, figsize=(2.15 * ncols, 2.15 * nrows))
+    for ax, res in zip(axes2.flat, ordered):
+        model_arr = np.array(res["models"])
+        for model in sorted(set(model_arr)):
+            mask = model_arr == model
+            ax.scatter(res["dep_s2"][mask], res["fit_s2"][mask], s=6, alpha=0.5,
+                      color=colors.get(model, "grey"))
+        ax.plot([0, 1], [0, 1], color="0.6", lw=0.8, ls="--", zorder=0)
+        ax.set_xlim(0, 1.05)
+        ax.set_ylim(0, 1.05)
+        ax.set_xticks([0, 0.5, 1]); ax.set_yticks([0, 0.5, 1])
+        ax.tick_params(labelsize=6)
+        title = (res["title"] or "")[:28]
+        ax.set_title(f'{res["bmrb_id"]}  r={res["r"]:.2f}\n{title}', fontsize=6.5)
+    for ax in axes2.flat[len(ordered):]:
+        ax.axis("off")
+    fig2.suptitle("Fit S2 (y) vs. deposited S2 (x), per protein -- sorted by r",
+                  fontsize=11)
+    fig2.tight_layout(rect=[0, 0, 1, 0.98])
+    fig2.savefig(GRID_FILE, dpi=150)
+    print(f"saved {GRID_FILE}")
 
 
 if __name__ == "__main__":
