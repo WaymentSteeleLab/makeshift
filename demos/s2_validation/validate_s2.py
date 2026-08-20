@@ -15,57 +15,39 @@ track reasonably well for residues both approaches call ordered.
 Screening (see demos/s2_validation/screen.py) ran every candidate for real
 (fetch -> build profile -> fit -> compare to deposited backbone S2) rather
 than guessing exclusions from metadata, then classified failures by what
-actually broke. 41 entries pass (ENTRIES below); EXCLUDED lists what didn't
-and why, grouped by root cause:
+actually broke.
+
+Entries deposited at more than one spectrometer field are excluded
+up front (MULTI_FIELD below), not fit at all: their deposited S2 was very
+likely obtained from a joint multi-field fit, which is a better-constrained
+problem than the single-field refit this code does (see
+makeshift/relaxation/model_free.py) -- a mismatch there isn't evidence of
+anything wrong, it's a different, easier problem on our side and a harder,
+better-posed one on theirs. This was found by hand for a handful of
+initially-puzzling low-correlation entries (11080, 6243, 5841, 26507 were
+ALL multi-field, 2-4 fields each) before being applied as a blanket
+prefilter -- it turned out true for the *whole* previously-diagnosed
+"unresolved" bucket, and for the majority of what were originally
+low-hanging "OK" entries too (13 of the first 41).
+
+29 single-field entries pass (ENTRIES below); EXCLUDED lists the
+single-field entries that still didn't, grouped by root cause:
 
   Data/parsing gaps (technical, not a modeling problem):
-    16917, 16918, 17246, 26779 -- NMRStarEntry.relaxation('T1') returns zero
+    16917, 16918, 26779 -- NMRStarEntry.relaxation('T1') returns zero
         rows for these depositions despite BMRB's own metadata reporting
         T1 counts > 0 (nonstandard saveframe/tag layout not covered by the
         current parser); a pre-existing gap in makeshift.entry, not in the
         S2-fitting code added here.
-    27447, 27448 -- correctly excluded, not a bug: their deposited
-        `_Order_param` rows are 100% methyl/side-chain (Atom_ID never N/H),
-        so there is no backbone S2 to compare against.
 
   Physical scope mismatches (the model here assumes one rigid, monomeric,
   solution-tumbling domain; these systems violate that assumption):
-    5548  -- bPP bound to DPC micelles: a micelle-embedded peptide's
-        effective hydrodynamic drag isn't captured by a bare-peptide bead
-        model.
     15097, 25852 -- villin C-terminal domains / calmodulin+eNOS peptide:
         multi-domain constructs connected by a flexible linker, so no
         single rigid-body diffusion tensor describes the whole chain.
-    26511 -- HIV protease: obligate homodimer (and perdeuterated, and the
-        BMRB entry's own title flags a genuine two-field anisotropy
-        analysis) -- outside the single monomer/single-field regime this
-        fit targets.
 
-  Low dynamic range (Pearson r is a poor metric here, not a bad fit):
-    11080 -- Pin (CsPin): RMSE 0.064, no systematic bias (mean fit-dep
-        -0.018) -- as good as many entries in ENTRIES -- but deposited S2
-        sits almost entirely in a 0.85-0.92 IQR window (this domain is
-        just uniformly rigid), so residue-to-residue noise dominates the
-        tiny true variance and Pearson r comes out at 0.38 despite good
-        absolute agreement. Confirmed by checking (not by units --
-        deposited T1/T2 are unambiguously tagged "s-1" and need no
-        makeshift.relaxation.fixes override). Excluded by the r>=0.5
-        threshold used to build ENTRIES, not because the fit is wrong.
-    6243 -- azurin: same narrow-IQR signature (0.79-0.85) with somewhat
-        more scatter (RMSE 0.139); plausibly the same effect, not
-        independently confirmed to the same degree as 11080.
-
-  Unresolved (fetched, fit ran, agreement is weak/negative, and -- unlike
-  11080/6243 above -- there's a real systematic problem, not just a
-  narrow-range metric artifact):
-    5841 -- FHA domain: RMSE 0.281 with a large systematic bias (fit runs
-        ~0.11 low on average); genuinely wrong, cause not confirmed.
-    26507 -- Psalmotoxin-1/ASIC1a: only N=21 residues, r is statistically
-        unstable at that size; not confirmed either way.
-
-Produces validate_s2.png: a pooled fit-vs-deposited S2 scatter across all
-41 entries (colored by assigned model) and a per-entry Pearson r summary,
-annotated with overall N/r/RMSE.
+  Unresolved:
+    27929 -- BlaC + avibactam: r=0.02, no specific cause confirmed.
 """
 
 from pathlib import Path
@@ -82,32 +64,27 @@ GRID_FILE = Path(__file__).parent / "validate_s2_grid.png"
 RESULTS_CSV = Path(__file__).parent / "validate_s2_results.csv"
 PAIRS_CSV = Path(__file__).parent / "validate_s2_pairs.csv"
 
-ENTRIES = [4245, 4267, 4364, 4365, 4366, 4390, 4689, 4970, 5153, 5154, 5330,
-           5331, 5549, 5550, 5991, 6470, 6474, 6577, 6838, 15445, 15451,
-           15562, 16392, 17010, 17012, 17013, 17041, 17046, 17047, 17069,
-           17226, 17306, 18388, 18389, 18758, 18971, 19388, 26513, 27011,
-           50001, 50212]
+ENTRIES = [4364, 4365, 4366, 4390, 4689, 5153, 5154, 5549, 5550, 5991, 6470,
+           6577, 15451, 17010, 17012, 17013, 17041, 17046, 17047, 17069,
+           17306, 18388, 18389, 18758, 19388, 26513, 27890, 50001, 50212]
+
+# entry_id -> number of distinct 1H spectrometer fields deposited (checked
+# via RelaxationProfile._list_fields_mhz across T1/T2/NOE); excluded before
+# any fetch/fit is attempted.
+MULTI_FIELD = {
+    4245: 4, 4267: 3, 4970: 3, 5330: 2, 5331: 2, 5548: 2, 5841: 2,
+    6243: 4, 6474: 2, 6838: 3, 11080: 2, 15445: 2, 15562: 2, 16392: 3,
+    17226: 3, 17246: 2, 18971: 3, 26507: 3, 26511: 2, 27011: 3,
+    27447: 2, 27448: 2, 27888: 2,
+}
 
 EXCLUDED = {
     16917: "relaxation() parser gap (zero T1 rows despite metadata)",
     16918: "relaxation() parser gap (zero T1 rows despite metadata)",
-    17246: "relaxation() parser gap (zero T1 rows despite metadata)",
     26779: "relaxation() parser gap (zero T1 rows despite metadata)",
-    27447: "deposited order parameters are methyl-only, not backbone",
-    27448: "deposited order parameters are methyl-only, not backbone",
-    5548: "micelle-bound peptide -- drag not captured by bare-peptide model",
     15097: "multi-domain construct with flexible linker",
     25852: "multi-domain construct (CaM) with flexible linker",
-    26511: "obligate homodimer; also a two-field-designed study",
-    11080: "low dynamic range: RMSE 0.064 (good), but deposited S2 IQR is "
-           "only 0.85-0.92, so Pearson r (0.38) is a poor metric here -- "
-           "not a units issue, checked directly",
-    6243: "same narrow-range signature as 11080 (IQR 0.79-0.85, RMSE "
-          "0.139), plausibly the same effect but not confirmed",
-    5841: "unresolved -- large systematic bias (fit ~0.11 low on "
-          "average, RMSE 0.281), a real problem, cause not confirmed",
-    26507: "unresolved -- only N=21, r is statistically unstable at "
-           "that size, not confirmed either way",
+    27929: "unresolved -- r=0.02, no specific cause confirmed",
 }
 
 

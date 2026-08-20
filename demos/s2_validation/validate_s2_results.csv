@@ -1,27 +1,17 @@
 bmrb_id,title,field_mhz,n,pearson_r,rmse
-4245,Assessing Potential Bias in the Determination of Rotational Correlation Times of Proteins by NMR Relaxation,500,51,0.7646,0.0532
-4267,Chemical shift assignments; 3JHNHA coupling constants and secondary structure of HNGAL (Human Neutrophil Gelatinase-Associated Lipocalin) in its apo form.,500,138,0.8496,0.0985
 4364,Dynamics of Stromelysin/Inhibitor Interactions Studied by 15N NMR Relaxation Measurements: Comparison of Ligand Binding to the S1-S3 and S1-S3PSubsites,600,138,0.9551,0.0456
 4365,Dynamics of Stromelysin/Inhibitor Interactions Studied by 15N NMR Relaxation Measurements: Comparison of Ligand Binding to the S1-S3 and S1-S3 Subsites,600,141,0.9535,0.0361
 4366,Dynamics of Stromelysin/Inhibitor Interactions Studied by 15N NMR Relaxation Measurements: Comparison of Ligand Binding to the S1-S3 and S1-S3 Subsites,600,145,0.9761,0.0329
 4390,Backbone dynamics of the human CC-chemokine eotaxin,500,57,0.9318,0.0824
 4689,NMR Studies of the Backbone Flexibility and Structure of Human Growth Hormone:a Comparison of High and Low pH Conformations,500,140,0.6225,0.2057
-4970,NMR Relaxation data for Protein Calmodulin in complex with the smooth muscle myosin light chain kinase calmodulin binding domain,500,112,0.5966,0.0994
 5153,Backbone dynamics of the N-TIMP-1 bound to MMP-3 catalytic domain,600,84,0.7931,0.1422
 5154,Backbone dynamics of free N-TIMP-1 in solution,500,102,0.9338,0.0887
-5330,Backbone relaxation data of rat apo cellular retinol-binding protein type I (CRBP-I),500,81,0.7458,0.0465
-5331,Backbone relaxation data of rat holo cellular retinol-binding protein type I (CRBP-I),500,117,0.8715,0.0383
 5549,Neuropeptide Y5-Receptor II: Solution Structure and Dynamics of [31Ala;32Pro]-NPY,500,28,0.9093,0.1532
 5550,Structure and Dynamics of Micelle-bound Neuropeptide Y: Comparison with unligated NPY and Implications for Receptor Selection,500,27,0.8704,0.1931
 5991,Backbone and Sidechain 1H; 13C; and 15N Chemical Shift Assignments and Backbone 15N Relaxation Parameters for Murine Ets-1 deltaN301,500,124,0.8848,0.0687
 6470,Rotational Diffusion Anisotropy of Human Ubiquitin from 15N NMR Relaxation,600,63,0.6386,0.0876
-6474,The 15N relaxation data and backbone dynamics results of CLV1 pT868 bound KI-FHA from KAPP,500,100,0.5578,0.1539
 6577,Solution structure of the C1-subdomain of Bacillus stearothermophilus translation initiation factor IF2,600,67,0.9479,0.1122
-6838,1H; 13C and 15N backbone resonance assignment for PSE-4; a 29.5 kDa class A beta-lactamase from Pseudomonas aeruginosa,500,223,0.8843,0.0345
-15445,15N relaxation and H/D exchange analysis of 15.5K free in solution,500,81,0.9395,0.0955
 15451,GABPa OST domain,500,77,0.8852,0.0658
-15562,Solution Structure of S. cerevisiae PDCD5-like Protein Ymr074cp,500,40,0.8094,0.1315
-16392,NMR relaxation data for the beta-lactamase TEM-1,500,152,0.6956,0.0395
 17010,Backbone Amide relaxation parameters for wild-type Tryptophan Repressor,600,55,0.8246,0.0705
 17012,Backbone Amide relaxation parameters for mutant L75F Tryptophan Repressor,600,81,0.8332,0.1113
 17013,Backbone Amide relaxation parameters for mutant A77V Tryptophan Repressor,600,72,0.6953,0.1133
@@ -29,14 +19,12 @@ bmrb_id,title,field_mhz,n,pearson_r,rmse
 17046,Backbone dynamics of Tryptophan repressor L75F mutant protein in holo-form,600,73,0.9593,0.0746
 17047,Backbone dynamics of Tryptophan repressor A77V mutant protein in holo-form,600,72,0.8454,0.0963
 17069,Backbone dynamics of E73 from SSV-RH,600,51,0.9113,0.0708
-17226,1H; 15N; and 13C chemical shift assignments; and 15N dynamics for trHbN-cyanomet from M. tuberculosis,500,96,0.8219,0.0586
 17306,NRC consensus ankyrin repeat protein backbone and sidechain assignments,600,85,0.8540,0.1147
 18388,Solution structure; dynamics and binding studies of CtCBM11,600,156,0.7105,0.0969
 18389,Solution structure; dynamics and binding studies of CtCBM11,600,148,0.6881,0.0910
 18758,Refined solution structure and dynamics of First Catalytic Cysteine Half-domain from mouse E1 enzyme,400,71,0.9151,0.0968
-18971,Structure and dynamics of a human Nedd4 WW domain-ENaC complex,600,33,0.8129,0.1796
 19388,The Apo-structure of the Low Molecular Weight Protein-tyrosine Phosphatase A (MptpA) from Mycobacterium tuberculosis Allows for Better Target-specific Drug Development,600,113,0.8060,0.0705
 26513,The Apo-structure of the Low Molecular Weight Protein-tyrosine Phosphatase A (MptpA) from Mycobacterium tuberculosis Allows for Better Target-specific Drug Development,600,111,0.8259,0.0697
-27011,Relaxation data for sigma1.1 from Bacillus subtilis,600,67,0.5551,0.2709
+27890,BlaC in bound to clavulanic acid,850,174,0.5445,0.1578
 50001,Solution structure of protein ARR_CleD in complex with c-di-GMP,600,30,0.5513,0.1253
 50212,Backbone 1H; 13C and 15N resonance assignments of 116 kDa Mycobacterium tuberculosis inorganic pyrophosphatase hexamer,700,136,0.8567,0.0705
