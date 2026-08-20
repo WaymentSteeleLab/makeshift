@@ -58,9 +58,11 @@ from scipy.stats import pearsonr
 
 from makeshift.entry import NMRStarEntry
 from makeshift.relaxation import RelaxationProfile
+from makeshift.rci import RCI
 
 OUTPUT_FILE = Path(__file__).parent / "validate_s2.png"
 GRID_FILE = Path(__file__).parent / "validate_s2_grid.png"
+RCI_FILE = Path(__file__).parent / "validate_s2_vs_rci.png"
 RESULTS_CSV = Path(__file__).parent / "validate_s2_results.csv"
 PAIRS_CSV = Path(__file__).parent / "validate_s2_pairs.csv"
 
@@ -88,6 +90,20 @@ EXCLUDED = {
 }
 
 
+def _rci_s2_by_seqid(entry, algorithm):
+    """{Seq_ID: S2} from RCI(algorithm=...) on this entry's own deposited
+    chemical shifts, or {} if it has none (many dynamics-focused entries
+    don't redeposit shifts, relying on a companion assignment entry this
+    code doesn't try to resolve) or the calculation otherwise fails. The
+    talosn backend's 9999.0 no-data sentinel rows are dropped."""
+    try:
+        res = RCI.from_entry(entry, algorithm=algorithm).run().results
+    except Exception:
+        return {}
+    res = res[res["RCI"] < 9999]
+    return dict(zip(res["Seq_ID"].astype(int), res["S2"]))
+
+
 def compare_entry(bmrb_id):
     entry = NMRStarEntry.from_bmrb(bmrb_id)
     prof = RelaxationProfile.from_entry(entry)
@@ -100,16 +116,18 @@ def compare_entry(bmrb_id):
     deposited = deposited.dropna(subset=["S2"])
     dep_by_seqid = dict(zip(deposited["Seq_ID"].astype(int), deposited["S2"]))
 
+    rci_w_by_seqid = _rci_s2_by_seqid(entry, "wishart")
+    rci_t_by_seqid = _rci_s2_by_seqid(entry, "talosn")
+
     t = prof.table.dropna(subset=["S2"])
-    seq_id, fit_s2, dep_s2, models = [], [], [], []
+    seq_id, fit_s2, dep_s2, rci_w_s2, rci_t_s2, models = [], [], [], [], [], []
     for _, row in t.iterrows():
         sid = int(row["Seq_ID"])
-        s2_dep = dep_by_seqid.get(sid)
-        if s2_dep is None:
-            continue
         seq_id.append(sid)
         fit_s2.append(row["S2"])
-        dep_s2.append(s2_dep)
+        dep_s2.append(dep_by_seqid.get(sid, np.nan))
+        rci_w_s2.append(rci_w_by_seqid.get(sid, np.nan))
+        rci_t_s2.append(rci_t_by_seqid.get(sid, np.nan))
         models.append(row["mf_model"])
 
     title = None
@@ -122,7 +140,21 @@ def compare_entry(bmrb_id):
 
     return dict(bmrb_id=bmrb_id, entry_id=entry.entry_id, title=title,
                 field_mhz=prof.field_mhz, seq_id=np.array(seq_id),
-                fit_s2=np.array(fit_s2), dep_s2=np.array(dep_s2), models=models)
+                fit_s2=np.array(fit_s2), dep_s2=np.array(dep_s2),
+                rci_w_s2=np.array(rci_w_s2), rci_t_s2=np.array(rci_t_s2),
+                models=models, has_shifts=bool(rci_w_by_seqid or rci_t_by_seqid))
+
+
+def _corr(fit, other):
+    """(r, rmse, n) for finite (fit, other) pairs; (nan, nan, 0) if fewer
+    than 2 usable pairs."""
+    mask = np.isfinite(fit) & np.isfinite(other)
+    n = int(mask.sum())
+    if n < 2:
+        return float("nan"), float("nan"), n
+    r, _ = pearsonr(fit[mask], other[mask])
+    rmse = float(np.sqrt(np.mean((fit[mask] - other[mask]) ** 2)))
+    return r, rmse, n
 
 
 def main():
@@ -133,33 +165,52 @@ def main():
         except Exception as e:
             print(f"BMRB {bid}: FAILED ({type(e).__name__}: {e})")
             continue
-        n = len(res["fit_s2"])
-        r, _ = pearsonr(res["fit_s2"], res["dep_s2"]) if n >= 2 else (float("nan"), None)
-        rmse = float(np.sqrt(np.mean((res["fit_s2"] - res["dep_s2"]) ** 2))) if n else float("nan")
-        res["r"], res["n"], res["rmse"] = r, n, rmse
+        res["r_dep"], res["rmse_dep"], res["n_dep"] = _corr(res["fit_s2"], res["dep_s2"])
+        res["r_rci_w"], res["rmse_rci_w"], res["n_rci_w"] = _corr(res["fit_s2"], res["rci_w_s2"])
+        res["r_rci_t"], res["rmse_rci_t"], res["n_rci_t"] = _corr(res["fit_s2"], res["rci_t_s2"])
         results.append(res)
-        print(f"BMRB {bid}: N={n} Pearson r={r:.3f} RMSE={rmse:.3f}")
+        print(f"BMRB {bid}: vs deposited N={res['n_dep']} r={res['r_dep']:.3f} "
+              f"rmse={res['rmse_dep']:.3f}  |  vs RCI(wishart) N={res['n_rci_w']} "
+              f"r={res['r_rci_w']:.3f}  |  vs RCI(talosn) N={res['n_rci_t']} "
+              f"r={res['r_rci_t']:.3f}")
 
     all_fit = np.concatenate([r["fit_s2"] for r in results])
     all_dep = np.concatenate([r["dep_s2"] for r in results])
-    overall_r, _ = pearsonr(all_fit, all_dep)
-    overall_rmse = float(np.sqrt(np.mean((all_fit - all_dep) ** 2)))
-    print(f"\nOverall: N={len(all_fit)} entries={len(results)} "
+    all_rci_w = np.concatenate([r["rci_w_s2"] for r in results])
+    all_rci_t = np.concatenate([r["rci_t_s2"] for r in results])
+
+    overall_r, overall_rmse, overall_n = _corr(all_fit, all_dep)
+    overall_r_w, overall_rmse_w, overall_n_w = _corr(all_fit, all_rci_w)
+    overall_r_t, overall_rmse_t, overall_n_t = _corr(all_fit, all_rci_t)
+    n_with_shifts = sum(1 for r in results if r["has_shifts"])
+    print(f"\nOverall vs deposited BMRB S2: N={overall_n} entries={len(results)} "
           f"Pearson r={overall_r:.3f} RMSE={overall_rmse:.3f}")
+    print(f"Overall vs RCI(wishart) S2:   N={overall_n_w} entries_with_shifts="
+          f"{n_with_shifts} Pearson r={overall_r_w:.3f} RMSE={overall_rmse_w:.3f}")
+    print(f"Overall vs RCI(talosn) S2:    N={overall_n_t} entries_with_shifts="
+          f"{n_with_shifts} Pearson r={overall_r_t:.3f} RMSE={overall_rmse_t:.3f}")
 
     with open(RESULTS_CSV, "w") as fh:
-        fh.write("bmrb_id,title,field_mhz,n,pearson_r,rmse\n")
+        fh.write("bmrb_id,title,field_mhz,n_dep,r_dep,rmse_dep,"
+                 "n_rci_wishart,r_rci_wishart,rmse_rci_wishart,"
+                 "n_rci_talosn,r_rci_talosn,rmse_rci_talosn\n")
         for res in results:
             title = (res["title"] or "").replace(",", ";")
-            fh.write(f"{res['bmrb_id']},{title},{res['field_mhz']},{res['n']},"
-                     f"{res['r']:.4f},{res['rmse']:.4f}\n")
+            fh.write(f"{res['bmrb_id']},{title},{res['field_mhz']},"
+                     f"{res['n_dep']},{res['r_dep']:.4f},{res['rmse_dep']:.4f},"
+                     f"{res['n_rci_w']},{res['r_rci_w']:.4f},{res['rmse_rci_w']:.4f},"
+                     f"{res['n_rci_t']},{res['r_rci_t']:.4f},{res['rmse_rci_t']:.4f}\n")
     print(f"saved {RESULTS_CSV}")
 
     with open(PAIRS_CSV, "w") as fh:
-        fh.write("bmrb_id,seq_id,fit_s2,dep_s2,mf_model\n")
+        fh.write("bmrb_id,seq_id,fit_s2,dep_s2,rci_wishart_s2,rci_talosn_s2,mf_model\n")
         for res in results:
-            for sid, f, d, m in zip(res["seq_id"], res["fit_s2"], res["dep_s2"], res["models"]):
-                fh.write(f"{res['bmrb_id']},{sid},{f:.4f},{d:.4f},{m}\n")
+            for sid, f, d, w, t, m in zip(res["seq_id"], res["fit_s2"], res["dep_s2"],
+                                          res["rci_w_s2"], res["rci_t_s2"], res["models"]):
+                fh.write(f"{res['bmrb_id']},{sid},{f:.4f},"
+                         f"{'' if np.isnan(d) else f'{d:.4f}'},"
+                         f"{'' if np.isnan(w) else f'{w:.4f}'},"
+                         f"{'' if np.isnan(t) else f'{t:.4f}'},{m}\n")
     print(f"saved {PAIRS_CSV}")
 
     fig, (ax_scatter, ax_bar) = plt.subplots(
@@ -180,8 +231,8 @@ def main():
                          f"(N={len(all_fit)}, r={overall_r:.3f}, RMSE={overall_rmse:.3f})")
     ax_scatter.legend(frameon=False, fontsize=8, loc="lower right")
 
-    ordered = sorted(results, key=lambda r: r["r"])
-    ax_bar.barh([str(r["bmrb_id"]) for r in ordered], [r["r"] for r in ordered],
+    ordered = sorted(results, key=lambda r: r["r_dep"])
+    ax_bar.barh([str(r["bmrb_id"]) for r in ordered], [r["r_dep"] for r in ordered],
                color="steelblue", height=0.7)
     ax_bar.axvline(0, color="0.3", lw=0.8)
     ax_bar.set_xlabel("Pearson r (fit S2 vs. deposited S2)")
@@ -193,7 +244,7 @@ def main():
     print(f"saved {OUTPUT_FILE}")
 
     # one small scatter panel per protein, sorted best-to-worst by r
-    ordered = sorted(results, key=lambda r: -r["r"])
+    ordered = sorted(results, key=lambda r: -r["r_dep"])
     ncols = 6
     nrows = -(-len(ordered) // ncols)
     fig2, axes2 = plt.subplots(nrows, ncols, figsize=(2.15 * ncols, 2.15 * nrows))
@@ -209,7 +260,7 @@ def main():
         ax.set_xticks([0, 0.5, 1]); ax.set_yticks([0, 0.5, 1])
         ax.tick_params(labelsize=6)
         title = (res["title"] or "")[:28]
-        ax.set_title(f'{res["bmrb_id"]}  r={res["r"]:.2f}\n{title}', fontsize=6.5)
+        ax.set_title(f'{res["bmrb_id"]}  r={res["r_dep"]:.2f}\n{title}', fontsize=6.5)
     for ax in axes2.flat[len(ordered):]:
         ax.axis("off")
     fig2.suptitle("Fit S2 (y) vs. deposited S2 (x), per protein -- sorted by r",
@@ -217,6 +268,28 @@ def main():
     fig2.tight_layout(rect=[0, 0, 1, 0.98])
     fig2.savefig(GRID_FILE, dpi=150)
     print(f"saved {GRID_FILE}")
+
+    # fit S2 vs. RCI-derived S2 (independent, chemical-shift-only signal),
+    # both backends pooled across every entry with its own deposited shifts
+    fig3, (ax_w, ax_t) = plt.subplots(1, 2, figsize=(11, 5.2))
+    for ax, arr, r, rmse, n, label in (
+        (ax_w, all_rci_w, overall_r_w, overall_rmse_w, overall_n_w, "wishart"),
+        (ax_t, all_rci_t, overall_r_t, overall_rmse_t, overall_n_t, "talosn"),
+    ):
+        mask = np.isfinite(arr)
+        ax.scatter(arr[mask], all_fit[mask], s=8, alpha=0.35, color="teal")
+        ax.plot([0, 1], [0, 1], color="0.5", lw=1, ls="--", zorder=0)
+        ax.set_xlim(0, 1.05)
+        ax.set_ylim(0, 1.05)
+        ax.set_xlabel(f"RCI(algorithm='{label}') S2")
+        ax.set_ylabel("makeshift fit S2 (relaxation)")
+        ax.set_title(f"vs. RCI '{label}' (N={n}, {n_with_shifts} entries, "
+                     f"r={r:.3f}, RMSE={rmse:.3f})")
+    fig3.suptitle("Relaxation-fit S2 vs. chemical-shift-only RCI S2 "
+                  "(independent signal, same entries)", fontsize=11)
+    fig3.tight_layout(rect=[0, 0, 1, 0.96])
+    fig3.savefig(RCI_FILE, dpi=150)
+    print(f"saved {RCI_FILE}")
 
 
 if __name__ == "__main__":
