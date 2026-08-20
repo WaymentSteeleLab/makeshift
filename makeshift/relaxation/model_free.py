@@ -103,19 +103,33 @@ def calibrate_tau_scale(residues, d2, c2, gamma_h, gamma_x, omega_h, omega_x):
     R2/R1 ratio) before any residue's S2 is fit.
 
     `residues` is a list of (amplitudes, taus, R1_obs, R1_err, R2_obs,
-    R2_err) tuples for the calibration set. Returns k (dimensionless).
+    R2_err, NOE_obs, NOE_err) tuples for the calibration set (NOE_obs/
+    NOE_err may be None to fit R1/R2 only). Including NOE matters: with
+    tau_e=0 elsewhere in this module, NOE is independent of S2 and used
+    directly as the "does this residue need tau_e" diagnostic
+    (`fit_residue`'s noe_flag) against the *uncalibrated* NOE_pred_rigid,
+    so any systematic NOE offset this calibration leaves behind reads as
+    widespread spurious tau_e need rather than real dynamics -- fitting
+    NOE here too is what removes that offset before per-residue model
+    selection runs. Returns k (dimensionless).
     """
     def chi2(log_k):
         k = 10.0 ** log_k
         total = 0.0
-        for amplitudes, taus, R1_obs, R1_err, R2_obs, R2_err in residues:
+        for res in residues:
+            amplitudes, taus, R1_obs, R1_err, R2_obs, R2_err = res[:6]
+            NOE_obs = res[6] if len(res) > 6 else None
+            NOE_err = res[7] if len(res) > 7 else None
             taus_k = [t * k for t in taus]
-            r1p, r2p, _ = relaxation_rates(
+            r1p, r2p, noep = relaxation_rates(
                 d2, c2, gamma_h, gamma_x, omega_h, omega_x,
                 amplitudes, taus_k, S2=1.0, tau_e=0.0)
             w1 = 1.0 / R1_err ** 2 if (R1_err and np.isfinite(R1_err) and R1_err > 0) else 1.0
             w2 = 1.0 / R2_err ** 2 if (R2_err and np.isfinite(R2_err) and R2_err > 0) else 1.0
             total += w1 * (R1_obs - r1p) ** 2 + w2 * (R2_obs - r2p) ** 2
+            if NOE_obs is not None and np.isfinite(NOE_obs):
+                w3 = 1.0 / NOE_err ** 2 if (NOE_err and np.isfinite(NOE_err) and NOE_err > 0) else 1.0
+                total += w3 * (NOE_obs - noep) ** 2
         return total
 
     grid = np.linspace(-1.0, 1.0, 41)   # k in [0.1, 10]
@@ -214,7 +228,7 @@ def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
 
     if noe_flag:
         S2, tau_e_s, S2_err = _fit_model2(
-            R1_obs, R1_err, R2_obs, R2_err,
+            R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
             d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus)
         return ResidueFit(model="2", S2=S2, S2_err=S2_err,
                            tau_e_ps=tau_e_s * 1e12, NOE_pred_rigid=NOE_rigid,
@@ -229,13 +243,21 @@ def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
                        NOE_pred_rigid=NOE_rigid)
 
 
-def _fit_model2(R1_obs, R1_err, R2_obs, R2_err,
+def _fit_model2(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
                  d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus):
     """Model 2 (S2, tau_e): 1D bounded search over tau_e (the only place it
     enters nonlinearly), with S2 solved by exact weighted linear regression
     against R1 and R2 at each trial tau_e (both are affine in S2 for fixed
     tau_e: R(S2) = R_B(tau_e) + S2*(R_rigid - R_B(tau_e)), where R_B is the
-    S2=0 endpoint at that tau_e). Returns (S2, tau_e_seconds, S2_err)."""
+    S2=0 endpoint at that tau_e).
+
+    NOE is not part of that inner linear solve (it's a nonlinear ratio in
+    S2 even at fixed tau_e -- see model_free module docstring), but it is
+    part of the outer chi-square that picks tau_e: without it, tau_e/S2
+    are only constrained by the same two numbers (R1, R2) Model 1 already
+    uses, which is degenerate -- multiple (S2, tau_e) pairs fit R1/R2
+    equally well, and nothing favors the tau_e->0 (Model 1) solution even
+    when it's correct. Returns (S2, tau_e_seconds, S2_err)."""
     R1_rigid, R2_rigid, _ = relaxation_rates(
         d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus,
         S2=1.0, tau_e=0.0)
@@ -256,12 +278,16 @@ def _fit_model2(R1_obs, R1_err, R2_obs, R2_err,
         if not np.isfinite(S2):
             return np.inf
         S2 = min(max(S2, 0.0), 1.0)
-        r1p, r2p, _ = relaxation_rates(
+        r1p, r2p, noep = relaxation_rates(
             d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus,
             S2=S2, tau_e=tau_e)
         w1 = 1.0 / R1_err ** 2 if (R1_err and np.isfinite(R1_err) and R1_err > 0) else 1.0
         w2 = 1.0 / R2_err ** 2 if (R2_err and np.isfinite(R2_err) and R2_err > 0) else 1.0
-        return w1 * (R1_obs - r1p) ** 2 + w2 * (R2_obs - r2p) ** 2
+        cost = w1 * (R1_obs - r1p) ** 2 + w2 * (R2_obs - r2p) ** 2
+        if NOE_obs is not None and np.isfinite(NOE_obs):
+            w3 = 1.0 / NOE_err ** 2 if (NOE_err and np.isfinite(NOE_err) and NOE_err > 0) else 1.0
+            cost += w3 * (NOE_obs - noep) ** 2
+        return cost
 
     # coarse log-spaced grid, then a bounded local polish -- mirrors the
     # perl script's own "gridsearch then Powell" pattern.

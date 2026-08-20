@@ -76,7 +76,8 @@ class RelaxationProfile:
         those has run.
     """
  
-    def __init__(self, table, sequence, entry_id=None, entity_id=None, entry=None):
+    def __init__(self, table, sequence, entry_id=None, entity_id=None, entry=None,
+                 field_mhz=None):
         self.table = table
         self.sequence = sequence
         self.entry_id = entry_id
@@ -84,23 +85,38 @@ class RelaxationProfile:
         self.entry = entry
         self.scale_factor = None
         self.tau_scale = None
+        self.field_mhz = field_mhz
  
     # construction
  
     @classmethod
     def from_bmrb(cls, bmrb_id, entity_id=None, sequence=None, peaklist=None,
-                  **fetch_kw):
+                  field_mhz=None, **fetch_kw):
         """Fetch a BMRB entry and build a profile from its deposited relaxation."""
         entry = NMRStarEntry.from_bmrb(bmrb_id, **fetch_kw)
         return cls.from_entry(entry, entity_id=entity_id, sequence=sequence,
-                              peaklist=peaklist)
+                              peaklist=peaklist, field_mhz=field_mhz)
  
     @classmethod
-    def from_entry(cls, entry, entity_id=None, sequence=None, peaklist=None):
+    def from_entry(cls, entry, entity_id=None, sequence=None, peaklist=None,
+                   field_mhz=None):
         """
         Build from an already-parsed NMRStarEntry.
         Pulls R1 (from T1), R2 (from T2), and hetNOE, converting times to rates
         using each list's units tag.
+
+        Some entries deposit relaxation at more than one spectrometer field
+        (separate lists within the T1/T2/NOE loops). Mixing lists from
+        different fields into one R1/R2/NOE triple per residue would be
+        physically wrong, so a single target field is resolved first:
+        `field_mhz` if given, else whichever 1H frequency is tagged
+        consistently across T1/T2/NOE (raises if that's ambiguous — pass
+        `field_mhz` explicitly, found via e.g.
+        `entry.saveframe('heteronucl_T1_relaxation')`). Lists with no field
+        tag at all are used unfiltered (old behavior). The resolved field
+        is stored as `self.field_mhz`, reused by
+        `add_rigid_prediction`/`fit_order_parameters` so the data and the
+        physics predictions are always at the same field.
 
         `peaklist` (a PeakList, a DataFrame with a Seq_ID column, or an iterable
         of Seq_IDs) marks which residues have an assigned amide peak; if None,
@@ -125,14 +141,18 @@ class RelaxationProfile:
             "Seq_ID": np.arange(1, n + 1),
             "residue": list(sequence),
         })
+
+        field_mhz, list_filter = cls._resolve_field(entry, field_mhz)
  
         for kind, col in (("T1", "R1"), ("T2", "R2")):
             df = entry.relaxation(kind)
+            df = cls._filter_by_list(df, list_filter.get(kind))
             units = cls._list_units(entry, kind)
             table[col], table[f"{col}_err"] = cls._align_rate(
                 df, n, units, kind, entry_id=entry.entry_id)
  
         noe = entry.relaxation("NOE")
+        noe = cls._filter_by_list(noe, list_filter.get("NOE"))
         table["NOE"], table["NOE_err"] = cls._align_plain(noe, n)
  
         table["R2_R1"] = table["R2"] / table["R1"]
@@ -148,10 +168,91 @@ class RelaxationProfile:
  
         return cls(table, sequence,
                    entry_id=getattr(entry, "entry_id", None),
+                   field_mhz=field_mhz,
                    entity_id=entity_id, entry=entry)
  
     # alignment helpers
  
+    _RELAX_CATEGORY = {"T1": "heteronucl_T1_relaxation",
+                       "T2": "heteronucl_T2_relaxation",
+                       "NOE": "heteronucl_NOEs"}
+
+    @classmethod
+    def _list_fields_mhz(cls, entry, kind):
+        """{list framecode -> 1H spectrometer frequency (MHz)} for every
+        list of the given relaxation kind that carries the tag."""
+        out = {}
+        try:
+            sfs = entry.saveframe(cls._RELAX_CATEGORY[kind])
+        except Exception:
+            return out
+        for name, sf in sfs.items():
+            val = sf.get("Spectrometer_frequency_1H")
+            if val not in (None, ".", "?"):
+                try:
+                    out[name] = float(val)
+                except (TypeError, ValueError):
+                    continue
+        return out
+
+    @classmethod
+    def _resolve_field(cls, entry, field_mhz=None, tol_mhz=1.0):
+        """
+        Resolve a single target 1H field (MHz) and, for each of T1/T2/NOE,
+        which list framecodes belong to it. Returns (field_mhz,
+        {kind: set_of_list_names_or_None}) -- None means that kind has no
+        field tags at all, so it's used unfiltered.
+
+        If `field_mhz` isn't given: a field present (within `tol_mhz`)
+        across every kind that has any field tags is preferred; if none is
+        common to all of them, the most frequently tagged field is used.
+        Raises if no field tag is found anywhere and more than one list
+        exists for any kind (genuinely ambiguous -- pass `field_mhz`).
+        """
+        per_kind = {k: cls._list_fields_mhz(entry, k) for k in ("T1", "T2", "NOE")}
+        tagged = {k: f for k, f in per_kind.items() if f}
+
+        if field_mhz is None and tagged:
+            value_sets = [set(round(v) for v in f.values()) for f in tagged.values()]
+            common = set.intersection(*value_sets) if len(value_sets) > 1 else value_sets[0]
+            if common:
+                field_mhz = sorted(common)[0]
+            else:
+                from collections import Counter
+                counts = Counter(round(v) for f in tagged.values() for v in f.values())
+                field_mhz = counts.most_common(1)[0][0]
+
+        if field_mhz is None:
+            unfiltered = {k: None for k in ("T1", "T2", "NOE")}
+            for kind in ("T1", "T2", "NOE"):
+                df = entry.relaxation(kind)
+                n_lists = df["list"].nunique() if "list" in df.columns else 0
+                if n_lists > 1:
+                    raise ValueError(
+                        f"{entry.entry_id}: {kind} has {n_lists} lists and no "
+                        "Spectrometer_frequency_1H tag to disambiguate them; "
+                        "pass field_mhz=<1H frequency in MHz> explicitly"
+                    )
+            return None, unfiltered
+
+        list_filter = {}
+        for kind, fields in per_kind.items():
+            if not fields:
+                list_filter[kind] = None
+            else:
+                list_filter[kind] = {name for name, f in fields.items()
+                                     if abs(f - field_mhz) < tol_mhz}
+        return field_mhz, list_filter
+
+    @staticmethod
+    def _filter_by_list(df, list_names):
+        """Restrict a relaxation DataFrame to rows from `list_names`
+        (a set of framecodes); no-op if `list_names` is None or the
+        DataFrame has no `list` column."""
+        if list_names is None or "list" not in df.columns:
+            return df
+        return df[df["list"].isin(list_names)]
+
     @staticmethod
     def _list_units(entry, kind):
         override = fixes.unit_override(entry.entry_id, kind)
@@ -257,6 +358,44 @@ class RelaxationProfile:
     # structure resolution (shared by add_rigid_prediction and
     # fit_order_parameters)
 
+    def _best_pdb_by_length(self, pdb_ids, max_check=15, tol=5):
+        """
+        `get_pdb_ids()` can return a long, unordered list for widely-studied
+        proteins (e.g. ubiquitin: hundreds of fusion/complex structures
+        sharing its sequence via entity-level cross-references, when the
+        entry has no depositor-curated `_Related_entries` link) — picking
+        [0] blindly can land on a fusion or oligomeric complex with a very
+        different diffusion tensor than this entry's own construct.
+
+        Checks up to `max_check` candidates' polymer size via RCSB's entry
+        API (one lightweight request each) and returns the first whose
+        polymer monomer count is within `tol` residues of this profile's
+        own sequence length, preferring an NMR structure among ties.
+        Returns None if nothing in range or all requests fail (caller
+        should fall back to pdb_ids[0]).
+        """
+        import json
+        import urllib.request
+
+        target = len(self.sequence)
+        best, best_key = None, None
+        for pid in pdb_ids[:max_check]:
+            try:
+                url = f"https://data.rcsb.org/rest/v1/core/entry/{pid}"
+                with urllib.request.urlopen(url, timeout=10) as resp:
+                    info = json.load(resp).get("rcsb_entry_info", {})
+            except Exception:
+                continue
+            n = (info.get("deposited_polymer_monomer_count")
+                 or info.get("polymer_monomer_count_maximum"))
+            if n is None or abs(n - target) > tol:
+                continue
+            is_nmr = "NMR" in (info.get("experimental_method") or "").upper()
+            key = (0 if is_nmr else 1, abs(n - target))
+            if best_key is None or key < best_key:
+                best, best_key = pid, key
+        return best
+
     def _resolve_pdb(self, pdb, source, **fetch_kw):
         """
         Resolve `pdb` to a local structure file path. `pdb` may be a local
@@ -265,12 +404,26 @@ class RelaxationProfile:
         one. If `pdb` is None, the entry's own deposited PDB code is used
         when it cites one; otherwise this raises (makeshift does not
         predict structure).
+
+        When multiple PDB ids are cited, the first is normally used (see
+        `NMRStarEntry.get_pdb_ids`, which prefers a depositor-curated
+        related-entry link when one exists) — but if there are more than a
+        few candidates, `_best_pdb_by_length` tries to pick one whose
+        polymer size actually matches this entry's sequence, since a long
+        candidate list usually means no curated link and a size mismatch
+        indicates a fusion/complex structure rather than this construct.
         """
         from ..utils.structures import fetch_structure
 
         if pdb is None:
             pdb_ids = self.entry.get_pdb_ids() if self.entry is not None else []
             af_ids = self.entry.get_alphafold_ids() if self.entry is not None else []
+            if len(pdb_ids) > 3:
+                better = self._best_pdb_by_length(pdb_ids)
+                if better is not None and better != pdb_ids[0]:
+                    print(f"  {len(pdb_ids)} PDB ids cited; {pdb_ids[0]} size "
+                          f"doesn't match the sequence, using {better} instead")
+                    pdb_ids = [better] + [p for p in pdb_ids if p != better]
             if source == "rcsb":
                 if not pdb_ids:
                     raise ValueError("entry cites no PDB; pass pdb=<PDB id | path>")
@@ -296,10 +449,15 @@ class RelaxationProfile:
 
     def _detect_field_mhz(self):
         """
-        The entry's 1H spectrometer frequency (MHz), read from its own
-        heteronucl_T1_relaxation saveframe (`Spectrometer_frequency_1H`).
-        Returns None if unavailable.
+        The 1H spectrometer frequency (MHz) this profile's R1/R2/NOE were
+        actually built at. Prefers `self.field_mhz` (set by `from_entry`'s
+        own field resolution, so it's guaranteed to match the data);
+        falls back to scanning the entry's heteronucl_T1_relaxation
+        saveframe directly for profiles built another way. Returns None
+        if unavailable.
         """
+        if self.field_mhz is not None:
+            return self.field_mhz
         if self.entry is None:
             return None
         try:
@@ -345,26 +503,33 @@ class RelaxationProfile:
 
     def _calibration_subset(self, geometry, noe_cut):
         """
-        (amplitudes, taus, R1, R1_err, R2, R2_err) tuples for the
-        presumed-rigid residues (NOE > `noe_cut`) used to calibrate
-        `model_free.calibrate_tau_scale`; falls back to every residue
-        with R1/R2 data (with a warning) if fewer than 3 qualify.
+        (amplitudes, taus, R1, R1_err, R2, R2_err, NOE, NOE_err) tuples for
+        the presumed-rigid residues (NOE > `noe_cut`) used to calibrate
+        `model_free.calibrate_tau_scale` -- NOE is included (not just
+        R1/R2) so the calibrated rigid prediction doesn't carry a
+        systematic NOE offset into the per-residue Model 2 (tau_e)
+        diagnostic, which compares raw NOE_pred_rigid to observed NOE.
+        Falls back to every residue with R1/R2 data (with a warning) if
+        fewer than 3 qualify.
         """
         def usable(row):
             return (row.get("R1") is not None and np.isfinite(row.get("R1"))
                     and row.get("R2") is not None and np.isfinite(row.get("R2")))
 
+        def tup(amplitudes, taus, row):
+            return (amplitudes, taus, row.get("R1"), row.get("R1_err"),
+                    row.get("R2"), row.get("R2_err"),
+                    row.get("NOE"), row.get("NOE_err"))
+
         calibration = [
-            (amplitudes, taus, row.get("R1"), row.get("R1_err"),
-             row.get("R2"), row.get("R2_err"))
+            tup(amplitudes, taus, row)
             for amplitudes, taus, row in geometry.values()
             if usable(row) and row.get("NOE") is not None
             and np.isfinite(row.get("NOE")) and row.get("NOE") > noe_cut
         ]
         if len(calibration) < 3:
             calibration = [
-                (amplitudes, taus, row.get("R1"), row.get("R1_err"),
-                 row.get("R2"), row.get("R2_err"))
+                tup(amplitudes, taus, row)
                 for amplitudes, taus, row in geometry.values() if usable(row)
             ]
             warnings.warn(
