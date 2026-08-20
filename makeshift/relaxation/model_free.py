@@ -198,10 +198,18 @@ def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
 
     # Model 1 point estimate (closed form, R1+R2), used as the baseline S2
     # for both diagnostics and as the fallback value for ambiguous residues.
+    # S2 is physically bounded to [0,1] -- fastmodelfree/modelfree4 enforce
+    # this as a hard constraint on the fit itself (S2 gridsearch/optimization
+    # bounds of 0/1.0 in the original perl script); the closed-form solution
+    # here is the unconstrained optimum of the same convex objective, so
+    # clamping it post hoc gives the identical constrained-optimum result,
+    # not an approximation.
     S2_m1, S2_m1_err = _weighted_slope([
         (R1_obs, R1_err, R1_rigid),
         (R2_obs, R2_err, R2_rigid),
     ])
+    if np.isfinite(S2_m1):
+        S2_m1 = min(max(S2_m1, 0.0), 1.0)
 
     # NOE diagnostic: NOE is independent of S2 when tau_e=0, so any
     # deficit relative to the parameter-free rigid prediction implicates
@@ -214,8 +222,11 @@ def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
 
     # Rex diagnostic: S2 from R1 alone is exchange-free (Rex doesn't touch
     # R1); compare the R2 that S2 implies against what was actually observed.
+    # Clamped to [0,1] for the same reason as S2_m1 above.
     r2_flag = False
     S2_from_R1 = R1_obs / R1_rigid if R1_rigid > 0 else np.nan
+    if np.isfinite(S2_from_R1):
+        S2_from_R1 = min(max(S2_from_R1, 0.0), 1.0)
     if R2_obs is not None and np.isfinite(R2_obs) and np.isfinite(S2_from_R1):
         r2_pred_no_rex = S2_from_R1 * R2_rigid
         r2_err = R2_err if (R2_err and np.isfinite(R2_err) and R2_err > 0) \
@@ -235,7 +246,9 @@ def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
                            noe_flag=True)
 
     if r2_flag:
-        Rex = R2_obs - S2_from_R1 * R2_rigid
+        # Rex is a chemical-exchange broadening term -- physically >= 0
+        # (same as fastmodelfree's own Rex lower bound of 0).
+        Rex = max(R2_obs - S2_from_R1 * R2_rigid, 0.0)
         return ResidueFit(model="3", S2=S2_from_R1, S2_err=np.nan, Rex=Rex,
                            NOE_pred_rigid=NOE_rigid, r2_flag=True)
 
