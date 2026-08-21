@@ -1,4 +1,4 @@
-# `makeshift`: a lightweight software for accessing and analyzing NMR data and protein dynamics
+# `makeshift`: lightweight NMR tools
 
 This repository provides a minimal, dependency-light tools to handle NMR data. Makeshift reads [NMR-STAR](https://bmrb.io/spec/) format files from the Biological Magnetic Resonance Bank ([BMRB](https://bmrb.io/)). It extracts sample metadata and measurements into Python dictionaries and pandas DataFrames.
 
@@ -117,7 +117,6 @@ The three concepts you’ll interact with most:
 - `offsets` — `{atom: float | None}` total offset applied per atom type
 
 ---
-
 
 ## License
 
