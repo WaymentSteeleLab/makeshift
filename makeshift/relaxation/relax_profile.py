@@ -74,6 +74,13 @@ class RelaxationProfile:
     tau_scale : the calibrated diffusion-tensor timescale correction (see
         `add_rigid_prediction`/`fit_order_parameters`), None until one of
         those has run.
+    calibration_diagnostics : dict from `model_free.assess_calibration`
+        (median_s2_from_r1, median_s2_from_r2, gap, n, unreliable), set
+        alongside tau_scale. `unreliable=True` means R1 and R2 imply
+        substantially different order parameters for the calibration set
+        -- no single tumbling timescale reconciles them, usually because
+        residues with real dynamics contaminated the calibration set, not
+        a data or code bug; a warning is also raised in that case.
     """
  
     def __init__(self, table, sequence, entry_id=None, entity_id=None, entry=None,
@@ -85,6 +92,7 @@ class RelaxationProfile:
         self.entry = entry
         self.scale_factor = None
         self.tau_scale = None
+        self.calibration_diagnostics = None
         self.field_mhz = field_mhz
  
     # construction
@@ -540,6 +548,41 @@ class RelaxationProfile:
             )
         return calibration
 
+    def _calibrate_tau(self, calibration, g):
+        """
+        Calibrate `self.tau_scale` against `calibration` and check the
+        result with `model_free.assess_calibration` -- warns if R1 and R2
+        imply substantially different order parameters for the
+        calibration set, which means no single tumbling timescale
+        reconciles them (usually because residues with real dynamics
+        contaminated the "presumed rigid" calibration set), not a data or
+        code bug. Sets `self.tau_scale` and `self.calibration_diagnostics`
+        (see `model_free.assess_calibration`'s return value), shared by
+        `add_rigid_prediction` and `fit_order_parameters`.
+        """
+        from . import model_free
+
+        self.tau_scale = model_free.calibrate_tau_scale(
+            calibration, g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x)
+        self.calibration_diagnostics = model_free.assess_calibration(
+            calibration, self.tau_scale, g.d2, g.c2, g.gamma_h, g.gamma_x,
+            g.omega_h, g.omega_x)
+        if self.calibration_diagnostics["unreliable"]:
+            d = self.calibration_diagnostics
+            warnings.warn(
+                f"tau_scale calibration may be unreliable: R1 and R2 imply "
+                f"substantially different order parameters for the "
+                f"presumed-rigid calibration set (median S2 from R1="
+                f"{d['median_s2_from_r1']:.2f}, from R2={d['median_s2_from_r2']:.2f}, "
+                f"gap={d['gap']:+.2f}, n={d['n']}). This usually means no "
+                "single overall tumbling timescale explains both -- often "
+                "because residues with real dynamics (e.g. widespread "
+                "conformational exchange) contaminated the calibration "
+                "set, not a data or code bug. S2 fits from this profile, "
+                "especially Models 1/3, should be treated with caution.",
+                UserWarning,
+            )
+
     # rigid-body prediction
  
     def add_rigid_prediction(self, pdb=None, source="auto", config=None,
@@ -599,8 +642,7 @@ class RelaxationProfile:
 
         geometry = self._residue_geometry(g, pdb_path, chain=chain)
         calibration = self._calibration_subset(geometry, noe_cut)
-        self.tau_scale = model_free.calibrate_tau_scale(
-            calibration, g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x)
+        self._calibrate_tau(calibration, g)
 
         n = len(self.table)
         ratio_pred = np.full(n, np.nan)
@@ -707,8 +749,7 @@ class RelaxationProfile:
 
         geometry = self._residue_geometry(g, pdb_path, chain=chain)
         calibration = self._calibration_subset(geometry, noe_cut)
-        self.tau_scale = model_free.calibrate_tau_scale(
-            calibration, g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x)
+        self._calibrate_tau(calibration, g)
 
         t = self.table.copy()
         n = len(t)

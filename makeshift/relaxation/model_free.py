@@ -141,6 +141,71 @@ def calibrate_tau_scale(residues, d2, c2, gamma_h, gamma_x, omega_h, omega_x):
     return 10.0 ** res.x
 
 
+def assess_calibration(residues, tau_scale, d2, c2, gamma_h, gamma_x, omega_h, omega_x,
+                        gap_threshold=0.3):
+    """
+    Check whether the calibrated tau_scale actually reconciles R1 and R2
+    for the calibration set, or is a forced compromise between two
+    genuinely inconsistent constraints.
+
+    R1(tau) has a peak and turns over; R2(tau) rises roughly monotonically
+    in the same regime. A single tau_scale can only satisfy both if the
+    calibration set is genuinely close to rigid for both observables at
+    once. When it isn't -- most often because residues with real
+    dynamics (conformational exchange elevating R2, or fast motion
+    depressing it) got included in the "presumed rigid" NOE-selected
+    calibration set -- calibrate_tau_scale still returns its best
+    least-squares compromise, but that compromise silently favors
+    whichever observable's loss is steeper near the optimum (usually
+    R1, since it's past its peak there) while leaving the other
+    systematically unexplained. That isn't a bug in the calibration; it's
+    the calibration correctly reporting that no single overall tumbling
+    timescale fits this protein, which downstream Model 1/3 S2 (linear in
+    R1 and R2 respectively) will silently inherit as a systematic bias
+    rather than an obviously-wrong number.
+
+    This computes, per calibration residue, an independent order
+    parameter estimate from R1 alone (S2 = R1_obs / R1_rigid) and from R2
+    alone (S2 = R2_obs / R2_rigid), both using the already-calibrated
+    tau_scale. For a genuinely rigid residue these agree closely (both
+    near 1 -- the reason it was selected for calibration in the first
+    place); a systematic gap between their medians across the whole
+    calibration set is the diagnostic.
+
+    `gap_threshold` default (0.3) is set empirically, not arbitrarily:
+    checked against several already-validated BMRB entries (see
+    demos/s2_validation), well-fit profiles cluster under |gap|~0.1 (one
+    good fit reached 0.20), the weakest entry in that validation set sits
+    at 0.47, and a profile with genuinely widespread exchange (BMRB 7036)
+    hit 1.98 -- an order of magnitude past everything else. 0.3 sits
+    cleanly between the good cluster and the flagged cases.
+
+    Returns a dict: median_s2_from_r1, median_s2_from_r2, gap (r2 minus
+    r1, signed), n, and unreliable (True if abs(gap) > gap_threshold).
+    """
+    s2_r1, s2_r2 = [], []
+    for res in residues:
+        amplitudes, taus, R1_obs, R1_err, R2_obs, R2_err = res[:6]
+        taus_k = [t * tau_scale for t in taus]
+        r1p, r2p, _ = relaxation_rates(
+            d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus_k,
+            S2=1.0, tau_e=0.0)
+        if R1_obs is not None and np.isfinite(R1_obs) and r1p > 0:
+            s2_r1.append(R1_obs / r1p)
+        if R2_obs is not None and np.isfinite(R2_obs) and r2p > 0:
+            s2_r2.append(R2_obs / r2p)
+
+    if not s2_r1 or not s2_r2:
+        return dict(median_s2_from_r1=np.nan, median_s2_from_r2=np.nan,
+                    gap=np.nan, n=0, unreliable=False)
+
+    med_r1 = float(np.median(s2_r1))
+    med_r2 = float(np.median(s2_r2))
+    gap = med_r2 - med_r1
+    return dict(median_s2_from_r1=med_r1, median_s2_from_r2=med_r2, gap=gap,
+                n=min(len(s2_r1), len(s2_r2)), unreliable=abs(gap) > gap_threshold)
+
+
 def _weighted_slope(pairs):
     """Weighted least squares slope S2 of y_i = S2 * x_i (through the
     origin), for pairs of (y_obs, y_err, x_pred). Skips entries with a
