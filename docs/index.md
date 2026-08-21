@@ -4,6 +4,8 @@ An open-source Python package for accessing and analyzing NMR data, from either 
 [NMR-STAR](https://pynmrstar.readthedocs.io/en/latest/) files from the
 [BMRB](https://bmrb.io/).
 
+Implementation details and validation of makeshift are described in our preprint [here](https://www.biorxiv.org/content/10.64898/2026.08.17.745346v1).
+
 ```python
 import makeshift as ms
 
@@ -54,3 +56,30 @@ govern the downloaded software, not this wrapper.
 
 - The [Biological Magnetic Resonance Bank (BMRB)](https://bmrb.io/) for maintaining and sharing NMR data.
 - The Bax lab at NIH for [TALOS-N](https://spin.niddk.nih.gov/bax-apps/software/TALOS-N/).
+
+## Citation
+
+If you use makeshift, please cite:
+
+```bibtex
+@article{makeshift2026,
+  title   = {makeshift: a lightweight software for accessing and analyzing NMR data and protein dynamics},
+  author  = {El Nesr, Gina and Wayment-Steele, Hannah K.},
+  journal = {bioRxiv},
+  year    = {2026},
+  doi     = {10.64898/2026.08.17.745346},
+  url     = {https://doi.org/10.64898/2026.08.17.745346}
+}
+```
+
+If you use the relaxation-dispersion processing, please also cite:
+
+```bibtex
+@article {dyna1,
+    author = {Wayment-Steele, Hannah K. and El Nesr, Gina and Hettiarachchi, Ramith and Ojoawo, Adedolapo and Kariyawasam, Hasindu and Ovchinnikov, Sergey and Kern, Dorothee},
+    title = {Learning millisecond protein dynamics from what is missing in NMR spectra},
+    year = {2026},
+    doi = {10.1038/s41586-026-10989-4},
+    journal = {Nature}
+}
+```
