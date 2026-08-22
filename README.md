@@ -2,7 +2,7 @@
 
 This repository provides a minimal, dependency-light tools to handle NMR data. Makeshift reads [NMR-STAR](https://bmrb.io/spec/) format files from the Biological Magnetic Resonance Bank ([BMRB](https://bmrb.io/)). It extracts sample metadata and measurements into Python dictionaries and pandas DataFrames.
 
-Implementation details and validation of makeshift are described in our preprint [here](https://www.biorxiv.org/content/10.64898/2026.08.17.745346v1).
+Implementation details and validation of makeshift are described in our preprint: El Nesr & Wayment-Steele, [*Makeshift: a lightweight software for accessing and analyzing NMR data and protein dynamics*](https://www.biorxiv.org/content/10.64898/2026.08.17.745346v1) (bioRxiv, 2026). [doi:10.64898/2026.08.17.745346](https://doi.org/10.64898/2026.08.17.745346).
 
 ## Features
 
@@ -14,7 +14,7 @@ Implementation details and validation of makeshift are described in our preprint
 ## Installation
 
 ```bash
-pip install git+https://github.com/WaymentSteeleLab/makeshift.git
+pip install makeshift-nmr
 ```
 
 Or clone and install in editable mode (useful if you want to modify the code):
@@ -141,7 +141,7 @@ If you use makeshift, please cite:
 
 ```bibtex
 @article{makeshift2026,
-  title   = {makeshift: a lightweight software for accessing and analyzing NMR data and protein dynamics},
+  title   = {Makeshift: a lightweight software for accessing and analyzing NMR data and protein dynamics},
   author  = {El Nesr, Gina and Wayment-Steele, Hannah K.},
   journal = {bioRxiv},
   year    = {2026},
