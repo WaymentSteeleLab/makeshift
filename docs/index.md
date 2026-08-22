@@ -4,7 +4,7 @@ An open-source Python package for accessing and analyzing NMR data, from either 
 [NMR-STAR](https://pynmrstar.readthedocs.io/en/latest/) files from the
 [BMRB](https://bmrb.io/).
 
-Implementation details and validation of makeshift are described in our preprint [here](https://www.biorxiv.org/content/10.64898/2026.08.17.745346v1).
+Implementation details and validation of makeshift are described in our preprint: El Nesr & Wayment-Steele, [*Makeshift: a lightweight software for accessing and analyzing NMR data and protein dynamics*](https://www.biorxiv.org/content/10.64898/2026.08.17.745346v1) (bioRxiv, 2026). [doi:10.64898/2026.08.17.745346](https://doi.org/10.64898/2026.08.17.745346).
 
 ```python
 import makeshift as ms
@@ -40,6 +40,7 @@ dependency stack.
 - :material-rocket-launch: **[Quickstart](quickstart.md)** — the core fetch → shifts → peaks workflow.
 - :material-book-open-variant: **[User guide](guide/entries.md)** — task-focused walkthroughs of every module.
 - :material-api: **[API reference](api/index.md)** — full signatures and docstrings, generated from the source.
+- :material-book-open-page-variant: **[Citation](citation.md)** — how to cite makeshift and related work.
 
 </div>
 
