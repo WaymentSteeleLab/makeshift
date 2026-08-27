@@ -31,7 +31,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
-from scipy.optimize import minimize_scalar
+from scipy.optimize import minimize_scalar, minimize
+
+from ..hydronmr.physics.nmr import diffusion_tensor_taus, mode_amplitudes_raw
 
 # tau_e search range (seconds): a few ps up to a few ns, comfortably below
 # typical overall correlation times (tau_m ~ 5-15 ns for globular proteins)
@@ -82,48 +84,84 @@ def relaxation_rates(d2, c2, gamma_h, gamma_x, omega_h, omega_x,
     return r1, r2, noe
 
 
-def calibrate_tau_scale(residues, d2, c2, gamma_h, gamma_x, omega_h, omega_x):
-    """
-    Fit a single global scale factor k applied to every mode's tau_k
-    (tau_k -> k*tau_k, for all five modes and all residues alike) so the
-    rigid (S2=1) R1/R2 prediction best matches observed R1/R2 for a set of
-    presumed-rigid calibration residues.
+def calibrated_tensor(dx0, dy0, dz0, rate, shape):
+    """Apply a (rate, shape) calibration to the hydrodynamic diffusion
+    tensor's eigenvalues (dx0,dy0,dz0), in the spirit of modelfree4's own
+    `diffusion` tensor optimization (it refits the tensor's overall rate
+    and axial ratio against the data, not just a single isotropic
+    correlation time).
 
-    The hydrodynamic bead model's rotational-diffusion *anisotropy shape*
-    (the amplitudes A_k, i.e. which residues are relatively more/less
-    exposed to which tumbling mode) is validated elsewhere
-    (demos/hydronmr_validation) to track the true tensor well; its
-    *absolute* timescale is a known, documented approximation (uniform
-    3.0-Angstrom-per-heavy-atom beads, not the real AtoB table -- see
-    makeshift/hydronmr/physics/structure.py). `add_rigid_prediction`
-    already corrects for this same absolute-magnitude offset with a
-    scale factor on the predicted R2/R1 ratio; this is the analogous
-    correction for the model-free fit, applied to the underlying
-    correlation times (so it also corrects R1 and NOE, not just the
-    R2/R1 ratio) before any residue's S2 is fit.
+    `shape` redistributes anisotropy around the tensor's mean eigenvalue
+    without changing that mean: shape=1 reproduces (dx0,dy0,dz0) exactly;
+    shape=0 collapses to the isotropic average; shape>1 exaggerates the
+    hydrodynamic model's anisotropy. `rate` then uniformly scales the
+    (possibly reshaped) tensor's mean eigenvalue -- the same "absolute
+    timescale is a known approximation, shape is not" correction
+    `calibrate_tau_scale` used to apply as a single tau_scale, generalized
+    to also let the anisotropy itself flex.
 
-    `residues` is a list of (amplitudes, taus, R1_obs, R1_err, R2_obs,
-    R2_err, NOE_obs, NOE_err) tuples for the calibration set (NOE_obs/
-    NOE_err may be None to fit R1/R2 only). Including NOE matters: with
-    tau_e=0 elsewhere in this module, NOE is independent of S2 and used
-    directly as the "does this residue need tau_e" diagnostic
-    (`fit_residue`'s noe_flag) against the *uncalibrated* NOE_pred_rigid,
-    so any systematic NOE offset this calibration leaves behind reads as
-    widespread spurious tau_e need rather than real dynamics -- fitting
-    NOE here too is what removes that offset before per-residue model
-    selection runs. Returns k (dimensionless).
+    Returns (dx, dy, dz, dav, aniso_delta, taus) -- the calibrated
+    eigenvalues plus everything `mode_amplitudes_raw` needs to build
+    per-residue amplitudes against them.
     """
-    def chi2(log_k):
-        k = 10.0 ** log_k
+    dav0 = (dx0 + dy0 + dz0) / 3.0
+    dx = rate * (dav0 + shape * (dx0 - dav0))
+    dy = rate * (dav0 + shape * (dy0 - dav0))
+    dz = rate * (dav0 + shape * (dz0 - dav0))
+    taus, dav, aniso_delta = diffusion_tensor_taus(dx, dy, dz)
+    return dx, dy, dz, dav, aniso_delta, taus
+
+
+def calibrate_tensor(residues, dx0, dy0, dz0, d2, c2, gamma_h, gamma_x, omega_h, omega_x,
+                     shape_bounds=(1.0, 1.0)):
+    """
+    Jointly refit the diffusion tensor's overall RATE and ANISOTROPY SHAPE
+    (not orientation, which stays fixed at rotani()'s principal axes)
+    against a presumed-rigid calibration set's R1/R2/NOE -- the same idea
+    as modelfree4's own tensor optimization step, simplified to the two
+    parameters (rate, shape) a single-field, single-structure calibration
+    set can actually constrain (see `calibrated_tensor`).
+
+    `residues` is a list of (l1, l2, l3, R1_obs, R1_err, R2_obs, R2_err,
+    NOE_obs, NOE_err) direction-cosine tuples (NOE_obs/NOE_err may be
+    None to fit R1/R2 only) -- direction cosines rather than precomputed
+    amplitudes/taus because those depend on the trial tensor being
+    calibrated here (see `makeshift.hydronmr.physics.nmr.mode_amplitudes_raw`).
+    Including NOE matters for the same reason described in
+    `fit_residue`'s docstring: with tau_e=0 here, NOE is independent of
+    S2, so fitting it removes any systematic NOE offset before it's
+    misread as widespread spurious tau_e need.
+
+    `shape_bounds` defaults to (1.0, 1.0) -- i.e. rate-only calibration,
+    reshaping disabled -- not out of caution alone: checked directly
+    against real data (BMRB 4390, 20 calibration residues), letting shape
+    range over e.g. [0, 3] finds a chi2 surface that varies by <1% across
+    the whole span, so the grid/local-polish search just chases numerical
+    noise and can land anywhere in the allowed range, including its
+    bounds. A single-field, ~20-residue "presumed rigid" calibration set
+    doesn't carry enough independent information to pin down anisotropy
+    *shape* separately from rate (modelfree4 itself only attempts full
+    tensor optimization with substantially more residues/experiments than
+    that). Widen `shape_bounds` only if the calibration set backing a
+    particular call is large and well-conditioned enough that its chi2
+    surface actually has a resolvable minimum in shape -- check before
+    trusting the result, the same way this default was chosen.
+
+    Returns (rate, shape).
+    """
+    def chi2(params):
+        log_rate, shape = params
+        rate = 10.0 ** log_rate
+        dx, dy, dz, dav, aniso_delta, taus = calibrated_tensor(dx0, dy0, dz0, rate, shape)
         total = 0.0
         for res in residues:
-            amplitudes, taus, R1_obs, R1_err, R2_obs, R2_err = res[:6]
-            NOE_obs = res[6] if len(res) > 6 else None
-            NOE_err = res[7] if len(res) > 7 else None
-            taus_k = [t * k for t in taus]
+            l1, l2, l3, R1_obs, R1_err, R2_obs, R2_err = res[:7]
+            NOE_obs = res[7] if len(res) > 7 else None
+            NOE_err = res[8] if len(res) > 8 else None
+            amplitudes = mode_amplitudes_raw(l1, l2, l3, dx, dy, dz, dav, aniso_delta)
             r1p, r2p, noep = relaxation_rates(
                 d2, c2, gamma_h, gamma_x, omega_h, omega_x,
-                amplitudes, taus_k, S2=1.0, tau_e=0.0)
+                amplitudes, taus, S2=1.0, tau_e=0.0)
             w1 = 1.0 / R1_err ** 2 if (R1_err and np.isfinite(R1_err) and R1_err > 0) else 1.0
             w2 = 1.0 / R2_err ** 2 if (R2_err and np.isfinite(R2_err) and R2_err > 0) else 1.0
             total += w1 * (R1_obs - r1p) ** 2 + w2 * (R2_obs - r2p) ** 2
@@ -132,45 +170,55 @@ def calibrate_tau_scale(residues, d2, c2, gamma_h, gamma_x, omega_h, omega_x):
                 total += w3 * (NOE_obs - noep) ** 2
         return total
 
-    grid = np.linspace(-1.0, 1.0, 41)   # k in [0.1, 10]
-    costs = [chi2(lk) for lk in grid]
-    best = grid[int(np.argmin(costs))]
-    step = grid[1] - grid[0]
-    res = minimize_scalar(chi2, bounds=(best - step, best + step),
-                           method="bounded", options={"xatol": 1e-4})
-    return 10.0 ** res.x
+    log_rate_grid = np.linspace(-1.0, 1.0, 21)   # rate in [0.1, 10]
+    shape_grid = np.linspace(shape_bounds[0], shape_bounds[1], 13)
+    best_cost = np.inf
+    best = (0.0, 1.0)
+    for lr in log_rate_grid:
+        for sh in shape_grid:
+            cost = chi2((lr, sh))
+            if cost < best_cost:
+                best_cost = cost
+                best = (lr, sh)
+
+    res = minimize(chi2, x0=best, method="Nelder-Mead",
+                    bounds=[(-1.0, 1.0), shape_bounds],
+                    options={"xatol": 1e-4, "fatol": 1e-8})
+    log_rate, shape = res.x
+    return 10.0 ** log_rate, shape
 
 
-def assess_calibration(residues, tau_scale, d2, c2, gamma_h, gamma_x, omega_h, omega_x,
+def assess_calibration(residues, rate, shape, dx0, dy0, dz0,
+                        d2, c2, gamma_h, gamma_x, omega_h, omega_x,
                         gap_threshold=0.3):
     """
-    Check whether the calibrated tau_scale actually reconciles R1 and R2
-    for the calibration set, or is a forced compromise between two
-    genuinely inconsistent constraints.
+    Check whether the calibrated (rate, shape) tensor actually reconciles
+    R1 and R2 for the calibration set, or is a forced compromise between
+    two genuinely inconsistent constraints.
 
     R1(tau) has a peak and turns over; R2(tau) rises roughly monotonically
-    in the same regime. A single tau_scale can only satisfy both if the
-    calibration set is genuinely close to rigid for both observables at
-    once. When it isn't -- most often because residues with real
-    dynamics (conformational exchange elevating R2, or fast motion
-    depressing it) got included in the "presumed rigid" NOE-selected
-    calibration set -- calibrate_tau_scale still returns its best
-    least-squares compromise, but that compromise silently favors
-    whichever observable's loss is steeper near the optimum (usually
-    R1, since it's past its peak there) while leaving the other
+    in the same regime. A single calibrated tensor can only satisfy both
+    if the calibration set is genuinely close to rigid for both
+    observables at once. When it isn't -- most often because residues
+    with real dynamics (conformational exchange elevating R2, or fast
+    motion depressing it) got included in the "presumed rigid"
+    NOE-selected calibration set -- `calibrate_tensor` still returns its
+    best least-squares compromise, but that compromise silently favors
+    whichever observable's loss is steeper near the optimum (usually R1,
+    since it's past its peak there) while leaving the other
     systematically unexplained. That isn't a bug in the calibration; it's
     the calibration correctly reporting that no single overall tumbling
-    timescale fits this protein, which downstream Model 1/3 S2 (linear in
-    R1 and R2 respectively) will silently inherit as a systematic bias
+    tensor fits this protein, which downstream Model 1/3 S2 (linear in R1
+    and R2 respectively) will silently inherit as a systematic bias
     rather than an obviously-wrong number.
 
     This computes, per calibration residue, an independent order
     parameter estimate from R1 alone (S2 = R1_obs / R1_rigid) and from R2
     alone (S2 = R2_obs / R2_rigid), both using the already-calibrated
-    tau_scale. For a genuinely rigid residue these agree closely (both
-    near 1 -- the reason it was selected for calibration in the first
-    place); a systematic gap between their medians across the whole
-    calibration set is the diagnostic.
+    tensor. For a genuinely rigid residue these agree closely (both near
+    1 -- the reason it was selected for calibration in the first place);
+    a systematic gap between their medians across the whole calibration
+    set is the diagnostic.
 
     `gap_threshold` default (0.3) is set empirically, not arbitrarily:
     checked against several already-validated BMRB entries (see
@@ -183,12 +231,13 @@ def assess_calibration(residues, tau_scale, d2, c2, gamma_h, gamma_x, omega_h, o
     Returns a dict: median_s2_from_r1, median_s2_from_r2, gap (r2 minus
     r1, signed), n, and unreliable (True if abs(gap) > gap_threshold).
     """
+    dx, dy, dz, dav, aniso_delta, taus = calibrated_tensor(dx0, dy0, dz0, rate, shape)
     s2_r1, s2_r2 = [], []
     for res in residues:
-        amplitudes, taus, R1_obs, R1_err, R2_obs, R2_err = res[:6]
-        taus_k = [t * tau_scale for t in taus]
+        l1, l2, l3, R1_obs, R1_err, R2_obs, R2_err = res[:7]
+        amplitudes = mode_amplitudes_raw(l1, l2, l3, dx, dy, dz, dav, aniso_delta)
         r1p, r2p, _ = relaxation_rates(
-            d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus_k,
+            d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus,
             S2=1.0, tau_e=0.0)
         if R1_obs is not None and np.isfinite(R1_obs) and r1p > 0:
             s2_r1.append(R1_obs / r1p)

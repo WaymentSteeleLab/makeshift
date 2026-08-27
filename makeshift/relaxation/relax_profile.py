@@ -71,9 +71,11 @@ class RelaxationProfile:
     sequence : str
         One-letter sequence the data is aligned to.
     entry_id, entity_id : identifiers carried for reference.
-    tau_scale : the calibrated diffusion-tensor timescale correction (see
-        `add_rigid_prediction`/`fit_order_parameters`), None until one of
-        those has run.
+    tau_scale, tau_shape : the calibrated diffusion tensor's overall rate
+        and anisotropy shape (see `add_rigid_prediction`/
+        `fit_order_parameters`, `model_free.calibrate_tensor`), None
+        until one of those has run. tau_shape=1.0 reproduces the
+        hydrodynamic model's own anisotropy unchanged.
     calibration_diagnostics : dict from `model_free.assess_calibration`
         (median_s2_from_r1, median_s2_from_r2, gap, n, unreliable), set
         alongside tau_scale. `unreliable=True` means R1 and R2 imply
@@ -92,6 +94,7 @@ class RelaxationProfile:
         self.entry = entry
         self.scale_factor = None
         self.tau_scale = None
+        self.tau_shape = None
         self.calibration_diagnostics = None
         self.field_mhz = field_mhz
  
@@ -481,15 +484,18 @@ class RelaxationProfile:
                     continue
         return None
 
-    def _residue_geometry(self, g, pdb_path, chain=None):
+    def _residue_cosines(self, g, pdb_path, chain=None):
         """
         For every residue with data and a matched N-H bond vector: its
-        Woessner mode amplitudes/taus (`mode_amplitudes`, unscaled) and
-        its table row. Returns {position -> (amplitudes, taus, row)},
-        shared by `add_rigid_prediction` and `fit_order_parameters` so
-        both work from identical per-residue tumbling geometry.
+        direction cosines (`direction_cosines`) along the diffusion
+        tensor's principal axes, and its table row. Returns {position ->
+        (l1, l2, l3, row)}, shared by `add_rigid_prediction` and
+        `fit_order_parameters` so both work from identical per-residue
+        tumbling geometry. Cosines only depend on the tensor's
+        *orientation* (g.rot_eigvecs), which `_calibrate_tensor` never
+        changes, so these stay valid before and after tensor calibration.
         """
-        from ..hydronmr.physics.nmr import mode_amplitudes
+        from ..hydronmr.physics.nmr import direction_cosines
         from ..hydronmr.physics.pdb import nh_bond_vectors, parse_pdb_atoms
 
         nh_vectors = nh_bond_vectors(parse_pdb_atoms(pdb_path))
@@ -499,89 +505,119 @@ class RelaxationProfile:
         for (c, resseq), v in nh_vectors.items():
             vec_by_seqid.setdefault(resseq, v)
 
-        geometry = {}
+        cosines = {}
         for pos, (_, row) in enumerate(self.table.iterrows()):
             if not row.get("has_data", False):
                 continue
             v = vec_by_seqid.get(int(row["Seq_ID"]))
             if v is None:
                 continue
-            geometry[pos] = (*mode_amplitudes(g, v), row)
-        return geometry
+            cosines[pos] = (*direction_cosines(g, v), row)
+        return cosines
 
-    def _calibration_subset(self, geometry, noe_cut):
+    def _calibration_subset(self, cosines, noe_cut):
         """
-        (amplitudes, taus, R1, R1_err, R2, R2_err, NOE, NOE_err) tuples for
-        the presumed-rigid residues (NOE > `noe_cut`) used to calibrate
-        `model_free.calibrate_tau_scale` -- NOE is included (not just
-        R1/R2) so the calibrated rigid prediction doesn't carry a
-        systematic NOE offset into the per-residue Model 2 (tau_e)
-        diagnostic, which compares raw NOE_pred_rigid to observed NOE.
-        Falls back to every residue with R1/R2 data (with a warning) if
-        fewer than 3 qualify.
+        (l1, l2, l3, R1, R1_err, R2, R2_err, NOE, NOE_err) tuples for the
+        presumed-rigid residues (NOE > `noe_cut`) used to calibrate
+        `model_free.calibrate_tensor` -- NOE is included (not just R1/R2)
+        so the calibrated rigid prediction doesn't carry a systematic NOE
+        offset into the per-residue Model 2 (tau_e) diagnostic, which
+        compares raw NOE_pred_rigid to observed NOE. Falls back to every
+        residue with R1/R2 data (with a warning) if fewer than 3 qualify.
         """
         def usable(row):
             return (row.get("R1") is not None and np.isfinite(row.get("R1"))
                     and row.get("R2") is not None and np.isfinite(row.get("R2")))
 
-        def tup(amplitudes, taus, row):
-            return (amplitudes, taus, row.get("R1"), row.get("R1_err"),
+        def tup(l1, l2, l3, row):
+            return (l1, l2, l3, row.get("R1"), row.get("R1_err"),
                     row.get("R2"), row.get("R2_err"),
                     row.get("NOE"), row.get("NOE_err"))
 
         calibration = [
-            tup(amplitudes, taus, row)
-            for amplitudes, taus, row in geometry.values()
+            tup(l1, l2, l3, row)
+            for l1, l2, l3, row in cosines.values()
             if usable(row) and row.get("NOE") is not None
             and np.isfinite(row.get("NOE")) and row.get("NOE") > noe_cut
         ]
         if len(calibration) < 3:
             calibration = [
-                tup(amplitudes, taus, row)
-                for amplitudes, taus, row in geometry.values() if usable(row)
+                tup(l1, l2, l3, row)
+                for l1, l2, l3, row in cosines.values() if usable(row)
             ]
             warnings.warn(
                 f"fewer than 3 residues with NOE > {noe_cut}; calibrating "
-                "the diffusion-tensor timescale against all residues with "
-                "R1/R2 data instead (less reliable if many are flexible).",
+                "the diffusion tensor against all residues with R1/R2 "
+                "data instead (less reliable if many are flexible).",
                 UserWarning,
             )
         return calibration
 
-    def _calibrate_tau(self, calibration, g):
+    def _calibrate_tensor(self, calibration, g):
         """
-        Calibrate `self.tau_scale` against `calibration` and check the
-        result with `model_free.assess_calibration` -- warns if R1 and R2
-        imply substantially different order parameters for the
-        calibration set, which means no single tumbling timescale
-        reconciles them (usually because residues with real dynamics
-        contaminated the "presumed rigid" calibration set), not a data or
-        code bug. Sets `self.tau_scale` and `self.calibration_diagnostics`
-        (see `model_free.assess_calibration`'s return value), shared by
+        Jointly refit the diffusion tensor's overall rate and anisotropy
+        shape against `calibration` (`model_free.calibrate_tensor`) and
+        check the result with `model_free.assess_calibration` -- warns if
+        R1 and R2 imply substantially different order parameters for the
+        calibration set, which means no single tumbling tensor reconciles
+        them (usually because residues with real dynamics contaminated
+        the "presumed rigid" calibration set), not a data or code bug.
+
+        Mutates `g.dx, g.dy, g.dz, g.dav, g.aniso_delta, g.rot_tau` in
+        place to the calibrated tensor (orientation, g.rot_eigvecs, is
+        left untouched), so downstream code can keep using `g` exactly as
+        before -- callers just need to build any amplitudes *after* this
+        runs, not before. Sets `self.tau_scale` (the calibrated rate) and
+        `self.tau_shape` (the calibrated anisotropy shape; 1.0
+        reproduces the hydrodynamic model's own anisotropy unchanged),
+        plus `self.calibration_diagnostics`. Shared by
         `add_rigid_prediction` and `fit_order_parameters`.
         """
         from . import model_free
 
-        self.tau_scale = model_free.calibrate_tau_scale(
-            calibration, g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x)
+        dx0, dy0, dz0 = g.dx, g.dy, g.dz
+        rate, shape = model_free.calibrate_tensor(
+            calibration, dx0, dy0, dz0,
+            g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x)
         self.calibration_diagnostics = model_free.assess_calibration(
-            calibration, self.tau_scale, g.d2, g.c2, g.gamma_h, g.gamma_x,
-            g.omega_h, g.omega_x)
+            calibration, rate, shape, dx0, dy0, dz0,
+            g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x)
+
+        g.dx, g.dy, g.dz, g.dav, g.aniso_delta, g.rot_tau = \
+            model_free.calibrated_tensor(dx0, dy0, dz0, rate, shape)
+        self.tau_scale = rate
+        self.tau_shape = shape
+
         if self.calibration_diagnostics["unreliable"]:
             d = self.calibration_diagnostics
             warnings.warn(
-                f"tau_scale calibration may be unreliable: R1 and R2 imply "
+                f"tensor calibration may be unreliable: R1 and R2 imply "
                 f"substantially different order parameters for the "
                 f"presumed-rigid calibration set (median S2 from R1="
                 f"{d['median_s2_from_r1']:.2f}, from R2={d['median_s2_from_r2']:.2f}, "
                 f"gap={d['gap']:+.2f}, n={d['n']}). This usually means no "
-                "single overall tumbling timescale explains both -- often "
+                "single overall tumbling tensor explains both -- often "
                 "because residues with real dynamics (e.g. widespread "
                 "conformational exchange) contaminated the calibration "
                 "set, not a data or code bug. S2 fits from this profile, "
                 "especially Models 1/3, should be treated with caution.",
                 UserWarning,
             )
+
+    @staticmethod
+    def _geometry_from_cosines(cosines, g):
+        """{position -> (amplitudes, taus, row)} built from cached
+        direction cosines plus the (now tensor-calibrated) `g` --
+        call after `_calibrate_tensor` so the amplitudes/taus reflect
+        the calibrated tensor, not the raw hydrodynamic one."""
+        from ..hydronmr.physics.nmr import mode_amplitudes_raw
+
+        geometry = {}
+        for pos, (l1, l2, l3, row) in cosines.items():
+            amplitudes = mode_amplitudes_raw(l1, l2, l3, g.dx, g.dy, g.dz,
+                                             g.dav, g.aniso_delta)
+            geometry[pos] = (amplitudes, g.rot_tau, row)
+        return geometry
 
     # rigid-body prediction
  
@@ -600,20 +636,22 @@ class RelaxationProfile:
         If `pdb` is None, the entry's own deposited PDB code is used when it
         cites one; otherwise this raises (makeshift does not predict structure).
 
-        Before predicting, a single global timescale correction (all five
-        Woessner modes' tau_k -> k*tau_k) is calibrated against the
-        presumed-rigid subset (NOE > `noe_cut`) via
-        `model_free.calibrate_tau_scale` — the same calibration
-        `fit_order_parameters` uses, so both methods agree on one rigid-body
-        baseline rather than each fitting an independent correction. (The
-        bead model's diffusion-tensor anisotropy *shape* is validated
-        elsewhere, demos/hydronmr_validation; its absolute timescale is a
-        known approximation — see makeshift/hydronmr/physics/structure.py.)
-        A small residual multiplicative correction on the ratio specifically
-        (`self.scale_factor`, expected close to 1.0 now that the timescale
+        Before predicting, the diffusion tensor's overall rate and
+        anisotropy shape are jointly refit against the presumed-rigid
+        subset (NOE > `noe_cut`) via `model_free.calibrate_tensor` — the
+        same calibration `fit_order_parameters` uses, so both methods
+        agree on one rigid-body baseline rather than each fitting an
+        independent correction. (The bead model's hydrodynamic tensor is
+        validated elsewhere, demos/hydronmr_validation, to have roughly
+        the right shape and axes; its absolute magnitude is a known
+        approximation — see makeshift/hydronmr/physics/structure.py —
+        and this calibration lets the data itself refine the shape too,
+        in the spirit of modelfree4's own tensor optimization.) A small
+        residual multiplicative correction on the ratio specifically
+        (`self.scale_factor`, expected close to 1.0 now that the tensor
         itself is calibrated) is still fit on top, mirroring the previous
-        behavior and absorbing whatever the timescale-only correction
-        doesn't reach.
+        behavior and absorbing whatever the tensor calibration doesn't
+        reach.
 
         `field_mhz` is the 1H spectrometer frequency to predict at; if not
         given, it's read from the entry's own heteronucl_T1_relaxation
@@ -640,18 +678,18 @@ class RelaxationProfile:
             dipolesnmr(g, b0_tesla=b0_tesla, gamma_h=g.gamma_h, gamma_x=g.gamma_x,
                       r_nh_angstrom=g.r_nh * 1.0e10, csa_ppm=g.csa * 1.0e6)
 
-        geometry = self._residue_geometry(g, pdb_path, chain=chain)
-        calibration = self._calibration_subset(geometry, noe_cut)
-        self._calibrate_tau(calibration, g)
+        cosines = self._residue_cosines(g, pdb_path, chain=chain)
+        calibration = self._calibration_subset(cosines, noe_cut)
+        self._calibrate_tensor(calibration, g)
+        geometry = self._geometry_from_cosines(cosines, g)
 
         n = len(self.table)
         ratio_pred = np.full(n, np.nan)
         noe_pred = np.full(n, np.nan)
         for pos, (amplitudes, taus, row) in geometry.items():
-            taus_scaled = [tau * self.tau_scale for tau in taus]
             r1p, r2p, noep = model_free.relaxation_rates(
                 g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x,
-                amplitudes, taus_scaled, S2=1.0, tau_e=0.0)
+                amplitudes, taus, S2=1.0, tau_e=0.0)
             ratio_pred[pos] = r2p / r1p
             noe_pred[pos] = noep
 
@@ -670,8 +708,9 @@ class RelaxationProfile:
         t = t.drop(columns="_pred_ratio")
         self.table = t
         print(f"  HYDRONMR: {n_match} residues matched structure to data, "
-              f"tau_scale {self.tau_scale:.3f}, residual ratio scale "
-              f"{self.scale_factor:.3f} ({int(ordered.sum())} ordered residues used)")
+              f"tau_scale {self.tau_scale:.3f}, tau_shape {self.tau_shape:.3f}, "
+              f"residual ratio scale {self.scale_factor:.3f} "
+              f"({int(ordered.sum())} ordered residues used)")
         return self
 
     # model-free order parameters
@@ -688,17 +727,19 @@ class RelaxationProfile:
         that existing per-residue anisotropic-tumbling spectral density
         rather than assuming isotropic tumbling.
 
-        Before fitting, a single global timescale correction (all five
-        modes' tau_k -> k*tau_k, same k for every residue) is calibrated
-        against the presumed-rigid subset (NOE > `noe_cut`) via
-        `model_free.calibrate_tau_scale`. The bead model's tumbling
-        *anisotropy shape* is validated elsewhere (demos/hydronmr_validation)
-        to track the true diffusion tensor well, but its *absolute*
-        timescale is a known approximation (see
+        Before fitting, the diffusion tensor's overall rate and anisotropy
+        shape are jointly refit against the presumed-rigid subset (NOE >
+        `noe_cut`) via `model_free.calibrate_tensor` -- in the spirit of
+        modelfree4's own tensor optimization step, simplified to the two
+        parameters a single-field calibration set can actually constrain.
+        The bead model's hydrodynamic tensor is validated elsewhere
+        (demos/hydronmr_validation) to have roughly the right shape and
+        axes, but its absolute magnitude is a known approximation (see
         makeshift/hydronmr/physics/structure.py) -- `add_rigid_prediction`
         already corrects the analogous offset for its R2/R1 ratio; this
-        does the same for R1 and NOE, which the ratio-only correction
-        doesn't reach, before any residue's S2 is fit.
+        calibration corrects R1 and NOE too, which the ratio-only
+        correction doesn't reach, and lets the anisotropy itself flex,
+        before any residue's S2 is fit.
 
         Models 4/5 (S2+tau_e+Rex, or S2f+S2s+tau_e) are not fit: against
         only R1/R2/NOE at a single field they are exactly- or
@@ -725,7 +766,8 @@ class RelaxationProfile:
         Adds columns: S2, S2_err, mf_model ("1"/"2"/"3"/"ambiguous"),
         tau_e_ps, Rex, NOE_pred_rigid, noe_flag, r2_flag. Residues with no
         R1 or no matched structural N-H vector keep mf_model=None / S2=NaN.
-        Sets `self.tau_scale` to the calibrated timescale correction.
+        Sets `self.tau_scale`/`self.tau_shape` to the calibrated tensor's
+        overall rate and anisotropy shape.
         """
         from ..hydronmr import run as run_hydronmr
         from ..hydronmr.physics.nmr import dipolesnmr
@@ -747,9 +789,10 @@ class RelaxationProfile:
         dipolesnmr(g, b0_tesla=b0_tesla, gamma_h=g.gamma_h, gamma_x=g.gamma_x,
                   r_nh_angstrom=g.r_nh * 1.0e10, csa_ppm=g.csa * 1.0e6)
 
-        geometry = self._residue_geometry(g, pdb_path, chain=chain)
-        calibration = self._calibration_subset(geometry, noe_cut)
-        self._calibrate_tau(calibration, g)
+        cosines = self._residue_cosines(g, pdb_path, chain=chain)
+        calibration = self._calibration_subset(cosines, noe_cut)
+        self._calibrate_tensor(calibration, g)
+        geometry = self._geometry_from_cosines(cosines, g)
 
         t = self.table.copy()
         n = len(t)
@@ -763,12 +806,11 @@ class RelaxationProfile:
         r2_flag = np.zeros(n, dtype=bool)
 
         for pos, (amplitudes, taus, row) in geometry.items():
-            taus_scaled = [tau * self.tau_scale for tau in taus]
             fit = model_free.fit_residue(
                 row.get("R1"), row.get("R1_err"),
                 row.get("R2"), row.get("R2_err"),
                 row.get("NOE"), row.get("NOE_err"),
-                amplitudes, taus_scaled, g.d2, g.c2, g.gamma_h, g.gamma_x,
+                amplitudes, taus, g.d2, g.c2, g.gamma_h, g.gamma_x,
                 g.omega_h, g.omega_x, sigma_flag=sigma_flag)
             if fit.model is None:
                 continue
@@ -793,8 +835,9 @@ class RelaxationProfile:
 
         counts = pd.Series([m for m in mf_model if m is not None]).value_counts().to_dict()
         print(f"  order-parameter fit at {field_mhz:.1f} MHz "
-              f"(tau_scale={self.tau_scale:.3f}, {len(calibration)} "
-              f"calibration residues): {sum(counts.values())} residues fit {counts}")
+              f"(tau_scale={self.tau_scale:.3f}, tau_shape={self.tau_shape:.3f}, "
+              f"{len(calibration)} calibration residues): "
+              f"{sum(counts.values())} residues fit {counts}")
         return self
 
     # labeling

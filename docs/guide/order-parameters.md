@@ -83,16 +83,23 @@ exchange → Model 3; a residue showing *both* signals is outside this
 two-parameter scope and reported as `"ambiguous"` rather than forced into
 either model.
 
-**Calibration.** The bead model's diffusion-tensor *anisotropy shape* is
-validated separately (`demos/hydronmr_validation`); its *absolute*
-timescale is a known approximation (uniform-radius beads, not the real
-AtoB table). Left uncorrected this pushes fitted S² outside [0, 1] for
-obviously-rigid residues. Before fitting any residue,
-`fit_order_parameters()` calibrates a single global scale factor on all
-five τₖ (`model_free.calibrate_tau_scale`) against the presumed-rigid
-subset (NOE above `noe_cut`), fit jointly on R1, R2, *and* NOE so the
-correction doesn't leave a systematic NOE offset for the τₑ diagnostic to
-trip on. `add_rigid_prediction()` uses the same calibration.
+**Calibration.** The bead model's hydrodynamic diffusion tensor is
+validated separately (`demos/hydronmr_validation`) to have roughly the
+right shape and axes; its *absolute* magnitude is a known approximation
+(uniform-radius beads, not the real AtoB table). Left uncorrected this
+pushes fitted S² outside [0, 1] for obviously-rigid residues. Before
+fitting any residue, `fit_order_parameters()` jointly refits the
+tensor's overall rate and anisotropy shape (`model_free.calibrate_tensor`,
+in the spirit of modelfree4's own tensor optimization step) against the
+presumed-rigid subset (NOE above `noe_cut`), fit jointly on R1, R2, *and*
+NOE so the correction doesn't leave a systematic NOE offset for the τₑ
+diagnostic to trip on. In practice the anisotropy-shape term is left
+disabled by default (`shape_bounds=(1.0, 1.0)`): checked against real
+calibration sets, shape isn't actually resolvable from a single-field,
+~20-residue subset (the chi² surface varies by <1% across the whole
+allowed shape range), so only the rate is fit unless a caller widens
+`shape_bounds` for a calibration set large/well-conditioned enough to
+constrain it. `add_rigid_prediction()` uses the same calibration.
 
 ## Example
 
