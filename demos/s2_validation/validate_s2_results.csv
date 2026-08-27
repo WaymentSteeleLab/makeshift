@@ -26,5 +26,4 @@ bmrb_id,title,field_mhz,n_dep,r_dep,rmse_dep,n_rci_wishart,r_rci_wishart,rmse_rc
 19388,The Apo-structure of the Low Molecular Weight Protein-tyrosine Phosphatase A (MptpA) from Mycobacterium tuberculosis Allows for Better Target-specific Drug Development,600,113,0.8065,0.0703,0,nan,nan,0,nan,nan,0,nan,nan,0,nan,nan
 26513,The Apo-structure of the Low Molecular Weight Protein-tyrosine Phosphatase A (MptpA) from Mycobacterium tuberculosis Allows for Better Target-specific Drug Development,600,111,0.8265,0.0694,0,nan,nan,0,nan,nan,0,nan,nan,0,nan,nan
 27890,BlaC in bound to clavulanic acid,850,174,0.5473,0.1576,222,0.0916,0.1613,220,-0.0066,0.1548,174,0.0383,0.1172,173,0.0346,0.2129
-50001,Solution structure of protein ARR_CleD in complex with c-di-GMP,600,30,0.6221,0.1123,30,-0.1017,0.1471,30,-0.1293,0.1546,30,0.4516,0.1399,30,0.4056,0.1345
 50212,Backbone 1H; 13C and 15N resonance assignments of 116 kDa Mycobacterium tuberculosis inorganic pyrophosphatase hexamer,700,136,0.9010,0.0593,136,0.4771,0.1056,136,0.4589,0.1283,136,0.5205,0.1080,136,0.4953,0.1419

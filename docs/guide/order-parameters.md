@@ -101,6 +101,17 @@ allowed shape range), so only the rate is fit unless a caller widens
 `shape_bounds` for a calibration set large/well-conditioned enough to
 constrain it. `add_rigid_prediction()` uses the same calibration.
 
+If the calibrated tensor still can't reconcile R1 and R2 for the
+calibration set (median S² implied by R1 alone vs. R2 alone differ by
+more than 0.3 — see `model_free.assess_calibration`), that means real
+per-residue dynamics contaminated the "presumed rigid" set, not a data or
+code bug. `fit_order_parameters()` raises `model_free.FittingError` in
+that case rather than reporting S² values that shouldn't be trusted; no
+columns are added to `prof.table`, though `prof.tau_scale`/`tau_shape`/
+`calibration_diagnostics` are still set, for inspecting why. (`add_rigid_prediction()`
+only warns and proceeds on the same condition, since its rigid baseline
+is a qualitative comparison rather than a reported number.)
+
 ## Example
 
 ```python

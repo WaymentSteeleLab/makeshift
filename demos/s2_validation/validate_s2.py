@@ -30,7 +30,7 @@ prefilter -- it turned out true for the *whole* previously-diagnosed
 "unresolved" bucket, and for the majority of what were originally
 low-hanging "OK" entries too (13 of the first 41).
 
-29 single-field entries pass (ENTRIES below); EXCLUDED lists the
+28 single-field entries pass (ENTRIES below); EXCLUDED lists the
 single-field entries that still didn't, grouped by root cause:
 
   Data/parsing gaps (technical, not a modeling problem):
@@ -45,6 +45,13 @@ single-field entries that still didn't, grouped by root cause:
     15097, 25852 -- villin C-terminal domains / calmodulin+eNOS peptide:
         multi-domain constructs connected by a flexible linker, so no
         single rigid-body diffusion tensor describes the whole chain.
+
+  Unreliable calibration (fit_order_parameters raises model_free.FittingError,
+  see makeshift/relaxation/model_free.py's assess_calibration -- R1 and R2
+  imply substantially different order parameters for the presumed-rigid
+  calibration set, so no S2 fit is attempted rather than reporting numbers
+  that shouldn't be trusted):
+    50001 -- only 8 calibration residues, gap +0.42.
 
   Unresolved:
     27929 -- BlaC + avibactam: r=0.02, no specific cause confirmed.
@@ -68,7 +75,7 @@ PAIRS_CSV = Path(__file__).parent / "validate_s2_pairs.csv"
 
 ENTRIES = [4364, 4365, 4366, 4390, 4689, 5153, 5154, 5549, 5550, 5991, 6470,
            6577, 15451, 17010, 17012, 17013, 17041, 17046, 17047, 17069,
-           17306, 18388, 18389, 18758, 19388, 26513, 27890, 50001, 50212]
+           17306, 18388, 18389, 18758, 19388, 26513, 27890, 50212]
 
 # entry_id -> number of distinct 1H spectrometer fields deposited (checked
 # via RelaxationProfile._list_fields_mhz across T1/T2/NOE); excluded before
@@ -87,6 +94,10 @@ EXCLUDED = {
     15097: "multi-domain construct with flexible linker",
     25852: "multi-domain construct (CaM) with flexible linker",
     27929: "unresolved -- r=0.02, no specific cause confirmed",
+    50001: "fit_order_parameters raises model_free.FittingError -- only 8 "
+           "presumed-rigid calibration residues, tau_scale pinned at the "
+           "search boundary, calibration gap +0.42 (> the 0.3 unreliable "
+           "threshold)",
 }
 
 

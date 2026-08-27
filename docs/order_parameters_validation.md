@@ -23,13 +23,13 @@ almost certainly came from a joint multi-field fit, a better-constrained
 problem than the single-field refit this code does, so a mismatch there
 isn't evidence of anything wrong on either side.
 
-**29 single-field entries pass.** Pooled across all of them:
+**28 single-field entries pass.** Pooled across all of them:
 
 | Metric | Value |
 |---|---|
-| Pearson r | 0.781 |
-| RMSE | 0.103 |
-| n | 2686 residues |
+| Pearson r | 0.797 |
+| RMSE | 0.098 |
+| n | 2656 residues |
 
 ### Per-entry breakdown
 
@@ -38,34 +38,33 @@ Sorted by Pearson r, high to low.
 | BMRB | Entry | Field (MHz) | n | r | RMSE |
 |---|---|---|---|---|---|
 | 4366 | Stromelysin+inhibitor (S1-S3, b) | 600 | 145 | 0.976 | 0.033 |
-| 17046 | Trp repressor, L75F (holo) | 600 | 73 | 0.959 | 0.075 |
+| 17046 | Trp repressor, L75F (holo) | 600 | 73 | 0.960 | 0.075 |
+| 5154 | N-TIMP-1, free | 500 | 102 | 0.956 | 0.066 |
 | 4364 | Stromelysin+inhibitor (S1-S3P) | 600 | 138 | 0.955 | 0.046 |
 | 4365 | Stromelysin+inhibitor (S1-S3, a) | 600 | 141 | 0.954 | 0.036 |
 | 6577 | IF2 C1-subdomain | 600 | 67 | 0.948 | 0.112 |
-| 5154 | N-TIMP-1, free | 500 | 102 | 0.934 | 0.089 |
 | 4390 | Eotaxin | 500 | 57 | 0.932 | 0.082 |
+| 5991 | Ets-1 deltaN301 | 500 | 124 | 0.927 | 0.055 |
+| 17069 | E73, SSV-RH | 600 | 51 | 0.921 | 0.068 |
 | 18758 | E1 enzyme half-domain | 400 | 71 | 0.915 | 0.097 |
-| 17069 | E73, SSV-RH | 600 | 51 | 0.911 | 0.071 |
 | 5549 | NPY analog [31Ala,32Pro] | 500 | 28 | 0.909 | 0.153 |
-| 17041 | Trp repressor, WT (holo) | 600 | 65 | 0.894 | 0.083 |
-| 15451 | GABPa OST domain | 500 | 77 | 0.885 | 0.066 |
-| 5991 | Ets-1 deltaN301 | 500 | 124 | 0.885 | 0.069 |
+| 17041 | Trp repressor, WT (holo) | 600 | 65 | 0.902 | 0.081 |
+| 50212 | M. tuberculosis pyrophosphatase | 700 | 136 | 0.901 | 0.059 |
+| 15451 | GABPa OST domain | 500 | 77 | 0.892 | 0.065 |
+| 5153 | N-TIMP-1 + MMP-3 | 600 | 84 | 0.892 | 0.084 |
+| 17010 | Trp repressor, WT | 600 | 55 | 0.890 | 0.064 |
 | 5550 | NPY, micelle-bound | 500 | 27 | 0.870 | 0.193 |
-| 50212 | M. tuberculosis pyrophosphatase | 700 | 136 | 0.857 | 0.070 |
-| 17306 | NRC ankyrin repeat protein | 600 | 85 | 0.854 | 0.115 |
-| 17047 | Trp repressor, A77V (holo) | 600 | 72 | 0.845 | 0.096 |
-| 17012 | Trp repressor, L75F | 600 | 81 | 0.833 | 0.111 |
-| 26513 | MptpA, apo (b) | 600 | 111 | 0.826 | 0.070 |
-| 17010 | Trp repressor, WT | 600 | 55 | 0.825 | 0.070 |
+| 17306 | NRC ankyrin repeat protein | 600 | 85 | 0.855 | 0.115 |
+| 17012 | Trp repressor, L75F | 600 | 81 | 0.850 | 0.108 |
+| 17047 | Trp repressor, A77V (holo) | 600 | 72 | 0.847 | 0.096 |
+| 26513 | MptpA, apo (b) | 600 | 111 | 0.827 | 0.069 |
 | 19388 | MptpA, apo (a) | 600 | 113 | 0.806 | 0.070 |
-| 5153 | N-TIMP-1 + MMP-3 | 600 | 84 | 0.793 | 0.142 |
-| 18388 | CtCBM11 (a) | 600 | 156 | 0.711 | 0.097 |
-| 17013 | Trp repressor, A77V | 600 | 72 | 0.695 | 0.113 |
-| 18389 | CtCBM11 (b) | 600 | 148 | 0.688 | 0.091 |
-| 6470 | Ubiquitin | 600 | 63 | 0.639 | 0.088 |
-| 4689 | Human growth hormone | 500 | 140 | 0.623 | 0.206 |
-| 50001 | ARR_CleD + c-di-GMP | 600 | 30 | 0.551 | 0.125 |
-| 27890 | BlaC + clavulanic acid | 850 | 174 | 0.544 | 0.158 |
+| 18388 | CtCBM11 (a) | 600 | 156 | 0.710 | 0.095 |
+| 17013 | Trp repressor, A77V | 600 | 72 | 0.696 | 0.113 |
+| 18389 | CtCBM11 (b) | 600 | 148 | 0.691 | 0.087 |
+| 6470 | Ubiquitin | 600 | 63 | 0.638 | 0.088 |
+| 4689 | Human growth hormone | 500 | 140 | 0.629 | 0.203 |
+| 27890 | BlaC + clavulanic acid | 850 | 174 | 0.547 | 0.158 |
 
 ## What was excluded, and why
 
@@ -94,6 +93,16 @@ domains), 25852 (calmodulin + eNOS peptide) — both multi-domain
 constructs joined by a flexible linker, so no single rigid-body diffusion
 tensor describes the whole chain. The model assumes one rigid domain by
 construction.
+
+**Unreliable calibration (1 entry).** 50001 (ARR_CleD + c-di-GMP) —
+`fit_order_parameters()` raises `model_free.FittingError` rather than
+attempting a fit: only 8 presumed-rigid calibration residues, with the
+calibrated tensor rate pinned at the search boundary and R1/R2 implying
+substantially different order parameters for that calibration set (gap
++0.42, over the 0.3 unreliable threshold — see
+[Calibration](guide/order-parameters.md)). No single overall tumbling
+tensor reconciles R1 and R2 here, so no S² is reported rather than
+reporting numbers that shouldn't be trusted.
 
 **Unresolved (1 entry).** 27929 (BlaC + avibactam): r=0.02, no specific
 cause confirmed.

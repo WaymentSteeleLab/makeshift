@@ -8,10 +8,11 @@ from .r2eff import compute_r2eff
 from .classify import classify_peaks, validate_sequence
 from .cpmg import CPMGExperiment, run_protein, save_results_csv
 from .relax_profile import RelaxationProfile
+from .model_free import FittingError
 
 __all__ = [
     "CPMGExperiment", "run_protein", "save_results_csv",
-    "RelaxationProfile",
+    "RelaxationProfile", "FittingError",
     "load_config", "load_planes",
     "fit_peaks", "compute_r2eff",
     "classify_peaks", "validate_sequence",

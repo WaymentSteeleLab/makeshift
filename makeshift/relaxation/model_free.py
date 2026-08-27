@@ -35,6 +35,13 @@ from scipy.optimize import minimize_scalar, minimize
 
 from ..hydronmr.physics.nmr import diffusion_tensor_taus, mode_amplitudes_raw
 
+
+class FittingError(RuntimeError):
+    """Raised by `RelaxationProfile.fit_order_parameters` when the
+    tensor calibration can't be trusted (see `assess_calibration`) and no
+    S2 fit was attempted, rather than returning numbers that silently
+    shouldn't be trusted."""
+
 # tau_e search range (seconds): a few ps up to a few ns, comfortably below
 # typical overall correlation times (tau_m ~ 5-15 ns for globular proteins)
 # so tau_e stays a genuinely fast, separated timescale.

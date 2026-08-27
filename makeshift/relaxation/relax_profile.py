@@ -82,7 +82,11 @@ class RelaxationProfile:
         substantially different order parameters for the calibration set
         -- no single tumbling timescale reconciles them, usually because
         residues with real dynamics contaminated the calibration set, not
-        a data or code bug; a warning is also raised in that case.
+        a data or code bug. `add_rigid_prediction` only warns and
+        proceeds on `unreliable=True` (its rigid baseline is a
+        qualitative comparison, not a reported number); `fit_order_parameters`
+        raises `model_free.FittingError` instead -- no S2 fit attempted
+        -- since its S2 values are numbers meant to be reported.
     """
  
     def __init__(self, table, sequence, entry_id=None, entity_id=None, entry=None,
@@ -553,11 +557,11 @@ class RelaxationProfile:
             )
         return calibration
 
-    def _calibrate_tensor(self, calibration, g):
+    def _calibrate_tensor(self, calibration, g, on_unreliable="warn"):
         """
         Jointly refit the diffusion tensor's overall rate and anisotropy
         shape against `calibration` (`model_free.calibrate_tensor`) and
-        check the result with `model_free.assess_calibration` -- warns if
+        check the result with `model_free.assess_calibration` -- flags if
         R1 and R2 imply substantially different order parameters for the
         calibration set, which means no single tumbling tensor reconciles
         them (usually because residues with real dynamics contaminated
@@ -571,7 +575,14 @@ class RelaxationProfile:
         `self.tau_shape` (the calibrated anisotropy shape; 1.0
         reproduces the hydrodynamic model's own anisotropy unchanged),
         plus `self.calibration_diagnostics`. Shared by
-        `add_rigid_prediction` and `fit_order_parameters`.
+        `add_rigid_prediction` and `fit_order_parameters`, which want
+        different responses to an unreliable calibration -- pass
+        `on_unreliable="warn"` (default; used by `add_rigid_prediction`,
+        whose rigid baseline is only a qualitative comparison, not a
+        number meant to be reported) or `on_unreliable="raise"` (used by
+        `fit_order_parameters`, whose S2 values ARE numbers meant to be
+        reported, so an untrustworthy calibration should stop the fit
+        rather than silently produce untrustworthy S2s).
         """
         from . import model_free
 
@@ -590,7 +601,7 @@ class RelaxationProfile:
 
         if self.calibration_diagnostics["unreliable"]:
             d = self.calibration_diagnostics
-            warnings.warn(
+            message = (
                 f"tensor calibration may be unreliable: R1 and R2 imply "
                 f"substantially different order parameters for the "
                 f"presumed-rigid calibration set (median S2 from R1="
@@ -598,9 +609,14 @@ class RelaxationProfile:
                 f"gap={d['gap']:+.2f}, n={d['n']}). This usually means no "
                 "single overall tumbling tensor explains both -- often "
                 "because residues with real dynamics (e.g. widespread "
-                "conformational exchange) contaminated the calibration "
-                "set, not a data or code bug. S2 fits from this profile, "
-                "especially Models 1/3, should be treated with caution.",
+                "conformational exchange) contaminated the calibration set, "
+                "not a data or code bug."
+            )
+            if on_unreliable == "raise":
+                raise model_free.FittingError(message)
+            warnings.warn(
+                message + " S2 fits from this profile, especially Models "
+                "1/3, should be treated with caution.",
                 UserWarning,
             )
 
@@ -741,6 +757,18 @@ class RelaxationProfile:
         correction doesn't reach, and lets the anisotropy itself flex,
         before any residue's S2 is fit.
 
+        Raises `model_free.FittingError` -- no S2 fit attempted at all --
+        if that calibration turns out unreliable (R1 and R2 imply
+        substantially different order parameters for the calibration set,
+        see `model_free.assess_calibration`): unlike `add_rigid_prediction`,
+        which only produces a qualitative comparison and so warns and
+        proceeds on the same condition, S2 here is a number meant to be
+        reported, and this usually means real per-residue dynamics
+        (e.g. conformational exchange) contaminated the "presumed rigid"
+        calibration set, not a data or code bug -- the fix is choosing a
+        better calibration subset (e.g. a lower `noe_cut`, or excluding
+        specific residues), not trusting numbers produced anyway.
+
         Models 4/5 (S2+tau_e+Rex, or S2f+S2s+tau_e) are not fit: against
         only R1/R2/NOE at a single field they are exactly- or
         over-parameterized and, in practice, ill-conditioned. Model
@@ -791,7 +819,7 @@ class RelaxationProfile:
 
         cosines = self._residue_cosines(g, pdb_path, chain=chain)
         calibration = self._calibration_subset(cosines, noe_cut)
-        self._calibrate_tensor(calibration, g)
+        self._calibrate_tensor(calibration, g, on_unreliable="raise")
         geometry = self._geometry_from_cosines(cosines, g)
 
         t = self.table.copy()
