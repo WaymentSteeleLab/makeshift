@@ -27,9 +27,15 @@ isn't evidence of anything wrong on either side.
 
 | Metric | Value |
 |---|---|
-| Pearson r | 0.797 |
-| RMSE | 0.098 |
+| Pearson r | 0.785 |
+| RMSE | 0.099 |
 | n | 2656 residues |
+
+Excluding "ambiguous"-model residues (both a NOE deficit and an R2 excess
+detected -- S2 falls back to the Model 1 point estimate rather than being
+confidently attributed to Model 2 or 3): r=0.799, RMSE=0.101, n=2271. See
+[validate_s2_no_ambiguous.png](../demos/s2_validation/validate_s2_no_ambiguous.png)
+alongside the all-models plot below.
 
 ### Per-entry breakdown
 
@@ -39,29 +45,29 @@ Sorted by Pearson r, high to low.
 |---|---|---|---|---|---|
 | 4366 | Stromelysin+inhibitor (S1-S3, b) | 600 | 145 | 0.976 | 0.033 |
 | 17046 | Trp repressor, L75F (holo) | 600 | 73 | 0.960 | 0.075 |
-| 5154 | N-TIMP-1, free | 500 | 102 | 0.956 | 0.066 |
+| 6577 | IF2 C1-subdomain | 600 | 67 | 0.957 | 0.105 |
 | 4364 | Stromelysin+inhibitor (S1-S3P) | 600 | 138 | 0.955 | 0.046 |
 | 4365 | Stromelysin+inhibitor (S1-S3, a) | 600 | 141 | 0.954 | 0.036 |
-| 6577 | IF2 C1-subdomain | 600 | 67 | 0.948 | 0.112 |
+| 5154 | N-TIMP-1, free | 500 | 102 | 0.946 | 0.069 |
+| 5991 | Ets-1 deltaN301 | 500 | 124 | 0.933 | 0.055 |
 | 4390 | Eotaxin | 500 | 57 | 0.932 | 0.082 |
-| 5991 | Ets-1 deltaN301 | 500 | 124 | 0.927 | 0.055 |
-| 17069 | E73, SSV-RH | 600 | 51 | 0.921 | 0.068 |
+| 17069 | E73, SSV-RH | 600 | 51 | 0.922 | 0.067 |
 | 18758 | E1 enzyme half-domain | 400 | 71 | 0.915 | 0.097 |
-| 5549 | NPY analog [31Ala,32Pro] | 500 | 28 | 0.909 | 0.153 |
+| 5549 | NPY analog [31Ala,32Pro] | 500 | 28 | 0.913 | 0.167 |
 | 17041 | Trp repressor, WT (holo) | 600 | 65 | 0.902 | 0.081 |
 | 50212 | M. tuberculosis pyrophosphatase | 700 | 136 | 0.901 | 0.059 |
+| 5153 | N-TIMP-1 + MMP-3 | 600 | 84 | 0.901 | 0.083 |
+| 5550 | NPY, micelle-bound | 500 | 27 | 0.897 | 0.191 |
 | 15451 | GABPa OST domain | 500 | 77 | 0.892 | 0.065 |
-| 5153 | N-TIMP-1 + MMP-3 | 600 | 84 | 0.892 | 0.084 |
 | 17010 | Trp repressor, WT | 600 | 55 | 0.890 | 0.064 |
-| 5550 | NPY, micelle-bound | 500 | 27 | 0.870 | 0.193 |
-| 17306 | NRC ankyrin repeat protein | 600 | 85 | 0.855 | 0.115 |
 | 17012 | Trp repressor, L75F | 600 | 81 | 0.850 | 0.108 |
 | 17047 | Trp repressor, A77V (holo) | 600 | 72 | 0.847 | 0.096 |
 | 26513 | MptpA, apo (b) | 600 | 111 | 0.827 | 0.069 |
+| 18389 | CtCBM11 (b) | 600 | 148 | 0.820 | 0.082 |
 | 19388 | MptpA, apo (a) | 600 | 113 | 0.806 | 0.070 |
-| 18388 | CtCBM11 (a) | 600 | 156 | 0.710 | 0.095 |
+| 17306 | NRC ankyrin repeat protein | 600 | 85 | 0.738 | 0.135 |
+| 18388 | CtCBM11 (a) | 600 | 156 | 0.711 | 0.095 |
 | 17013 | Trp repressor, A77V | 600 | 72 | 0.696 | 0.113 |
-| 18389 | CtCBM11 (b) | 600 | 148 | 0.691 | 0.087 |
 | 6470 | Ubiquitin | 600 | 63 | 0.638 | 0.088 |
 | 4689 | Human growth hormone | 500 | 140 | 0.629 | 0.203 |
 | 27890 | BlaC + clavulanic acid | 850 | 174 | 0.547 | 0.158 |
@@ -142,13 +148,36 @@ A fourth, smaller fix: `NMRStarEntry.get_alphafold_ids()` choked on an
 accession wrapped in quotes with an appended domain-range annotation
 (`"'P9WKD3[43 - 307]'"`, from three BlaC entries) — both are now stripped.
 
+**5. Model 2's tau_e search had a real second, unphysical minimum.** As
+tau_e approaches the protein's own overall tumbling time tau_m, the
+"fast"-motion term converges to the same functional form as the S²
+term, so the fit stops depending on S² at all -- opening a genuine
+double-well in chi2(tau_e) where large tau_e lets S² collapse toward 0.
+A fixed absolute cap on the search (the old `TAU_E_MAX_S=3ns` alone)
+doesn't protect any protein whose own tau_m isn't safely larger than
+that -- true for most single-domain proteins. Found on a RelaxDB entry
+(Protein G B1 domain, tau_m~4.7ns after calibration): 12.3% of Model-2
+fits across that dataset had collapsed to S²<0.5, some as low as 0.25 in
+a famously rigid, extensively characterized domain core. Fixed by
+capping the search at `tau_m / model_free.TAU_E_SEPARATION_FACTOR`
+(10x) in addition to the fixed constant — see that constant's docstring
+for the direct chi2(tau_e) evidence. This entry's own BMRB validation
+set didn't contain the pathology as severely as the RelaxDB case that
+surfaced it, but the fix still shifts some Model-2 residues' S²: pooled
+fit-vs-deposited r moved from 0.797 to 0.785 (a few entries improved --
+6577 0.948->0.957 -- while one dropped more -- 17306 0.855->0.738 --
+net close to a wash, and not indicative of the fix being wrong, since
+the deposited fit isn't ground truth either).
+
 ## Reproducing this validation
 
 `demos/s2_validation/validate_s2.py` fits every entry in its `ENTRIES`
 list, compares against deposited backbone S² (`Atom_ID` N/H, filtering out
 methyl/side-chain order parameters), and writes `validate_s2_results.csv`
 (per-entry stats), `validate_s2_pairs.csv` (every fit/deposited S² pair),
-and two figures — a pooled scatter + per-entry correlation bar chart, and
-a small-multiples grid, one panel per protein. It needs network access (to
-fetch entries and structures) and takes on the order of 15–20 minutes for
-the full set.
+and three figures — a pooled scatter + per-entry correlation bar chart
+(`validate_s2.png`), the same pair excluding "ambiguous"-model residues
+(`validate_s2_no_ambiguous.png`), and a small-multiples grid, one panel
+per protein (`validate_s2_grid.png`). It needs network access (to fetch
+entries and structures) and takes on the order of 15–20 minutes for the
+full set.

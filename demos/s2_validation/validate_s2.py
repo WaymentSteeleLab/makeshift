@@ -68,6 +68,7 @@ from makeshift.relaxation import RelaxationProfile
 from makeshift.rci import RCI
 
 OUTPUT_FILE = Path(__file__).parent / "validate_s2.png"
+OUTPUT_FILE_NO_AMBIGUOUS = Path(__file__).parent / "validate_s2_no_ambiguous.png"
 GRID_FILE = Path(__file__).parent / "validate_s2_grid.png"
 RCI_FILE = Path(__file__).parent / "validate_s2_vs_rci.png"
 RESULTS_CSV = Path(__file__).parent / "validate_s2_results.csv"
@@ -243,35 +244,63 @@ def main():
                          f"{'' if np.isnan(t) else f'{t:.4f}'},{m}\n")
     print(f"saved {PAIRS_CSV}")
 
-    fig, (ax_scatter, ax_bar) = plt.subplots(
-        1, 2, figsize=(13, 6), gridspec_kw={"width_ratios": [1, 1.3]})
-
     colors = {"1": "black", "2": "tab:blue", "3": "tab:orange", "ambiguous": "tab:red"}
-    all_models = np.concatenate([r["models"] for r in results])
-    for model in sorted(set(all_models)):
-        mask = all_models == model
-        ax_scatter.scatter(all_dep[mask], all_fit[mask], s=8, alpha=0.35,
-                           color=colors.get(model, "grey"), label=f"Model {model}")
-    ax_scatter.plot([0, 1], [0, 1], color="0.5", lw=1, ls="--", zorder=0)
-    ax_scatter.set_xlim(0, 1.05)
-    ax_scatter.set_ylim(0, 1.05)
-    ax_scatter.set_xlabel("deposited S2 (BMRB)")
-    ax_scatter.set_ylabel("makeshift fit S2")
-    ax_scatter.set_title(f"All {len(results)} entries pooled "
-                         f"(N={len(all_fit)}, r={overall_r:.3f}, RMSE={overall_rmse:.3f})")
-    ax_scatter.legend(frameon=False, fontsize=8, loc="lower right")
 
-    ordered = sorted(results, key=lambda r: r["r_dep"])
-    ax_bar.barh([str(r["bmrb_id"]) for r in ordered], [r["r_dep"] for r in ordered],
-               color="steelblue", height=0.7)
-    ax_bar.axvline(0, color="0.3", lw=0.8)
-    ax_bar.set_xlabel("Pearson r (fit S2 vs. deposited S2)")
-    ax_bar.set_title("Per-entry correlation")
-    ax_bar.tick_params(axis="y", labelsize=7)
+    def _make_pooled_plot(path, exclude_ambiguous):
+        """Pooled scatter (fit vs. deposited S2, colored by model) + per-entry
+        correlation bar chart -- optionally dropping "ambiguous"-model
+        residues (both signals present, S2 falls back to the Model-1 point
+        estimate, not confidently attributed to Model 2 or 3) from every
+        stat and panel, to see how much they're dragging down agreement
+        with the deposited fit vs. genuinely explaining it."""
+        def keep(r):
+            models = np.asarray(r["models"])
+            mask = models != "ambiguous" if exclude_ambiguous else np.ones(len(models), dtype=bool)
+            return mask
 
-    fig.tight_layout()
-    fig.savefig(OUTPUT_FILE, dpi=150)
-    print(f"saved {OUTPUT_FILE}")
+        masks = {id(r): keep(r) for r in results}
+        pooled_fit = np.concatenate([r["fit_s2"][masks[id(r)]] for r in results])
+        pooled_dep = np.concatenate([r["dep_s2"][masks[id(r)]] for r in results])
+        pooled_models = np.concatenate([np.asarray(r["models"])[masks[id(r)]] for r in results])
+        pooled_r, pooled_rmse, pooled_n = _corr(pooled_fit, pooled_dep)
+
+        per_entry_r = {}
+        for r in results:
+            m = masks[id(r)]
+            per_entry_r[r["bmrb_id"]], _, _ = _corr(r["fit_s2"][m], r["dep_s2"][m])
+
+        fig, (ax_scatter, ax_bar) = plt.subplots(
+            1, 2, figsize=(13, 6), gridspec_kw={"width_ratios": [1, 1.3]})
+
+        for model in sorted(set(pooled_models)):
+            mask = pooled_models == model
+            ax_scatter.scatter(pooled_dep[mask], pooled_fit[mask], s=8, alpha=0.35,
+                               color=colors.get(model, "grey"), label=f"Model {model}")
+        ax_scatter.plot([0, 1], [0, 1], color="0.5", lw=1, ls="--", zorder=0)
+        ax_scatter.set_xlim(0, 1.05)
+        ax_scatter.set_ylim(0, 1.05)
+        ax_scatter.set_xlabel("deposited S2 (BMRB)")
+        ax_scatter.set_ylabel("makeshift fit S2")
+        subtitle = "excluding ambiguous" if exclude_ambiguous else "all models"
+        ax_scatter.set_title(f"All {len(results)} entries pooled, {subtitle} "
+                             f"(N={pooled_n}, r={pooled_r:.3f}, RMSE={pooled_rmse:.3f})")
+        ax_scatter.legend(frameon=False, fontsize=8, loc="lower right")
+
+        ordered = sorted(results, key=lambda r: per_entry_r[r["bmrb_id"]])
+        ax_bar.barh([str(r["bmrb_id"]) for r in ordered],
+                   [per_entry_r[r["bmrb_id"]] for r in ordered],
+                   color="steelblue", height=0.7)
+        ax_bar.axvline(0, color="0.3", lw=0.8)
+        ax_bar.set_xlabel("Pearson r (fit S2 vs. deposited S2)")
+        ax_bar.set_title("Per-entry correlation" + (" (excluding ambiguous)" if exclude_ambiguous else ""))
+        ax_bar.tick_params(axis="y", labelsize=7)
+
+        fig.tight_layout()
+        fig.savefig(path, dpi=150)
+        print(f"saved {path}")
+
+    _make_pooled_plot(OUTPUT_FILE, exclude_ambiguous=False)
+    _make_pooled_plot(OUTPUT_FILE_NO_AMBIGUOUS, exclude_ambiguous=True)
 
     # one small scatter panel per protein, sorted best-to-worst by r
     ordered = sorted(results, key=lambda r: -r["r_dep"])

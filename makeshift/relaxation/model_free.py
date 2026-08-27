@@ -42,11 +42,33 @@ class FittingError(RuntimeError):
     S2 fit was attempted, rather than returning numbers that silently
     shouldn't be trusted."""
 
-# tau_e search range (seconds): a few ps up to a few ns, comfortably below
-# typical overall correlation times (tau_m ~ 5-15 ns for globular proteins)
-# so tau_e stays a genuinely fast, separated timescale.
+# tau_e search range (seconds): a few ps up to a few ns. TAU_E_MAX_S alone
+# is NOT a safe upper bound in general -- see TAU_E_SEPARATION_FACTOR below
+# for why every fit_residue()/_fit_model2() call also needs the protein's
+# own tau_m to actually keep tau_e "fast and separated."
 TAU_E_MIN_S = 1.0e-12
 TAU_E_MAX_S = 3.0e-9
+
+# Model 2's chi2(tau_e) is genuinely double-welled, not just multimodal from
+# numerics: as tau_e approaches/exceeds tau_m, tau_k' = tau_k*tau_e/(tau_k+tau_e)
+# saturates to tau_k, so the "fast" term (1-S2)*tau_k'/(1+w^2 tau_k'^2)
+# converges to the same form as the S2 term itself, and J(w) stops
+# depending on S2 at all -- a real second minimum opens up where large
+# tau_e lets S2 collapse toward 0 to soak up any R1/R2/NOE mismatch,
+# unconstrained by anything physical. Checked directly (RelaxDB entry
+# 5839/Protein G B1, tau_m ~3.5 ns): with the fixed TAU_E_MAX_S=3ns alone,
+# this second minimum is both reachable AND lower-chi2 than the correct
+# one for ~12% of Model-2 fits across the RelaxDB validation set -- a
+# fixed absolute cap doesn't protect proteins whose own tau_m isn't much
+# larger than it (most single-domain, monomeric proteins). Instead, the
+# search's effective upper bound is tau_m/TAU_E_SEPARATION_FACTOR (see
+# fit_residue's tau_m parameter): checked against the same 5839 example,
+# the two basins are separated by a barrier around tau_m/10, so capping
+# there keeps the search on the correct side for that case; still an
+# empirically-set margin, not a proven-universal one, but a large
+# improvement over an absolute constant that isn't tied to the protein
+# being fit at all.
+TAU_E_SEPARATION_FACTOR = 10.0
 
 
 def spectral_density_rigid(amplitudes, taus, omega):
@@ -295,7 +317,8 @@ class ResidueFit:
 
 def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
                  amplitudes, taus, d2, c2, gamma_h, gamma_x, omega_h, omega_x,
-                 sigma_flag=2.0, noe_fallback_err=0.05, r2_fallback_frac=0.05):
+                 sigma_flag=2.0, noe_fallback_err=0.05, r2_fallback_frac=0.05,
+                 tau_m=None):
     """Fit one residue's order parameter, choosing among Models 1-3 by the
     physical-residual criterion described in the module docstring.
 
@@ -305,6 +328,14 @@ def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
     `noe_fallback_err` (absolute) or `r2_fallback_frac` (fractional) is
     used as a stand-in so the diagnostic still has a scale to compare
     against.
+
+    `tau_m` is this protein's own overall tumbling correlation time
+    (seconds; e.g. `1/(6*g.dav)` for the calibrated tensor) -- passed
+    through to `_fit_model2` to keep its tau_e search safely below
+    tau_m/TAU_E_SEPARATION_FACTOR rather than only the fixed TAU_E_MAX_S
+    (see that constant's docstring for why a fixed cap alone isn't safe).
+    None falls back to TAU_E_MAX_S alone, e.g. for direct calls that don't
+    have a tensor to derive tau_m from.
 
     Returns a ResidueFit. If R1_obs is missing/non-finite, no fit is
     attempted (Model 1/3's S2 depends on R1; Model 2 needs it too) and
@@ -361,7 +392,8 @@ def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
     if noe_flag:
         S2, tau_e_s, S2_err = _fit_model2(
             R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
-            d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus)
+            d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus,
+            tau_m=tau_m)
         return ResidueFit(model="2", S2=S2, S2_err=S2_err,
                            tau_e_ps=tau_e_s * 1e12, NOE_pred_rigid=NOE_rigid,
                            noe_flag=True)
@@ -378,7 +410,8 @@ def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
 
 
 def _fit_model2(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
-                 d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus):
+                 d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus,
+                 tau_m=None):
     """Model 2 (S2, tau_e): 1D bounded search over tau_e (the only place it
     enters nonlinearly), with S2 solved by exact weighted linear regression
     against R1 and R2 at each trial tau_e (both are affine in S2 for fixed
@@ -391,7 +424,16 @@ def _fit_model2(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
     are only constrained by the same two numbers (R1, R2) Model 1 already
     uses, which is degenerate -- multiple (S2, tau_e) pairs fit R1/R2
     equally well, and nothing favors the tau_e->0 (Model 1) solution even
-    when it's correct. Returns (S2, tau_e_seconds, S2_err)."""
+    when it's correct.
+
+    `tau_m`, if given, caps the tau_e search at
+    tau_m/TAU_E_SEPARATION_FACTOR (in addition to the fixed TAU_E_MAX_S --
+    whichever is smaller): the chi2(tau_e) landscape genuinely opens a
+    second, unphysical minimum once tau_e approaches tau_m (see
+    TAU_E_MAX_S's docstring), so a cap that isn't tied to this protein's
+    own tau_m doesn't reliably keep the search out of it.
+
+    Returns (S2, tau_e_seconds, S2_err)."""
     R1_rigid, R2_rigid, _ = relaxation_rates(
         d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus,
         S2=1.0, tau_e=0.0)
@@ -423,9 +465,14 @@ def _fit_model2(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
             cost += w3 * (NOE_obs - noep) ** 2
         return cost
 
+    tau_e_max = TAU_E_MAX_S
+    if tau_m is not None and np.isfinite(tau_m) and tau_m > 0:
+        tau_e_max = min(tau_e_max, tau_m / TAU_E_SEPARATION_FACTOR)
+    tau_e_max = max(tau_e_max, TAU_E_MIN_S * 10)  # keep the search range non-degenerate
+
     # coarse log-spaced grid, then a bounded local polish -- mirrors the
     # perl script's own "gridsearch then Powell" pattern.
-    log_lo, log_hi = np.log10(TAU_E_MIN_S), np.log10(TAU_E_MAX_S)
+    log_lo, log_hi = np.log10(TAU_E_MIN_S), np.log10(tau_e_max)
     grid = np.linspace(log_lo, log_hi, 40)
     costs = [chi2(g) for g in grid]
     best_log = grid[int(np.argmin(costs))]

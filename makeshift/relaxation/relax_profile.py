@@ -782,6 +782,14 @@ class RelaxationProfile:
         scope and are labeled "ambiguous" rather than forced into either
         model.
 
+        Model 2's tau_e search is capped at this protein's own calibrated
+        overall tumbling time divided by `model_free.TAU_E_SEPARATION_FACTOR`
+        (in addition to the fixed `model_free.TAU_E_MAX_S`) -- checked
+        directly (see that constant's docstring), an absolute cap alone
+        lets the fit wander into a real second, unphysical minimum where
+        S2 collapses toward 0 as tau_e approaches tau_m, for any protein
+        whose own tau_m isn't safely larger than the fixed cap.
+
         `pdb`/`source` are as in `add_rigid_prediction`. `field_mhz` is
         the 1H spectrometer frequency the relaxation data were recorded
         at; if not given, it's read from the entry's own
@@ -821,6 +829,9 @@ class RelaxationProfile:
         calibration = self._calibration_subset(cosines, noe_cut)
         self._calibrate_tensor(calibration, g, on_unreliable="raise")
         geometry = self._geometry_from_cosines(cosines, g)
+        tau_m = 1.0 / (6.0 * g.dav)  # this protein's own overall tumbling
+        # time, post-calibration -- keeps Model 2's tau_e search safely
+        # separated from it (see model_free.TAU_E_SEPARATION_FACTOR)
 
         t = self.table.copy()
         n = len(t)
@@ -839,7 +850,7 @@ class RelaxationProfile:
                 row.get("R2"), row.get("R2_err"),
                 row.get("NOE"), row.get("NOE_err"),
                 amplitudes, taus, g.d2, g.c2, g.gamma_h, g.gamma_x,
-                g.omega_h, g.omega_x, sigma_flag=sigma_flag)
+                g.omega_h, g.omega_x, sigma_flag=sigma_flag, tau_m=tau_m)
             if fit.model is None:
                 continue
             S2[pos] = fit.S2
