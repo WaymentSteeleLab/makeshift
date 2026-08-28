@@ -70,6 +70,7 @@ from makeshift.rci import RCI
 OUTPUT_FILE = Path(__file__).parent / "validate_s2.png"
 OUTPUT_FILE_NO_AMBIGUOUS = Path(__file__).parent / "validate_s2_no_ambiguous.png"
 GRID_FILE = Path(__file__).parent / "validate_s2_grid.png"
+SEQID_FILE = Path(__file__).parent / "validate_s2_by_seqid.png"
 RCI_FILE = Path(__file__).parent / "validate_s2_vs_rci.png"
 RESULTS_CSV = Path(__file__).parent / "validate_s2_results.csv"
 PAIRS_CSV = Path(__file__).parent / "validate_s2_pairs.csv"
@@ -327,6 +328,44 @@ def main():
     fig2.tight_layout(rect=[0, 0, 1, 0.98])
     fig2.savefig(GRID_FILE, dpi=150)
     print(f"saved {GRID_FILE}")
+
+    # deposited and fit S2 along the sequence, one panel per protein --
+    # complements the scatter grid above by showing *where* along the
+    # chain fit and deposited disagree, not just by how much.
+    fig4, axes4 = plt.subplots(nrows, ncols, figsize=(2.6 * ncols, 1.9 * nrows))
+    for ax, res in zip(axes4.flat, ordered):
+        model_arr = np.array(res["models"])
+        order = np.argsort(res["seq_id"])
+        seq_id = res["seq_id"][order]
+        dep = res["dep_s2"][order]
+        fit = res["fit_s2"][order]
+        models_sorted = model_arr[order]
+        dep_mask = np.isfinite(dep)
+        ax.plot(seq_id[dep_mask], dep[dep_mask], color="0.5", lw=1,
+               label="deposited", zorder=1)
+        for model in sorted(set(models_sorted)):
+            mask = models_sorted == model
+            ax.scatter(seq_id[mask], fit[mask], s=5, alpha=0.7,
+                      color=colors.get(model, "grey"), zorder=2)
+        ax.set_ylim(0, 1.05)
+        ax.tick_params(labelsize=6)
+        ax.set_yticks([0, 0.5, 1])
+        title = (res["title"] or "")[:28]
+        ax.set_title(f'{res["bmrb_id"]}  r={res["r_dep"]:.2f}\n{title}', fontsize=6.5)
+    for ax in axes4.flat[len(ordered):]:
+        ax.axis("off")
+    handles = [plt.Line2D([0], [0], color="0.5", lw=1, label="deposited")] + [
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=c, markersize=5,
+                  label=f"fit, Model {m}")
+        for m, c in colors.items()
+    ]
+    fig4.legend(handles=handles, loc="lower center", ncol=5, fontsize=8,
+               bbox_to_anchor=(0.5, 0))
+    fig4.suptitle("S2 vs. residue number, deposited (grey line) vs. fit "
+                  "(colored by model) -- sorted by r", fontsize=11)
+    fig4.tight_layout(rect=[0, 0.03, 1, 0.97])
+    fig4.savefig(SEQID_FILE, dpi=150)
+    print(f"saved {SEQID_FILE}")
 
     # fit S2 vs. RCI-derived S2 (independent, chemical-shift-only signal),
     # both backends pooled across every entry with its own deposited shifts
