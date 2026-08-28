@@ -859,6 +859,17 @@ class RelaxationProfile:
         scope and are labeled "ambiguous" rather than forced into either
         model.
 
+        The R2-excess test (and Model 3's reported S2/Rex) correct their
+        S2-from-R1 baseline by this profile's own calibration gap
+        (`self.calibration_diagnostics["gap"]`) before comparing against
+        R2 -- checked directly (see
+        docs/order_parameters_validation.md, "Bugs found during
+        validation" #6), without this even a mild R1-vs-R2 calibration
+        tension (well under `assess_calibration`'s 0.3 "unreliable"
+        threshold) makes most of a protein's residues look falsely
+        R2-excess, since every one of them inherits the same systematic,
+        not per-residue, offset.
+
         Model 2's tau_e search is capped at this protein's own calibrated
         overall tumbling time divided by `model_free.TAU_E_SEPARATION_FACTOR`
         (in addition to the fixed `model_free.TAU_E_MAX_S`) -- checked
@@ -917,6 +928,11 @@ class RelaxationProfile:
         tau_m = 1.0 / (6.0 * g.dav)  # this protein's own overall tumbling
         # time, post-calibration -- keeps Model 2's tau_e search safely
         # separated from it (see model_free.TAU_E_SEPARATION_FACTOR)
+        calibration_gap = self.calibration_diagnostics["gap"]  # corrects
+        # the Rex test's S2-from-R1 baseline for the same R1-vs-R2
+        # tension assess_calibration measures (see model_free.fit_residue)
+        if not np.isfinite(calibration_gap):
+            calibration_gap = 0.0
 
         t = self.table.copy()
         n = len(t)
@@ -936,7 +952,8 @@ class RelaxationProfile:
                 row.get("R2"), row.get("R2_err"),
                 row.get("NOE"), row.get("NOE_err"),
                 amplitudes, taus, g.d2, g.c2, g.gamma_h, g.gamma_x,
-                g.omega_h, g.omega_x, sigma_flag=sigma_flag, tau_m=tau_m)
+                g.omega_h, g.omega_x, sigma_flag=sigma_flag, tau_m=tau_m,
+                calibration_gap=calibration_gap)
             if fit.model is None:
                 continue
             S2[pos] = fit.S2

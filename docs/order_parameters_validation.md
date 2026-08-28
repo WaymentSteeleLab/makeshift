@@ -27,13 +27,13 @@ isn't evidence of anything wrong on either side.
 
 | Metric | Value |
 |---|---|
-| Pearson r | 0.785 |
-| RMSE | 0.099 |
+| Pearson r | 0.817 |
+| RMSE | 0.090 |
 | n | 2656 residues |
 
 Excluding "ambiguous"-model residues (both a NOE deficit and an R2 excess
 detected -- S2 falls back to the Model 1 point estimate rather than being
-confidently attributed to Model 2 or 3): r=0.799, RMSE=0.101, n=2271. See
+confidently attributed to Model 2 or 3): r=0.828, RMSE=0.090, n=2374. See
 [validate_s2_no_ambiguous.png](../demos/s2_validation/validate_s2_no_ambiguous.png)
 alongside the all-models plot below.
 
@@ -43,34 +43,34 @@ Sorted by Pearson r, high to low.
 
 | BMRB | Entry | Field (MHz) | n | r | RMSE |
 |---|---|---|---|---|---|
-| 4366 | Stromelysin+inhibitor (S1-S3, b) | 600 | 145 | 0.976 | 0.033 |
-| 17046 | Trp repressor, L75F (holo) | 600 | 73 | 0.960 | 0.075 |
-| 6577 | IF2 C1-subdomain | 600 | 67 | 0.957 | 0.105 |
-| 4364 | Stromelysin+inhibitor (S1-S3P) | 600 | 138 | 0.955 | 0.046 |
+| 17012 | Trp repressor, L75F | 600 | 81 | 0.979 | 0.063 |
+| 4366 | Stromelysin+inhibitor (S1-S3, b) | 600 | 145 | 0.974 | 0.033 |
+| 6577 | IF2 C1-subdomain | 600 | 67 | 0.974 | 0.089 |
+| 17046 | Trp repressor, L75F (holo) | 600 | 73 | 0.971 | 0.051 |
+| 6470 | Ubiquitin | 600 | 63 | 0.971 | 0.089 |
+| 4390 | Eotaxin | 500 | 57 | 0.959 | 0.073 |
 | 4365 | Stromelysin+inhibitor (S1-S3, a) | 600 | 141 | 0.954 | 0.036 |
-| 5154 | N-TIMP-1, free | 500 | 102 | 0.946 | 0.069 |
-| 5991 | Ets-1 deltaN301 | 500 | 124 | 0.933 | 0.055 |
-| 4390 | Eotaxin | 500 | 57 | 0.932 | 0.082 |
-| 17069 | E73, SSV-RH | 600 | 51 | 0.922 | 0.067 |
-| 18758 | E1 enzyme half-domain | 400 | 71 | 0.915 | 0.097 |
-| 5549 | NPY analog [31Ala,32Pro] | 500 | 28 | 0.913 | 0.167 |
-| 17041 | Trp repressor, WT (holo) | 600 | 65 | 0.902 | 0.081 |
-| 50212 | M. tuberculosis pyrophosphatase | 700 | 136 | 0.901 | 0.059 |
-| 5153 | N-TIMP-1 + MMP-3 | 600 | 84 | 0.901 | 0.083 |
-| 5550 | NPY, micelle-bound | 500 | 27 | 0.897 | 0.191 |
-| 15451 | GABPa OST domain | 500 | 77 | 0.892 | 0.065 |
-| 17010 | Trp repressor, WT | 600 | 55 | 0.890 | 0.064 |
-| 17012 | Trp repressor, L75F | 600 | 81 | 0.850 | 0.108 |
-| 17047 | Trp repressor, A77V (holo) | 600 | 72 | 0.847 | 0.096 |
-| 26513 | MptpA, apo (b) | 600 | 111 | 0.827 | 0.069 |
-| 18389 | CtCBM11 (b) | 600 | 148 | 0.820 | 0.082 |
-| 19388 | MptpA, apo (a) | 600 | 113 | 0.806 | 0.070 |
-| 17306 | NRC ankyrin repeat protein | 600 | 85 | 0.738 | 0.135 |
-| 18388 | CtCBM11 (a) | 600 | 156 | 0.711 | 0.095 |
-| 17013 | Trp repressor, A77V | 600 | 72 | 0.696 | 0.113 |
-| 6470 | Ubiquitin | 600 | 63 | 0.638 | 0.088 |
-| 4689 | Human growth hormone | 500 | 140 | 0.629 | 0.203 |
-| 27890 | BlaC + clavulanic acid | 850 | 174 | 0.547 | 0.158 |
+| 50212 | M. tuberculosis pyrophosphatase | 700 | 136 | 0.953 | 0.037 |
+| 15451 | GABPa OST domain | 500 | 77 | 0.949 | 0.035 |
+| 4364 | Stromelysin+inhibitor (S1-S3P) | 600 | 138 | 0.944 | 0.041 |
+| 17047 | Trp repressor, A77V (holo) | 600 | 72 | 0.941 | 0.054 |
+| 17306 | NRC ankyrin repeat protein | 600 | 85 | 0.936 | 0.093 |
+| 5991 | Ets-1 deltaN301 | 500 | 124 | 0.925 | 0.058 |
+| 5154 | N-TIMP-1, free | 500 | 102 | 0.921 | 0.072 |
+| 17069 | E73, SSV-RH | 600 | 51 | 0.921 | 0.068 |
+| 5549 | NPY analog [31Ala,32Pro] | 500 | 28 | 0.919 | 0.164 |
+| 18758 | E1 enzyme half-domain | 400 | 71 | 0.916 | 0.096 |
+| 5153 | N-TIMP-1 + MMP-3 | 600 | 84 | 0.900 | 0.084 |
+| 17041 | Trp repressor, WT (holo) | 600 | 65 | 0.884 | 0.097 |
+| 17010 | Trp repressor, WT | 600 | 55 | 0.881 | 0.067 |
+| 26513 | MptpA, apo (b) | 600 | 111 | 0.856 | 0.089 |
+| 19388 | MptpA, apo (a) | 600 | 113 | 0.841 | 0.088 |
+| 17013 | Trp repressor, A77V | 600 | 72 | 0.817 | 0.081 |
+| 27890 | BlaC + clavulanic acid | 850 | 174 | 0.805 | 0.097 |
+| 5550 | NPY, micelle-bound | 500 | 27 | 0.740 | 0.213 |
+| 4689 | Human growth hormone | 500 | 140 | 0.618 | 0.207 |
+| 18388 | CtCBM11 (a) | 600 | 156 | 0.572 | 0.098 |
+| 18389 | CtCBM11 (b) | 600 | 148 | 0.512 | 0.094 |
 
 ## What was excluded, and why
 
@@ -183,9 +183,9 @@ degenerate tau_e. Across the full RelaxDB set this triggers rarely (13
 of 3330 Model-2 residues, across 9 of 119 fit entries) -- most
 boundary-adjacent cases turn out to be genuine, not degenerate.
 
-**6. A biased calibration inflates Model 3 (Rex) selection, and one
+**6. A biased calibration inflated Model 3 (Rex) selection, and one
 family of entries had the wrong oligomeric structure entirely.**
-15 of the 28 validation entries have >20% of residues assigned Model 3
+15 of the 28 validation entries had >20% of residues assigned Model 3
 -- implausibly widespread real chemical exchange (e.g. 6470/ubiquitin at
 88%, a famously rigid, extensively studied protein). Root cause: the
 Rex test (`fit_residue`'s r2_flag) compares observed R2 against
@@ -194,11 +194,37 @@ tension `assess_calibration`'s `gap` already measures -- and unlike the
 0.3 "unreliable" threshold, even a *mild* gap (0.07-0.23, well under
 that threshold) is enough to make most of a protein's residues look
 falsely R2-excess. Checked directly: median(implied Rex / R2_rigid)
-across every residue in an entry tracks that entry's calibration gap
+across every residue in an entry tracked that entry's calibration gap
 almost exactly (e.g. 6470: gap=+0.225, ratio=+0.218) -- the signature of
-a protein-wide bias, not per-residue exchange. Not yet fixed (candidate
-fix: correct the Rex-test baseline by the measured gap before testing
-for excess).
+a protein-wide bias, not per-residue exchange.
+
+Fixed by adding `calibration_gap` back to `S2_from_R1` (on the
+unclamped ratio, before clamping to [0,1]) before testing for R2 excess
+or reporting Model 3's S2/Rex -- `fit_order_parameters` now passes
+`self.calibration_diagnostics["gap"]` through to every `fit_residue`
+call. Verified on the four worst offenders: 6470 (ubiquitin) dropped
+from 88% to 2.9% Model 3 (now correctly dominated by Model 1, 58/68
+residues); 17306, 15451, 17012 all dropped by roughly half (68%->32%,
+68%->27%, 60%->34%). The correction is symmetric -- entries with a
+*negative* gap (R1-implied S2 running high, not low) get *more*
+Model-3 assignments, not fewer, which is the same fix working in the
+other direction, not a new problem. Net effect across the full
+validation set: pooled fit-vs-deposited r improved from 0.785 to 0.817
+(RMSE 0.099 to 0.090) -- the best numbers reached in this validation.
+17012 in particular went from the second-worst entry (r=0.696, before
+any of this session's fixes) to the *best* (r=0.979), once both this
+correction and the biological-assembly fix below applied together.
+
+Still 15 of 28 entries sit above the 20% Model-3 threshold after this
+fix -- but the threshold itself is no longer a reliable "something's
+wrong" signal on its own: several of the *best*-correlating entries
+(17012 r=0.979, 6577 r=0.974, 17046 r=0.971, 50212 r=0.953, 15451
+r=0.949) are among them. The gap correction removes the *systematic*
+bias; it doesn't rule out genuine, widespread mild conformational
+exchange (common enough in real proteins) or a smaller residual version
+of the same calibration tension a single global correction can't fully
+resolve per-residue. Worth revisiting per-entry if a specific fit looks
+wrong, not as a blanket rule anymore.
 
 Separately, for BMRB 17012 (and 17010, 17013 -- all Trp repressor
 mutants), the *structural* cause is more fundamental: the resolved PDB

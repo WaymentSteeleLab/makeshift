@@ -323,7 +323,7 @@ class ResidueFit:
 def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
                  amplitudes, taus, d2, c2, gamma_h, gamma_x, omega_h, omega_x,
                  sigma_flag=2.0, noe_fallback_err=0.05, r2_fallback_frac=0.05,
-                 tau_m=None):
+                 tau_m=None, calibration_gap=0.0):
     """Fit one residue's order parameter, choosing among Models 1-3 by the
     physical-residual criterion described in the module docstring.
 
@@ -341,6 +341,19 @@ def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
     (see that constant's docstring for why a fixed cap alone isn't safe).
     None falls back to TAU_E_MAX_S alone, e.g. for direct calls that don't
     have a tensor to derive tau_m from.
+
+    `calibration_gap` is this profile's `assess_calibration`-measured
+    `gap` (median S2 from R2 minus median S2 from R1 on the calibration
+    set). The Rex test below is built on S2_from_R1 alone, so it directly
+    inherits whatever R1-vs-R2 tension the calibrated tensor leaves
+    behind -- checked directly (see docs/order_parameters_validation.md,
+    "Bugs found during validation" #6), even a mild gap well under
+    `assess_calibration`'s own 0.3 "unreliable" threshold is enough to
+    make most of a protein's residues look falsely R2-excess, because
+    every one of them inherits the same systematic (not per-residue)
+    offset. Adding the gap back to S2_from_R1 before testing corrects for
+    that known bias; 0.0 (the default) applies no correction, e.g. for
+    direct calls with no calibration run to measure a gap from.
 
     Returns a ResidueFit. If R1_obs is missing/non-finite, no fit is
     attempted (Model 1/3's S2 depends on R1; Model 2 needs it too) and
@@ -379,11 +392,13 @@ def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
 
     # Rex diagnostic: S2 from R1 alone is exchange-free (Rex doesn't touch
     # R1); compare the R2 that S2 implies against what was actually observed.
-    # Clamped to [0,1] for the same reason as S2_m1 above.
+    # calibration_gap-corrected (see docstring) before clamping to [0,1]
+    # for the same reason as S2_m1 above -- clamping first would bake in
+    # the very bias the correction exists to remove.
     r2_flag = False
     S2_from_R1 = R1_obs / R1_rigid if R1_rigid > 0 else np.nan
     if np.isfinite(S2_from_R1):
-        S2_from_R1 = min(max(S2_from_R1, 0.0), 1.0)
+        S2_from_R1 = min(max(S2_from_R1 + calibration_gap, 0.0), 1.0)
     if R2_obs is not None and np.isfinite(R2_obs) and np.isfinite(S2_from_R1):
         r2_pred_no_rex = S2_from_R1 * R2_rigid
         r2_err = R2_err if (R2_err and np.isfinite(R2_err) and R2_err > 0) \
