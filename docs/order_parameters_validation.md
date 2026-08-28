@@ -169,6 +169,20 @@ fit-vs-deposited r moved from 0.797 to 0.785 (a few entries improved --
 net close to a wash, and not indicative of the fix being wrong, since
 the deposited fit isn't ground truth either).
 
+A fixed fraction of tau_m isn't fully trustworthy on its own, either:
+checked on other RelaxDB entries, several residues' true chi2(tau_e)
+minimum legitimately sits close to (or past) that cap without being the
+tau_e~tau_m degeneracy -- e.g. one entry's N-terminal residues had a
+genuine minimum around 1-1.7ns that the `tau_m/10` cap alone would have
+clipped. `model_free._fit_model2` now re-checks any residue landing at
+that cap against a much wider one (`tau_m/2`): a genuine interior
+minimum found there is accepted; a residue still climbing toward the
+wider boundary is genuinely unresolvable and falls back to Model 1's S2
+with `tau_e_degenerate=True` rather than reporting either a clipped or a
+degenerate tau_e. Across the full RelaxDB set this triggers rarely (13
+of 3330 Model-2 residues, across 9 of 119 fit entries) -- most
+boundary-adjacent cases turn out to be genuine, not degenerate.
+
 ## Reproducing this validation
 
 `demos/s2_validation/validate_s2.py` fits every entry in its `ENTRIES`

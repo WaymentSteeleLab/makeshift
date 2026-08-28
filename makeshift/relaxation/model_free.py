@@ -313,6 +313,11 @@ class ResidueFit:
     NOE_pred_rigid: float = np.nan
     noe_flag: bool = False     # NOE deficit vs. rigid prediction (tau_e signature)
     r2_flag: bool = False      # R2 excess vs. S2(R1)-scaled rigid prediction (Rex signature)
+    tau_e_degenerate: bool = False  # Model 2 attempted but tau_e/S2 couldn't be
+    # pinned down (chi2(tau_e) still improving right up to a search boundary
+    # even after widening it -- see _fit_model2). model falls back to "1"
+    # (S2 from R1+R2 only) with this flag set, rather than reporting a tau_e
+    # that's an artifact of wherever the search happened to stop.
 
 
 def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
@@ -390,10 +395,14 @@ def fit_residue(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
                            NOE_pred_rigid=NOE_rigid, noe_flag=True, r2_flag=True)
 
     if noe_flag:
-        S2, tau_e_s, S2_err = _fit_model2(
+        S2, tau_e_s, S2_err, degenerate = _fit_model2(
             R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
             d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus,
             tau_m=tau_m)
+        if degenerate:
+            return ResidueFit(model="1", S2=S2_m1, S2_err=S2_m1_err,
+                               NOE_pred_rigid=NOE_rigid, noe_flag=True,
+                               tau_e_degenerate=True)
         return ResidueFit(model="2", S2=S2, S2_err=S2_err,
                            tau_e_ps=tau_e_s * 1e12, NOE_pred_rigid=NOE_rigid,
                            noe_flag=True)
@@ -428,12 +437,20 @@ def _fit_model2(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
 
     `tau_m`, if given, caps the tau_e search at
     tau_m/TAU_E_SEPARATION_FACTOR (in addition to the fixed TAU_E_MAX_S --
-    whichever is smaller): the chi2(tau_e) landscape genuinely opens a
-    second, unphysical minimum once tau_e approaches tau_m (see
-    TAU_E_MAX_S's docstring), so a cap that isn't tied to this protein's
-    own tau_m doesn't reliably keep the search out of it.
+    whichever is smaller). That cap alone isn't trustworthy on its own,
+    though: checked directly, some residues' true chi2(tau_e) minimum
+    legitimately sits close to (or past) it even without being the
+    unphysical tau_e~tau_m degeneracy -- a fixed fraction of tau_m can't
+    tell "genuinely need a few hundred ps" from "chi2 is still improving
+    because we're approaching the S2-independent regime" by itself. So
+    when the search lands at that cap, it's re-run once more with a much
+    wider one (tau_m/2) to check which case it is: if the wider search
+    finds a genuine interior minimum (not itself at the new boundary),
+    that's the real answer; if it's STILL climbing toward the boundary
+    even there, tau_e/S2 genuinely can't be pinned down for this residue
+    and `degenerate=True` is returned instead.
 
-    Returns (S2, tau_e_seconds, S2_err)."""
+    Returns (S2, tau_e_seconds, S2_err, degenerate)."""
     R1_rigid, R2_rigid, _ = relaxation_rates(
         d2, c2, gamma_h, gamma_x, omega_h, omega_x, amplitudes, taus,
         S2=1.0, tau_e=0.0)
@@ -465,23 +482,47 @@ def _fit_model2(R1_obs, R1_err, R2_obs, R2_err, NOE_obs, NOE_err,
             cost += w3 * (NOE_obs - noep) ** 2
         return cost
 
+    def search(tau_e_max):
+        """Grid then bounded local polish over [TAU_E_MIN_S, tau_e_max] --
+        mirrors the perl script's own "gridsearch then Powell" pattern.
+        Returns (S2, tau_e, S2_err, at_boundary): at_boundary is True when
+        the coarse grid's minimum is the very last (largest-tau_e) point,
+        i.e. chi2 was still improving at the edge of the search."""
+        log_lo, log_hi = np.log10(TAU_E_MIN_S), np.log10(tau_e_max)
+        grid = np.linspace(log_lo, log_hi, 40)
+        costs = [chi2(g) for g in grid]
+        best_idx = int(np.argmin(costs))
+        best_log = grid[best_idx]
+        at_boundary = best_idx == len(grid) - 1
+
+        lo = max(log_lo, best_log - (grid[1] - grid[0]))
+        hi = min(log_hi, best_log + (grid[1] - grid[0]))
+        res = minimize_scalar(chi2, bounds=(lo, hi), method="bounded",
+                               options={"xatol": 1e-3})
+        tau_e = 10.0 ** res.x
+        S2, S2_err = inner_S2(tau_e)
+        S2 = min(max(S2, 0.0), 1.0) if np.isfinite(S2) else np.nan
+        return S2, tau_e, S2_err, at_boundary
+
     tau_e_max = TAU_E_MAX_S
     if tau_m is not None and np.isfinite(tau_m) and tau_m > 0:
         tau_e_max = min(tau_e_max, tau_m / TAU_E_SEPARATION_FACTOR)
     tau_e_max = max(tau_e_max, TAU_E_MIN_S * 10)  # keep the search range non-degenerate
 
-    # coarse log-spaced grid, then a bounded local polish -- mirrors the
-    # perl script's own "gridsearch then Powell" pattern.
-    log_lo, log_hi = np.log10(TAU_E_MIN_S), np.log10(tau_e_max)
-    grid = np.linspace(log_lo, log_hi, 40)
-    costs = [chi2(g) for g in grid]
-    best_log = grid[int(np.argmin(costs))]
+    S2, tau_e, S2_err, at_boundary = search(tau_e_max)
+    if not at_boundary:
+        return S2, tau_e, S2_err, False
 
-    lo = max(log_lo, best_log - (grid[1] - grid[0]))
-    hi = min(log_hi, best_log + (grid[1] - grid[0]))
-    res = minimize_scalar(chi2, bounds=(lo, hi), method="bounded",
-                           options={"xatol": 1e-3})
-    tau_e = 10.0 ** res.x
-    S2, S2_err = inner_S2(tau_e)
-    S2 = min(max(S2, 0.0), 1.0) if np.isfinite(S2) else np.nan
-    return S2, tau_e, S2_err
+    tau_e_max_wide = TAU_E_MAX_S
+    if tau_m is not None and np.isfinite(tau_m) and tau_m > 0:
+        tau_e_max_wide = min(tau_e_max_wide, tau_m / 2.0)
+    if tau_e_max_wide <= tau_e_max:
+        # nothing wider to check (TAU_E_MAX_S itself was already the cap, or
+        # no tau_m was given) -- can't distinguish the two cases, so don't
+        # trust a tau_e sitting right at the only bound available.
+        return np.nan, np.nan, np.nan, True
+
+    S2w, tau_ew, S2_errw, at_boundary_wide = search(tau_e_max_wide)
+    if at_boundary_wide:
+        return np.nan, np.nan, np.nan, True
+    return S2w, tau_ew, S2_errw, False

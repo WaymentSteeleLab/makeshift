@@ -788,7 +788,14 @@ class RelaxationProfile:
         directly (see that constant's docstring), an absolute cap alone
         lets the fit wander into a real second, unphysical minimum where
         S2 collapses toward 0 as tau_e approaches tau_m, for any protein
-        whose own tau_m isn't safely larger than the fixed cap.
+        whose own tau_m isn't safely larger than the fixed cap. A fixed
+        fraction alone isn't fully trustworthy either -- some residues'
+        true chi2(tau_e) minimum legitimately sits close to that cap
+        without being the tau_e~tau_m degeneracy -- so `model_free._fit_model2`
+        re-checks any residue landing at the cap against a much wider one
+        before accepting or rejecting it; residues where tau_e/S2 still
+        can't be pinned down even then fall back to Model 1's S2 with
+        `tau_e_degenerate=True` rather than reporting a boundary artifact.
 
         `pdb`/`source` are as in `add_rigid_prediction`. `field_mhz` is
         the 1H spectrometer frequency the relaxation data were recorded
@@ -800,7 +807,8 @@ class RelaxationProfile:
         a NOE/R2 residual must exceed to flag tau_e/Rex.
 
         Adds columns: S2, S2_err, mf_model ("1"/"2"/"3"/"ambiguous"),
-        tau_e_ps, Rex, NOE_pred_rigid, noe_flag, r2_flag. Residues with no
+        tau_e_ps, Rex, NOE_pred_rigid, noe_flag, r2_flag, tau_e_degenerate.
+        Residues with no
         R1 or no matched structural N-H vector keep mf_model=None / S2=NaN.
         Sets `self.tau_scale`/`self.tau_shape` to the calibrated tensor's
         overall rate and anisotropy shape.
@@ -843,6 +851,7 @@ class RelaxationProfile:
         noe_pred_rigid = np.full(n, np.nan)
         noe_flag = np.zeros(n, dtype=bool)
         r2_flag = np.zeros(n, dtype=bool)
+        tau_e_degenerate = np.zeros(n, dtype=bool)
 
         for pos, (amplitudes, taus, row) in geometry.items():
             fit = model_free.fit_residue(
@@ -861,6 +870,7 @@ class RelaxationProfile:
             noe_pred_rigid[pos] = fit.NOE_pred_rigid
             noe_flag[pos] = fit.noe_flag
             r2_flag[pos] = fit.r2_flag
+            tau_e_degenerate[pos] = fit.tau_e_degenerate
 
         t["S2"] = S2
         t["S2_err"] = S2_err
@@ -870,13 +880,17 @@ class RelaxationProfile:
         t["NOE_pred_rigid"] = noe_pred_rigid
         t["noe_flag"] = noe_flag
         t["r2_flag"] = r2_flag
+        t["tau_e_degenerate"] = tau_e_degenerate
         self.table = t
 
         counts = pd.Series([m for m in mf_model if m is not None]).value_counts().to_dict()
+        n_degenerate = int(tau_e_degenerate.sum())
+        degenerate_note = f", {n_degenerate} tau_e-degenerate (fell back to Model 1)" \
+            if n_degenerate else ""
         print(f"  order-parameter fit at {field_mhz:.1f} MHz "
               f"(tau_scale={self.tau_scale:.3f}, tau_shape={self.tau_shape:.3f}, "
               f"{len(calibration)} calibration residues): "
-              f"{sum(counts.values())} residues fit {counts}")
+              f"{sum(counts.values())} residues fit {counts}{degenerate_note}")
         return self
 
     # labeling
