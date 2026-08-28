@@ -183,6 +183,50 @@ degenerate tau_e. Across the full RelaxDB set this triggers rarely (13
 of 3330 Model-2 residues, across 9 of 119 fit entries) -- most
 boundary-adjacent cases turn out to be genuine, not degenerate.
 
+**6. A biased calibration inflates Model 3 (Rex) selection, and one
+family of entries had the wrong oligomeric structure entirely.**
+15 of the 28 validation entries have >20% of residues assigned Model 3
+-- implausibly widespread real chemical exchange (e.g. 6470/ubiquitin at
+88%, a famously rigid, extensively studied protein). Root cause: the
+Rex test (`fit_residue`'s r2_flag) compares observed R2 against
+`S2_from_R1 * R2_rigid`, but `S2_from_R1` inherits the same R1-vs-R2
+tension `assess_calibration`'s `gap` already measures -- and unlike the
+0.3 "unreliable" threshold, even a *mild* gap (0.07-0.23, well under
+that threshold) is enough to make most of a protein's residues look
+falsely R2-excess. Checked directly: median(implied Rex / R2_rigid)
+across every residue in an entry tracks that entry's calibration gap
+almost exactly (e.g. 6470: gap=+0.225, ratio=+0.218) -- the signature of
+a protein-wide bias, not per-residue exchange. Not yet fixed (candidate
+fix: correct the Rex-test baseline by the measured gap before testing
+for excess).
+
+Separately, for BMRB 17012 (and 17010, 17013 -- all Trp repressor
+mutants), the *structural* cause is more fundamental: the resolved PDB
+(3WRP) is only the crystallographic asymmetric unit -- RCSB's own
+`pdbx_struct_assembly.oligomeric_count=2` says the biological assembly
+is dimeric, but the file has just one chain, with the second protomer
+only implied by a BIOMT symmetry transform this code never applies.
+Trp repressor is a constitutive homodimer; modeling it as a monomer
+gives HYDRONMR the wrong diffusion tensor size *and shape*, which the
+rate-only calibration (`shape_bounds=(1.0, 1.0)`, see
+`model_free.calibrate_tensor`) can't correct by design.
+`RelaxationProfile._check_biological_assembly` now warns whenever a
+`source="rcsb"` structure is missing chains the assembly needs (a
+single lightweight RCSB API call, checked against the resolved
+structure's own chain count) -- confirmed to fire only for 3WRP among
+all 28 entries, and to stay silent for every correctly-monomeric
+structure checked (1D3Z/ubiquitin, 2L6B/ankyrin repeat, 2JUO/GABPa).
+
+That still doesn't fully explain the pattern, though: 17046 and 17047
+(the other two Trp-repressor mutants) resolve to a *correctly* complete
+dimer (2XDI, both chains present) and still show 47-51% Model 3, with
+unusually large tau_scale corrections (~2.0-2.1x, vs ~1-1.5x typical for
+monomeric entries) that don't track their calibration gap as cleanly as
+the monomeric cases did. That looks like a separate, harder problem --
+the uniform-bead hydrodynamic approximation may simply be less accurate
+for larger multi-chain assemblies than for compact single domains, not
+something a data/structure-resolution fix can address. Left open.
+
 ## Reproducing this validation
 
 `demos/s2_validation/validate_s2.py` fits every entry in its `ENTRIES`

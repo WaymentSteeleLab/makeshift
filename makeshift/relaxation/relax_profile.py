@@ -427,6 +427,12 @@ class RelaxationProfile:
         polymer size actually matches this entry's sequence, since a long
         candidate list usually means no curated link and a size mismatch
         indicates a fusion/complex structure rather than this construct.
+
+        For an `source="rcsb"` structure, `_check_biological_assembly`
+        also warns if the fetched file is missing chains RCSB's own
+        metadata says the biological assembly needs (e.g. a homodimer
+        deposited as a single-chain asymmetric unit) -- see that
+        method's docstring for why this matters for the diffusion tensor.
         """
         from ..utils.structures import fetch_structure
 
@@ -460,7 +466,78 @@ class RelaxationProfile:
                 )
             print(f"  no pdb given; using {source} structure {pdb}")
 
-        return fetch_structure(pdb, source=source, **fetch_kw)
+        structure_path = fetch_structure(pdb, source=source, **fetch_kw)
+        if source == "rcsb":
+            self._check_biological_assembly(pdb, structure_path)
+        return structure_path
+
+    @staticmethod
+    def _check_biological_assembly(pdb_id, structure_path):
+        """
+        Warn if `pdb_id`'s biological assembly (RCSB's own
+        `pdbx_struct_assembly.oligomeric_count`) needs more protein chains
+        than `structure_path` actually contains -- e.g. a homodimer
+        deposited with only the crystallographic asymmetric unit (one
+        protomer) in the downloaded file, the rest of the complex only
+        implied by a BIOMT symmetry transform this code never applies.
+
+        This matters because modeling a real oligomer as its lone
+        protomer gives HYDRONMR the wrong diffusion tensor *size and
+        shape* -- not something `model_free.calibrate_tensor`'s rate-only
+        calibration (shape_bounds defaults to (1.0, 1.0), see that
+        function's docstring) can correct, since it deliberately doesn't
+        reshape the tensor. Found by hand on BMRB 17012 (Trp repressor,
+        a constitutive homodimer): the resolved structure 3WRP has
+        `oligomeric_count=2` but only chain A in the file, and every
+        other Trp-repressor validation entry (a well-known dimer) shows
+        the same elevated, spurious Model-3/Rex rate this causes (see
+        docs/order_parameters_validation.md) -- the tensor calibration
+        silently absorbs the size/shape error into a persistent
+        R1-vs-R2 tension that then contaminates the per-residue Rex test.
+
+        Silently no-ops if the RCSB lookup fails (e.g. `pdb_id` isn't a
+        real RCSB entry) or the structure file can't be read -- this is
+        advisory, not required for the fit to proceed.
+        """
+        import json
+        import urllib.request
+
+        try:
+            url = f"https://data.rcsb.org/rest/v1/core/assembly/{pdb_id}/1"
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                info = json.load(resp)
+            assembly = info.get("pdbx_struct_assembly", {})
+            oligomeric_count = assembly.get("oligomeric_count")
+            oligomeric_details = assembly.get("oligomeric_details")
+        except Exception:
+            return
+        if not oligomeric_count or oligomeric_count <= 1:
+            return
+
+        try:
+            chains = set()
+            with open(structure_path) as f:
+                for line in f:
+                    if line.startswith(("ATOM", "HETATM")):
+                        chains.add(line[21])
+        except Exception:
+            return
+
+        if len(chains) < oligomeric_count:
+            warnings.warn(
+                f"{pdb_id}'s biological assembly is {oligomeric_details} "
+                f"({oligomeric_count} chains), but the fetched structure "
+                f"only has {len(chains)} ({sorted(chains)}) -- likely just "
+                "the crystallographic asymmetric unit, with the rest of "
+                "the complex only implied by a symmetry transform this "
+                "code doesn't apply. Modeling this as a "
+                f"{len(chains)}-chain structure gives HYDRONMR the wrong "
+                "diffusion tensor size/shape for a real oligomer, which "
+                "the model-free fit's rate-only calibration can't "
+                "correct -- consider passing pdb=<a structure that "
+                "already includes the full assembly>.",
+                UserWarning,
+            )
 
     def _detect_field_mhz(self):
         """
