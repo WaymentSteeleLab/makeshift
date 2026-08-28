@@ -23,17 +23,17 @@ almost certainly came from a joint multi-field fit, a better-constrained
 problem than the single-field refit this code does, so a mismatch there
 isn't evidence of anything wrong on either side.
 
-**28 single-field entries pass.** Pooled across all of them:
+**27 single-field entries pass.** Pooled across all of them:
 
 | Metric | Value |
 |---|---|
-| Pearson r | 0.817 |
+| Pearson r | 0.815 |
 | RMSE | 0.090 |
-| n | 2656 residues |
+| n | 2572 residues |
 
 Excluding "ambiguous"-model residues (both a NOE deficit and an R2 excess
 detected -- S2 falls back to the Model 1 point estimate rather than being
-confidently attributed to Model 2 or 3): r=0.828, RMSE=0.090, n=2374. See
+confidently attributed to Model 2 or 3): r=0.827, RMSE=0.090, n=2310. See
 [validate_s2_no_ambiguous.png](../demos/s2_validation/validate_s2_no_ambiguous.png)
 alongside the all-models plot below.
 
@@ -60,7 +60,6 @@ Sorted by Pearson r, high to low.
 | 17069 | E73, SSV-RH | 600 | 51 | 0.921 | 0.068 |
 | 5549 | NPY analog [31Ala,32Pro] | 500 | 28 | 0.919 | 0.164 |
 | 18758 | E1 enzyme half-domain | 400 | 71 | 0.916 | 0.096 |
-| 5153 | N-TIMP-1 + MMP-3 | 600 | 84 | 0.900 | 0.084 |
 | 17041 | Trp repressor, WT (holo) | 600 | 65 | 0.884 | 0.097 |
 | 17010 | Trp repressor, WT | 600 | 55 | 0.881 | 0.067 |
 | 26513 | MptpA, apo (b) | 600 | 111 | 0.856 | 0.089 |
@@ -110,8 +109,32 @@ substantially different order parameters for that calibration set (gap
 tensor reconciles R1 and R2 here, so no S² is reported rather than
 reporting numbers that shouldn't be trusted.
 
-**Unresolved (1 entry).** 27929 (BlaC + avibactam): r=0.02, no specific
-cause confirmed.
+**Wrong structure resolved (1 entry).** 5153 (N-TIMP-1 bound to MMP-3) —
+`_resolve_pdb` built the diffusion tensor from MMP-3 alone (1B3D, the
+binding partner, no TIMP-1 present at all), not from any structure of
+N-TIMP-1 or the complex. All of the first ~20 (of 40) cited PDB ids are
+MMP-3-only structures; `_best_pdb_by_length` only checks the first 15,
+so the actual complex (1UEA, cited at position 25) never got considered.
+More fundamentally, the size check compares a candidate's *total*
+residue count against this profile's single-entity sequence (126
+residues, N-TIMP-1 alone) — for a bound-complex study the physically
+correct structure is the whole complex (~300+ residues), which would
+never pass that check even if reached. Fixing this properly needs
+entity-aware structure matching (match one polymer entity within a
+candidate structure, not the whole structure's size); not attempted.
+Despite the wrong molecule entirely, this entry still reached r=0.900
+before being excluded — a reminder that a plausible-looking correlation
+isn't proof the underlying structure was right.
+
+**Unresolved (2 entries).** 27929 (BlaC + avibactam): r=0.02, no
+specific cause confirmed. 18388/18389 (CtCBM11, apo/bound): r=0.57/0.51
+-- checked for large per-residue outliers the way 5153 and the
+Trp-repressor entries had; found essentially none (one residue >0.3 off
+in 18388, zero in 18389). The weak correlation looks like diffuse,
+moderate scatter across most residues rather than a few residues driven
+by a specific bug -- possibly genuine dynamical complexity this
+Models-1-3 framework doesn't capture well, or noisier underlying data,
+not something a specific code fix was found for.
 
 ## Bugs found during validation
 

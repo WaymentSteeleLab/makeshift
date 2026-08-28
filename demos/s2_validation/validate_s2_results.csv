@@ -4,7 +4,6 @@ bmrb_id,title,field_mhz,n_dep,r_dep,rmse_dep,n_rci_wishart,r_rci_wishart,rmse_rc
 4366,Dynamics of Stromelysin/Inhibitor Interactions Studied by 15N NMR Relaxation Measurements: Comparison of Ligand Binding to the S1-S3 and S1-S3 Subsites,600,145,0.9741,0.0325,0,nan,nan,0,nan,nan,0,nan,nan,0,nan,nan
 4390,Backbone dynamics of the human CC-chemokine eotaxin,500,57,0.9594,0.0735,0,nan,nan,0,nan,nan,0,nan,nan,0,nan,nan
 4689,NMR Studies of the Backbone Flexibility and Structure of Human Growth Hormone:a Comparison of High and Low pH Conformations,500,140,0.6175,0.2073,140,0.5925,0.2007,140,0.4963,0.1926,140,0.4986,0.1601,140,0.4087,0.2127
-5153,Backbone dynamics of the N-TIMP-1 bound to MMP-3 catalytic domain,600,84,0.9000,0.0836,0,nan,nan,0,nan,nan,0,nan,nan,0,nan,nan
 5154,Backbone dynamics of free N-TIMP-1 in solution,500,102,0.9215,0.0725,0,nan,nan,0,nan,nan,0,nan,nan,0,nan,nan
 5549,Neuropeptide Y5-Receptor II: Solution Structure and Dynamics of [31Ala;32Pro]-NPY,500,28,0.9194,0.1640,28,0.7857,0.2293,28,0.1900,0.2893,28,0.9141,0.3072,28,0.4214,0.3335
 5550,Structure and Dynamics of Micelle-bound Neuropeptide Y: Comparison with unligated NPY and Implications for Receptor Selection,500,27,0.7403,0.2132,31,0.6446,0.2292,31,0.0351,0.2774,27,0.8537,0.2448,27,0.2349,0.2697

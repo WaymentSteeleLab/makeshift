@@ -30,7 +30,7 @@ prefilter -- it turned out true for the *whole* previously-diagnosed
 "unresolved" bucket, and for the majority of what were originally
 low-hanging "OK" entries too (13 of the first 41).
 
-28 single-field entries pass (ENTRIES below); EXCLUDED lists the
+27 single-field entries pass (ENTRIES below); EXCLUDED lists the
 single-field entries that still didn't, grouped by root cause:
 
   Data/parsing gaps (technical, not a modeling problem):
@@ -52,6 +52,19 @@ single-field entries that still didn't, grouped by root cause:
   calibration set, so no S2 fit is attempted rather than reporting numbers
   that shouldn't be trusted):
     50001 -- only 8 calibration residues, gap +0.42.
+
+  Wrong structure resolved (_resolve_pdb/_best_pdb_by_length landed on a
+  structure that doesn't represent the entity the relaxation data was
+  measured on):
+    5153 -- N-TIMP-1 bound to MMP-3: all cited PDB ids in the first ~20
+        (of 40) are MMP-3-only structures (the binding partner);
+        _best_pdb_by_length only checks the first 15 and picked one of
+        those (1B3D, no TIMP-1 at all) over the actual complex (1UEA,
+        cited at position 25). More fundamentally, the size check
+        compares a candidate's total residue count against this
+        profile's single-entity sequence, which a real bound-complex
+        structure never passes even when correctly identified --
+        needs entity-aware matching to fix properly.
 
   Unresolved:
     27929 -- BlaC + avibactam: r=0.02, no specific cause confirmed.
@@ -75,7 +88,7 @@ RCI_FILE = Path(__file__).parent / "validate_s2_vs_rci.png"
 RESULTS_CSV = Path(__file__).parent / "validate_s2_results.csv"
 PAIRS_CSV = Path(__file__).parent / "validate_s2_pairs.csv"
 
-ENTRIES = [4364, 4365, 4366, 4390, 4689, 5153, 5154, 5549, 5550, 5991, 6470,
+ENTRIES = [4364, 4365, 4366, 4390, 4689, 5154, 5549, 5550, 5991, 6470,
            6577, 15451, 17010, 17012, 17013, 17041, 17046, 17047, 17069,
            17306, 18388, 18389, 18758, 19388, 26513, 27890, 50212]
 
@@ -100,6 +113,20 @@ EXCLUDED = {
            "presumed-rigid calibration residues, tau_scale pinned at the "
            "search boundary, calibration gap +0.42 (> the 0.3 unreliable "
            "threshold)",
+    5153: "wrong structure resolved -- entry cites 40 PDB ids for its "
+          "binding partner MMP-3, none of which include TIMP-1 itself, "
+          "within the first ~20; _best_pdb_by_length only checks the "
+          "first 15, so it landed on 1B3D (MMP-3 alone, no TIMP-1) "
+          "instead of 1UEA (the actual MMP-3/TIMP-1 complex, cited at "
+          "position 25). More fundamentally, _best_pdb_by_length's size "
+          "check compares a candidate's *total* residue count against "
+          "this profile's single-entity sequence (126 residues, "
+          "N-TIMP-1 alone) -- for a bound-complex study the physically "
+          "correct structure is the whole complex (~300+ residues), "
+          "which never passes that check even when found. Needs "
+          "entity-aware structure matching (match one polymer entity "
+          "within a candidate, not the whole structure's size) to fix "
+          "properly; not attempted here.",
 }
 
 
