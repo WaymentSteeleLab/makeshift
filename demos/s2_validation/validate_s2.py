@@ -30,7 +30,7 @@ prefilter -- it turned out true for the *whole* previously-diagnosed
 "unresolved" bucket, and for the majority of what were originally
 low-hanging "OK" entries too (13 of the first 41).
 
-27 single-field entries pass (ENTRIES below); EXCLUDED lists the
+23 single-field entries pass (ENTRIES below); EXCLUDED lists the
 single-field entries that still didn't, grouped by root cause:
 
   Data/parsing gaps (technical, not a modeling problem):
@@ -65,6 +65,32 @@ single-field entries that still didn't, grouped by root cause:
         profile's single-entity sequence, which a real bound-complex
         structure never passes even when correctly identified --
         needs entity-aware matching to fix properly.
+    17010, 17012, 17013 -- Trp repressor (WT, L75F, A77V): a constitutive
+        homodimer, but all three resolve to 3WRP, which RCSB's own
+        metadata says is dimeric while the file contains only one chain
+        (the crystallographic asymmetric unit; the second protomer is
+        only implied by a BIOMT symmetry transform this code never
+        applies). A monomer has a different diffusion tensor size AND
+        shape than the real dimer -- not something the rate-only
+        calibration can correct by design.
+        `RelaxationProfile._check_biological_assembly` warns on this
+        but doesn't change which structure gets used, so all three stay
+        excluded regardless of how well any of them happens to
+        correlate (17012 reached r=0.979, the best in the set, purely
+        from the calibration-gap fix -- a good number built on a
+        known-wrong structure isn't evidence the structure was fine). The
+        other three Trp-repressor entries (17041, 17046, 17047) resolve
+        to 2XDI instead, which correctly includes both chains, so they
+        stay in the validation set.
+
+  Multi-field, not detectable from BMRB's own metadata:
+    5154 -- N-TIMP-1, free: the original study used multiple fields
+        despite BMRB tagging only one (confirmed against the paper
+        itself). Unlike MULTI_FIELD above (caught automatically from
+        field tags actually present in the deposit), this one slips
+        past that check entirely since the metadata itself is
+        incomplete -- there is no way to detect it without independent
+        knowledge of the source paper.
 
   Unresolved:
     27929 -- BlaC + avibactam: r=0.02, no specific cause confirmed.
@@ -88,8 +114,8 @@ RCI_FILE = Path(__file__).parent / "validate_s2_vs_rci.png"
 RESULTS_CSV = Path(__file__).parent / "validate_s2_results.csv"
 PAIRS_CSV = Path(__file__).parent / "validate_s2_pairs.csv"
 
-ENTRIES = [4364, 4365, 4366, 4390, 4689, 5154, 5549, 5550, 5991, 6470,
-           6577, 15451, 17010, 17012, 17013, 17041, 17046, 17047, 17069,
+ENTRIES = [4364, 4365, 4366, 4390, 4689, 5549, 5550, 5991, 6470,
+           6577, 15451, 17041, 17046, 17047, 17069,
            17306, 18388, 18389, 18758, 19388, 26513, 27890, 50212]
 
 # entry_id -> number of distinct 1H spectrometer fields deposited (checked
@@ -127,6 +153,30 @@ EXCLUDED = {
           "entity-aware structure matching (match one polymer entity "
           "within a candidate, not the whole structure's size) to fix "
           "properly; not attempted here.",
+    5154: "multi-field in the original study despite BMRB tagging only one "
+          "field -- confirmed against the paper itself (not detectable from "
+          "BMRB's own metadata, unlike MULTI_FIELD above, which is caught "
+          "automatically from field tags actually present in the deposit).",
+    17010: "wrong structure resolved -- Trp repressor is a constitutive "
+           "homodimer (RCSB: 'AUTHOR DETERMINED BIOLOGICAL UNIT: DIMERIC' "
+           "for 3WRP), but the resolved structure (3WRP) is only the "
+           "crystallographic asymmetric unit -- one chain, with the "
+           "second protomer only implied by a BIOMT symmetry transform "
+           "this code never applies. A monomer has a different diffusion "
+           "tensor size AND shape than the real dimer, which the "
+           "rate-only calibration can't correct by design. "
+           "_check_biological_assembly warns on this but doesn't fix "
+           "which structure gets used -- same category as 5153, "
+           "excluded on the same principle regardless of how the "
+           "resulting fit correlates.",
+    17012: "wrong structure resolved -- same issue as 17010 (Trp "
+           "repressor dimer modeled from 3WRP, a monomer-only file). "
+           "Despite reaching r=0.979 (the best in the set) after the "
+           "calibration-gap fix, the underlying structural assumption "
+           "was never corrected, only warned about -- a plausible-looking "
+           "correlation isn't proof the structure was right.",
+    17013: "wrong structure resolved -- same issue as 17010/17012 (Trp "
+           "repressor dimer modeled from 3WRP, a monomer-only file).",
 }
 
 

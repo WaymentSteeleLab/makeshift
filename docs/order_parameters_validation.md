@@ -23,17 +23,17 @@ almost certainly came from a joint multi-field fit, a better-constrained
 problem than the single-field refit this code does, so a mismatch there
 isn't evidence of anything wrong on either side.
 
-**27 single-field entries pass.** Pooled across all of them:
+**23 single-field entries pass.** Pooled across all of them:
 
 | Metric | Value |
 |---|---|
-| Pearson r | 0.815 |
-| RMSE | 0.090 |
-| n | 2572 residues |
+| Pearson r | 0.805 |
+| RMSE | 0.093 |
+| n | 2262 residues |
 
 Excluding "ambiguous"-model residues (both a NOE deficit and an R2 excess
 detected -- S2 falls back to the Model 1 point estimate rather than being
-confidently attributed to Model 2 or 3): r=0.827, RMSE=0.090, n=2310. See
+confidently attributed to Model 2 or 3): r=0.818, RMSE=0.093, n=2037. See
 [validate_s2_no_ambiguous.png](../demos/s2_validation/validate_s2_no_ambiguous.png)
 alongside the all-models plot below.
 
@@ -43,7 +43,6 @@ Sorted by Pearson r, high to low.
 
 | BMRB | Entry | Field (MHz) | n | r | RMSE |
 |---|---|---|---|---|---|
-| 17012 | Trp repressor, L75F | 600 | 81 | 0.979 | 0.063 |
 | 4366 | Stromelysin+inhibitor (S1-S3, b) | 600 | 145 | 0.974 | 0.033 |
 | 6577 | IF2 C1-subdomain | 600 | 67 | 0.974 | 0.089 |
 | 17046 | Trp repressor, L75F (holo) | 600 | 73 | 0.971 | 0.051 |
@@ -56,15 +55,12 @@ Sorted by Pearson r, high to low.
 | 17047 | Trp repressor, A77V (holo) | 600 | 72 | 0.941 | 0.054 |
 | 17306 | NRC ankyrin repeat protein | 600 | 85 | 0.936 | 0.093 |
 | 5991 | Ets-1 deltaN301 | 500 | 124 | 0.925 | 0.058 |
-| 5154 | N-TIMP-1, free | 500 | 102 | 0.921 | 0.072 |
 | 17069 | E73, SSV-RH | 600 | 51 | 0.921 | 0.068 |
 | 5549 | NPY analog [31Ala,32Pro] | 500 | 28 | 0.919 | 0.164 |
 | 18758 | E1 enzyme half-domain | 400 | 71 | 0.916 | 0.096 |
 | 17041 | Trp repressor, WT (holo) | 600 | 65 | 0.884 | 0.097 |
-| 17010 | Trp repressor, WT | 600 | 55 | 0.881 | 0.067 |
 | 26513 | MptpA, apo (b) | 600 | 111 | 0.856 | 0.089 |
 | 19388 | MptpA, apo (a) | 600 | 113 | 0.841 | 0.088 |
-| 17013 | Trp repressor, A77V | 600 | 72 | 0.817 | 0.081 |
 | 27890 | BlaC + clavulanic acid | 850 | 174 | 0.805 | 0.097 |
 | 5550 | NPY, micelle-bound | 500 | 27 | 0.740 | 0.213 |
 | 4689 | Human growth hormone | 500 | 140 | 0.618 | 0.207 |
@@ -125,6 +121,30 @@ candidate structure, not the whole structure's size); not attempted.
 Despite the wrong molecule entirely, this entry still reached r=0.900
 before being excluded — a reminder that a plausible-looking correlation
 isn't proof the underlying structure was right.
+
+**Wrong structure resolved (3 entries): Trp repressor is a dimer.**
+17010, 17012, 17013 (WT, L75F, A77V) all resolve to 3WRP — RCSB's own
+metadata says its biological assembly is dimeric, but the file has only
+one chain (the crystallographic asymmetric unit; the second protomer is
+only implied by a BIOMT symmetry transform this code never applies). A
+monomer has a different diffusion tensor size *and* shape than the real
+dimer, which the rate-only calibration can't correct by design (see
+[Calibration](guide/order-parameters.md)).
+`RelaxationProfile._check_biological_assembly` warns on exactly this
+condition but doesn't change which structure gets used, so all three
+stay excluded on the same principle as 5153 regardless of fit quality —
+17012 in particular reached r=0.979 (the best in the set) purely from
+the calibration-gap fix, on a structure already known to be wrong. The
+other three Trp-repressor entries (17041, 17046, 17047) resolve to
+2XDI instead, which correctly includes both chains, so they remain in
+the validation set.
+
+**Multi-field, undetectable from BMRB's own metadata (1 entry).** 5154
+(N-TIMP-1, free) — the original study used multiple spectrometer
+fields despite BMRB tagging only one field. Unlike the 23 entries
+excluded automatically from field tags actually present in the deposit
+(see above), this one has no metadata signal to catch; the only way to
+find it is independent knowledge of the source paper.
 
 **Unresolved (2 entries).** 27929 (BlaC + avibactam): r=0.02, no
 specific cause confirmed. 18388/18389 (CtCBM11, apo/bound): r=0.57/0.51
@@ -236,7 +256,12 @@ validation set: pooled fit-vs-deposited r improved from 0.785 to 0.817
 (RMSE 0.099 to 0.090) -- the best numbers reached in this validation.
 17012 in particular went from the second-worst entry (r=0.696, before
 any of this session's fixes) to the *best* (r=0.979), once both this
-correction and the biological-assembly fix below applied together.
+correction and the biological-assembly fix below applied together. (17012
+was later excluded from the validation set entirely once it became clear
+the biological-assembly fix only *warns* about the underlying wrong
+structure rather than correcting it -- see "What was excluded, and why"
+above. The r=0.979 was real evidence the gap-correction fix works, not
+evidence the structure was right.)
 
 Still 15 of 28 entries sit above the 20% Model-3 threshold after this
 fix -- but the threshold itself is no longer a reliable "something's
