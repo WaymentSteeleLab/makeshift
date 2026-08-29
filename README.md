@@ -68,7 +68,7 @@ cs = ms.get_chem_shifts(ms.parse_nmr_star('bmr4527_3.str'))
 df, check, offsets = ms.reref(cs, method='panav')  # or method='lacs'
 print(offsets)  # {'N': ..., 'CA': ..., 'CB': ..., 'C': ...}
 ```
-![Image showing distributions](https://github.com/WaymentSteeleLab/NMRstar_parser/blob/c9726af327b8dc4fef08c0c25711448342b0fe7f/static/example_rereferencing_ed.png)
+![Image showing distributions](https://github.com/WaymentSteeleLab/makeshift/blob/main/docs/static/example_rereferencing_ed.png)
 
 Entry 4527 is an example entry that is correctly referenced. Entries 6586 and 4150 are both entries described previously in literature as needing re-referencing.
 
