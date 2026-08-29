@@ -10,12 +10,16 @@ from pathlib import Path
 from typing import Optional
 
 # Registry of known datasets. Each entry:
-#   url    : direct download URL for the zip
-#   sha256 : hex digest of the zip for integrity verification
+#   url    : direct download URL (a .zip, or a single data file)
+#   sha256 : hex digest of the downloaded file for integrity verification
 DATASETS = {
     "SHP2_NSH2_CPMG": dict(
-        url="https://zenodo.org/records/20732240/files/SHP2_NSH2_CPMG.zip",
+        url="https://zenodo.org/records/22161246/files/SHP2_NSH2_CPMG.zip",
         sha256="1a2e1e59a985a6ddac0dec56025c217cc0d22ddc0984c557c5038ca57755d0d7",
+    ),
+    "NTRC_HSQC": dict(
+        url="https://zenodo.org/records/22161246/files/hsqcN15wfb_25deg_ntrc.ucsf",
+        sha256="6ba340a740ad0d6aec678224e6d0040b1719185acbeb73823e36fb9abf11d35c",
     ),
 }
 
@@ -25,7 +29,8 @@ _CACHE_DIR = Path.home() / ".makeshift" / "datasets"
 def fetch(name: str, url: Optional[str] = None, sha256: Optional[str] = None,
           cache_dir: Optional[Path] = None, overwrite: bool = False) -> Path:
     """
-    Download, verify, cache, and extract a dataset zip.
+    Download, verify, and cache a dataset. Zips are extracted; single files
+    (e.g. a lone .ucsf spectrum) are downloaded as-is.
 
     Three ways to call it:
 
@@ -60,7 +65,8 @@ def fetch(name: str, url: Optional[str] = None, sha256: Optional[str] = None,
     Returns
     -------
     Path
-        Directory containing the extracted dataset files.
+        Directory containing the extracted dataset files, or the path to the
+        downloaded file itself for a single-file dataset.
     """
     # allow a URL to be passed directly as `name`
     if url is None and _looks_like_url(name):
@@ -88,25 +94,27 @@ def fetch(name: str, url: Optional[str] = None, sha256: Optional[str] = None,
         return _locate_data(extract_dir)
 
     extract_dir.mkdir(parents=True, exist_ok=True)
-    zip_path = extract_dir / f"{name}.zip"
+    fname = Path(urlparse(url).path).name
+    dest_path = extract_dir / fname
     print(f"Downloading {name} from {url} ...")
-    urllib.request.urlretrieve(url, zip_path, reporthook=_progress_hook())
+    urllib.request.urlretrieve(url, dest_path, reporthook=_progress_hook())
     print()
 
     if sha256:
-        actual = _sha256(zip_path)
+        actual = _sha256(dest_path)
         if actual != sha256:
-            zip_path.unlink()
+            dest_path.unlink()
             raise RuntimeError(
                 f"Checksum mismatch for {name}.\n"
                 f"  expected: {sha256}\n"
                 f"  got:      {actual}"
             )
 
-    print(f"Extracting to {extract_dir} ...")
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        zf.extractall(extract_dir)
-    zip_path.unlink()
+    if dest_path.suffix == ".zip":
+        print(f"Extracting to {extract_dir} ...")
+        with zipfile.ZipFile(dest_path, "r") as zf:
+            zf.extractall(extract_dir)
+        dest_path.unlink()
     marker.touch()
 
     data_dir = _locate_data(extract_dir)
@@ -124,13 +132,13 @@ def _looks_like_url(s) -> bool:
 
 
 def _locate_data(extract_dir: Path) -> Path:
-    """Return the directory holding the dataset. If the zip extracted to a
-    single top-level folder, descend into it; otherwise return extract_dir."""
+    """Return the path holding the dataset. If there's a single top-level
+    entry (a folder from zip extraction, or a lone downloaded file), return
+    that directly; otherwise return extract_dir."""
     entries = [p for p in extract_dir.iterdir()
                if p.name != ".complete" and p.suffix != ".zip"]
-    dirs = [p for p in entries if p.is_dir()]
-    if len(entries) == 1 and len(dirs) == 1:
-        return dirs[0]
+    if len(entries) == 1:
+        return entries[0]
     return extract_dir
 
 
