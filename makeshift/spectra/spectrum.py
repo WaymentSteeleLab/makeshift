@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import nmrglue as ng
 
+from ..utils.datasets import fetch
+
 def estimate_background(data, n=1000, seed=42):
     """Noise-floor estimate: median absolute intensity over ``n`` random
     points of ``data``. Deterministic for a given ``seed``."""
@@ -51,6 +53,11 @@ class Spectrum:
         data = data.astype(float)
         uc = [ng.sparky.make_uc(dic, data, dim=i) for i in range(data.ndim)]
         return cls(data, uc)
+
+    @classmethod
+    def example_hsqc(cls):
+        """Load the example NTRC 15N-HSQC, downloading it on first use."""
+        return cls.from_ucsf(fetch("NTRC_HSQC"))
 
     def estimate_background(self, n=1000, seed=42):
         """
