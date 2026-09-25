@@ -52,6 +52,13 @@ RESIDUE_VOLUME_A3 = {
 }
 DEFAULT_RESIDUE_VOLUME_A3 = 130.0  # fallback for unknown/hetero residues
 
+# Crystallographic solvent; excluded so it doesn't inflate the bead model.
+WATER_RESNAMES = {"HOH", "WAT", "DOD", "H2O", "TIP", "TIP3", "SOL"}
+
+# Upper bound on a C(i-1)-N peptide bond (ideal 1.33 A) when building N-H
+# vectors; anything longer is a chain break or gap.
+MAX_PEPTIDE_BOND_A = 2.0
+
 
 @dataclass
 class Atom:
@@ -68,7 +75,10 @@ class Atom:
 
 def parse_pdb_atoms(path: str):
     """Parse ATOM/HETATM records from a PDB file (fixed-column format,
-    columns per the PDB format spec). Returns a list of Atom."""
+    columns per the PDB format spec). Returns a list of Atom.
+
+    Water (WATER_RESNAMES) is skipped; other HETATM records (ligands,
+    cofactors) are kept as part of the hydrodynamic particle."""
     atoms = []
     with open(path) as fh:
         for line in fh:
@@ -88,6 +98,8 @@ def parse_pdb_atoms(path: str):
                 z = float(line[46:54])
                 element = line[76:78].strip() or name[0]
             except ValueError:
+                continue
+            if resname in WATER_RESNAMES:
                 continue
             atoms.append(Atom(serial, name, resname, chain, resseq, x, y, z, element))
 
@@ -133,6 +145,11 @@ def nh_bond_vectors(atoms):
     every residue that has N, CA, and a preceding residue's C atom
     (residue 1 of each chain has no C(i-1) and is skipped, matching
     tmp.t12's "190 out of 206" / similar undercounts).
+
+    C(i-1) is only used if it is in the same chain and within
+    MAX_PEPTIDE_BOND_A of N, so the first residue of each chain and the
+    residue after a structural gap are skipped rather than built from an
+    unbonded carbonyl.
     """
     # group atoms by (chain, resseq), preserving order
     residues = {}
@@ -146,12 +163,17 @@ def nh_bond_vectors(atoms):
 
     vectors = {}
     prev_c = None
+    prev_chain = None
     for key in order:
         res = residues[key]
         n = res.get("N")
         ca = res.get("CA")
         c = res.get("C")
-        if n is not None and ca is not None and prev_c is not None:
+        if key[0] != prev_chain:
+            prev_c = None
+            prev_chain = key[0]
+        if (n is not None and ca is not None and prev_c is not None
+                and np.linalg.norm(n - prev_c) <= MAX_PEPTIDE_BOND_A):
             v1 = n - prev_c
             v2 = n - ca
             v1 = v1 / np.linalg.norm(v1)
@@ -160,7 +182,7 @@ def nh_bond_vectors(atoms):
             norm = np.linalg.norm(nh)
             if norm > 1e-8:
                 vectors[key] = nh / norm
-        prev_c = c if c is not None else prev_c
+        prev_c = c
     return vectors
 
 
