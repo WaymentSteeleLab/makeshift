@@ -31,7 +31,7 @@ import makeshift as ms
 from makeshift.reref import compute_offsets
 
 HERE = Path(__file__).parent
-OUTPUT_FILE = HERE / "reref_validation.png"
+OUTPUT_FILE = HERE / "reref_validation.pdf"
 ALL_IDS_CACHE = HERE / "bmrb_all_ids.txt"
 RESULTS_CACHE = HERE / "reref_validation_results.jsonl"
 DEFAULT_IDS = [11080, 15451, 15490, 15521, 15581, 15763, 15959, 52018, 5991]
@@ -277,19 +277,8 @@ def save_figure(lacs_rows, panav_rows, path: Path, *, announce: bool = True) -> 
                 ys = [ref for _, a, ref, _ in rows if a == atom]
                 label = ATOM_LABEL.get(atom, atom)
                 vals = xs + ys
-                if vals:
-                    lo, hi = int(np.floor(min(vals))), int(np.ceil(max(vals)))
-                    if lo == hi:
-                        lo, hi = lo - 1, hi + 1
-                    span = hi - lo
-                    n_int = min(3, span)
-                    step = int(np.ceil(span / n_int))
-                    n_int = min(int(np.ceil(span / step)), 3)
-                    hi = lo + step * n_int
-                    ticks = list(range(lo, hi + 1, step))
-                    lims = (lo, hi)
-                else:
-                    lims, ticks = (-1, 1), [-1, 0, 1]
+                lims=(-8,8)
+                ticks=list(range(-8,9,2))
 
                 if len(xs) >= 2:
                     x, y = np.asarray(xs, float), np.asarray(ys, float)
