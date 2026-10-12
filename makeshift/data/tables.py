@@ -28,6 +28,20 @@ def get_panav_distns():
     return out
 
 
+def get_panav_n_prev():
+    """PANAV.jar 15N distributions keyed on residue i and i-1.
+
+    Returns {(residue, prev_residue): {ss: (mean, std)}}; pairs/SS with no
+    data in the jar are omitted.
+    """
+    df = pd.read_csv(_DATA / 'panav_n_prev.csv', comment='#').dropna()
+    out = {}
+    for _, row in df.iterrows():
+        key = (row['AA'].upper(), row['prev_AA'].upper())
+        out.setdefault(key, {})[row['SS']] = (float(row['mean']), float(row['stdev']))
+    return out
+
+
 def get_bmrb_stats():
     """BMRB full-database statistics. Returns {residue: {atom: (mean, std)}}."""
     df = pd.read_csv(_DATA / 'bmrb_stats.csv')

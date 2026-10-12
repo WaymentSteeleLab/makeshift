@@ -3,6 +3,7 @@
 from .tables import (
     get_random_coil,
     get_panav_distns,
+    get_panav_n_prev,
     get_bmrb_stats,
     get_c_prime_rc,
     get_csi_wishart,
@@ -16,6 +17,7 @@ from .tables import (
 __all__ = [
     "get_random_coil",
     "get_panav_distns",
+    "get_panav_n_prev",
     "get_bmrb_stats",
     "get_c_prime_rc",
     "get_csi_wishart",

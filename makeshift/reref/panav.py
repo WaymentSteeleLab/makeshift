@@ -5,15 +5,21 @@ HA→SS (PSSI joint P_s + 5-residue B/C density smooth), then iterative
 N/CA/CB/C offsets vs panav_distns.csv. Offset = mean(d_ave - d_obs);
 corrected = Val + offset. Optional CONA fragment scan afterward (does not
 change offsets).
+
+As in PANAV.jar (not described in the papers), N reference distributions
+for SS assignment and offsets depend on residue i and i-1
+(panav_n_prev.csv). N on residues with unknown/missing i-1 is skipped there.
+CONA scoring keeps the per-residue N distributions.
 """
 
 import numpy as np
 import pandas as pd
 
-from ..data.tables import get_panav_distns
+from ..data.tables import get_panav_distns, get_panav_n_prev
 from ..utils.constants import _AA_3TO1, _SS
 
 _REF = get_panav_distns()
+_REF_N = get_panav_n_prev()  # {(aa_i, aa_{i-1}): {ss: (mean, std)}}
 _NO_REF = {("PRO", "N"), ("PRO", "H"), ("GLY", "CB")}
 _OFFSET_ATOMS = ("N", "CA", "CB", "C")
 _ALL_ATOMS = ("N", "CA", "CB", "C", "H", "HA")
@@ -21,6 +27,9 @@ _STD = {"C": 175.7, "CA": 56.6, "CB": 34.4, "N": 119.3, "H": 7.93, "HA": 4.41}
 _MIN_N = 25
 _CONA_TOL = 0.1
 _DENSITY_CUT = 0.35  # PSSI: promote to majority type if P > this
+# PANAV.jar (CSI_Sec.get_csiOff) adds +0.4 ppm to the CB offset after each
+# refinement round; not in the papers. Set to 0.0 to disable.
+_JAR_CB_BUMP = 0.4
 
 
 def _ok(aa, atom):
@@ -36,21 +45,37 @@ def _ok(aa, atom):
         return False
 
 
+def _ok_n(aa, prev):
+    d = _REF_N.get((aa, prev))
+    return d is not None and all(ss in d for ss in _SS)
+
+
+def _dist(aa, prev, ss, atom):
+    """(mean, std) for ``atom``; N uses the i/i-1 table."""
+    if atom == "N":
+        return _REF_N[(aa, prev)][ss]
+    return _REF[aa][ss][atom]
+
+
+def _ok_atom(aa, prev, atom):
+    return _ok_n(aa, prev) if atom == "N" else _ok(aa, atom)
+
+
 def _gauss(x, mu, sig):
     return np.exp(-0.5 * ((x - mu) / sig) ** 2) / (sig * np.sqrt(2 * np.pi))
 
 
-def _ss_prob(aa, shifts, atoms):
+def _ss_prob(aa, shifts, atoms, prev=None):
     """
     Joint P_s over ``atoms`` (normalize-then-product; missing atoms skipped).
-    Returns (best_ss, probs) or (None, None).
+    N uses the (aa, prev) distributions. Returns (best_ss, probs) or (None, None).
     """
     raw = {ss: 1.0 for ss in _SS}
     n = 0
     for atom in atoms:
-        if atom not in shifts or not _ok(aa, atom):
+        if atom not in shifts or not _ok_atom(aa, prev, atom):
             continue
-        g = {ss: _gauss(shifts[atom], *_REF[aa][ss][atom]) for ss in _SS}
+        g = {ss: _gauss(shifts[atom], *_dist(aa, prev, ss, atom)) for ss in _SS}
         gsum = sum(g.values())
         if gsum <= 0:
             continue
@@ -131,6 +156,9 @@ def reref_panav(df, cona=True):
         rec["shifts"][atom] = v if prev is None else 0.5 * (prev + v)
 
     seq_ids = sorted(orig)
+    # residue i-1 identity from any atom row (N reference depends on it)
+    aa_by_sid = dict(zip(df["Seq_ID"].astype(int), df["Comp_ID"]))
+    prev_aa = {s: aa_by_sid.get(s - 1) for s in seq_ids}
     none = {a: None for a in _OFFSET_ATOMS}
     if not seq_ids:
         return none, {a: False for a in _OFFSET_ATOMS}, None
@@ -151,11 +179,11 @@ def reref_panav(df, cona=True):
     for s in seq_ids:
         aa = orig[s]["aa"]
         for atom, val in orig[s]["shifts"].items():
-            if not _ok(aa, atom):
+            if not _ok_atom(aa, prev_aa[s], atom):
                 continue
             if all(
-                abs(val + crude[atom] - _REF[aa][ss][atom][0])
-                > 6 * _REF[aa][ss][atom][1]
+                abs(val + crude[atom] - _dist(aa, prev_aa[s], ss, atom)[0])
+                > 6 * _dist(aa, prev_aa[s], ss, atom)[1]
                 for ss in _SS
             ):
                 deviant[s].add(atom)
@@ -171,7 +199,7 @@ def reref_panav(df, cona=True):
                 for atom in _OFFSET_ATOMS:
                     if cn_off.get(atom) is not None and atom in sh:
                         sh[atom] = sh[atom] + cn_off[atom]
-            label, p = _ss_prob(orig[s]["aa"], sh, atoms)
+            label, p = _ss_prob(orig[s]["aa"], sh, atoms, prev_aa[s])
             ss[s], probs[s] = label, (p or {})
         _smooth(seq_ids, ss, probs)
 
@@ -183,9 +211,9 @@ def reref_panav(df, cona=True):
                 aa, sh = orig[s]["aa"], orig[s]["shifts"]
                 if atom in deviant[s] or atom not in sh or ss.get(s) is None:
                     continue
-                if not _ok(aa, atom):
+                if not _ok_atom(aa, prev_aa[s], atom):
                     continue
-                mu, _ = _REF[aa][ss[s]][atom]
+                mu, _ = _dist(aa, prev_aa[s], ss[s], atom)
                 deltas.append(mu - sh[atom])
             off = _mean_3sigma(deltas)
             out[atom], ok[atom] = (off, True) if off is not None else (None, False)
@@ -197,6 +225,8 @@ def reref_panav(df, cona=True):
     for _ in range(2):
         assign_ss(offsets)
         offsets, check = compute_offsets()
+        if offsets["CB"] is not None:
+            offsets["CB"] += _JAR_CB_BUMP
 
     cal = {
         s: {

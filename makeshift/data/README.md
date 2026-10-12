@@ -4,7 +4,8 @@ CSV tables loaded by `makeshift/data/tables.py` and cached as module-level
 dicts. To update a table, edit the CSV — no code changes needed.
 
 The loaders are `get_random_coil`, `get_bmrb_stats`, `get_c_prime_rc`,
-`get_rc_pre_pro`, `get_rc_n_prev`, `get_csi_wishart`, and `get_panav_distns`.
+`get_rc_pre_pro`, `get_rc_n_prev`, `get_csi_wishart`, `get_panav_distns`, and
+`get_panav_n_prev`.
 
 ## `random_coil.csv`
 
@@ -72,6 +73,19 @@ HA→SS assignment, Wang & Wishart (2005) offsets, and Wang et al. (2010) CONA
 joint-probability scoring.
 
 **Used by:** `get_panav_distns()` in `reref/panav.py`.
+
+## `panav_n_prev.csv`
+
+**Columns:** `AA, prev_AA, SS, mean, stdev`
+
+15N reference distributions for residue `AA` given the preceding residue
+`prev_AA`, per SS class (E = strand, C = coil, H = helix). Extracted from the
+`NCSI_ave` table in PANAV.jar (`CSI_AVE_STD.java`); this i/i−1 dependence is
+used by the jar but not described in the PANAV papers. Blank = no data in the
+jar (zero mean or zero stdev).
+
+**Used by:** `get_panav_n_prev()` — PANAV N for SS assignment and offsets
+(CONA scoring still uses the per-residue N in `panav_distns.csv`).
 
 ## `csi_wishart.csv`
 
