@@ -104,13 +104,20 @@ def fetch_panav_offsets(eid: int) -> dict[str, float] | None:
     return out or None
 
 
-def process_entry(eid: int, do_lacs: bool, do_panav: bool) -> dict:
+def process_entry(
+    eid: int, do_lacs: bool, do_panav: bool, panav_cache: dict | None = None
+) -> dict:
     result = {"id": eid, "lacs": [], "panav": [], "notes": []}
     lacs_ref = panav_ref = cs = None
     cs_exc = None
+    cached = panav_cache is not None and eid in panav_cache
+    if do_panav and cached:
+        panav_ref = panav_cache[eid]
     with ThreadPoolExecutor(max_workers=3) as net:
         f_lacs = net.submit(fetch_lacs_offsets, eid) if do_lacs else None
-        f_panav = net.submit(fetch_panav_offsets, eid) if do_panav else None
+        f_panav = (
+            net.submit(fetch_panav_offsets, eid) if do_panav and not cached else None
+        )
         f_cs = net.submit(ms.ChemicalShifts.from_bmrb, eid, keep_download=False)
         if f_lacs is not None:
             try:
@@ -233,6 +240,21 @@ def load_results(path: Path, do_lacs: bool, do_panav: bool):
     return done_ids, lacs_rows, panav_rows
 
 
+def load_panav_refs(path: Path) -> dict[int, dict[str, float] | None]:
+    """id -> {atom: ref} from a prior results JSONL (None if no PANAV pairs)."""
+    refs = {}
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        try:
+            rec = json.loads(line)
+            if not rec.get("did_panav"):
+                continue
+            pairs = {str(p["atom"]): float(p["ref"]) for p in rec.get("panav") or []}
+            refs[int(rec["id"])] = pairs or None
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            continue
+    return refs
+
+
 def append_result(path: Path, rec: dict) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -352,6 +374,10 @@ def main(argv=None):
     parser.add_argument("--workers", type=int, default=None)
     parser.add_argument("--checkpoint-every", type=int, default=None)
     parser.add_argument("-o", "--output", type=Path, default=OUTPUT_FILE)
+    parser.add_argument(
+        "--panav-refs-from", type=Path, default=None,
+        help="Reuse PANAV reference offsets from this results JSONL (no re-fetch)",
+    )
     args = parser.parse_args(argv)
 
     do_lacs = args.methods in ("both", "lacs")
@@ -421,6 +447,15 @@ def main(argv=None):
                 flush=True,
             )
 
+    panav_cache = None
+    if args.panav_refs_from is not None:
+        panav_cache = load_panav_refs(args.panav_refs_from)
+        print(
+            f"Reusing PANAV refs for {len(panav_cache)} ids from "
+            f"{args.panav_refs_from.name}\n",
+            flush=True,
+        )
+
     todo = [eid for eid in ids if eid not in done_ids]
     n_total, n_done_prior = len(ids), len(ids) - len(todo)
     if n_done_prior:
@@ -475,7 +510,8 @@ def main(argv=None):
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         futs = {
-            pool.submit(process_entry, eid, do_lacs, do_panav): eid for eid in todo
+            pool.submit(process_entry, eid, do_lacs, do_panav, panav_cache): eid
+            for eid in todo
         }
         for fut in as_completed(futs):
             eid = futs[fut]
