@@ -23,17 +23,17 @@ almost certainly came from a joint multi-field fit, a better-constrained
 problem than the single-field refit this code does, so a mismatch there
 isn't evidence of anything wrong on either side.
 
-**23 single-field entries pass.** Pooled across all of them:
+**22 single-field entries pass.** Pooled across all of them:
 
 | Metric | Value |
 |---|---|
-| Pearson r | 0.805 |
-| RMSE | 0.093 |
-| n | 2262 residues |
+| Pearson r | 0.796 |
+| RMSE | 0.095 |
+| n | 2126 residues |
 
 Excluding "ambiguous"-model residues (both a NOE deficit and an R2 excess
 detected -- S2 falls back to the Model 1 point estimate rather than being
-confidently attributed to Model 2 or 3): r=0.818, RMSE=0.093, n=2037. See
+confidently attributed to Model 2 or 3): r=0.808, RMSE=0.095, n=1906. See
 [validate_s2_no_ambiguous.png](../demos/s2_validation/validate_s2_no_ambiguous.png)
 alongside the all-models plot below.
 
@@ -49,7 +49,6 @@ Sorted by Pearson r, high to low.
 | 6470 | Ubiquitin | 600 | 63 | 0.971 | 0.089 |
 | 4390 | Eotaxin | 500 | 57 | 0.959 | 0.073 |
 | 4365 | Stromelysin+inhibitor (S1-S3, a) | 600 | 141 | 0.954 | 0.036 |
-| 50212 | M. tuberculosis pyrophosphatase | 700 | 136 | 0.953 | 0.037 |
 | 15451 | GABPa OST domain | 500 | 77 | 0.949 | 0.035 |
 | 4364 | Stromelysin+inhibitor (S1-S3P) | 600 | 138 | 0.944 | 0.041 |
 | 17047 | Trp repressor, A77V (holo) | 600 | 72 | 0.941 | 0.054 |
@@ -138,6 +137,16 @@ the calibration-gap fix, on a structure already known to be wrong. The
 other three Trp-repressor entries (17041, 17046, 17047) resolve to
 2XDI instead, which correctly includes both chains, so they remain in
 the validation set.
+
+**Wrong structure resolved: homohexamer (1 entry).** 50212 (Mtb inorganic
+pyrophosphatase) — the deposition describes a homohexamer (116 kDa) and
+cites no PDB entry, so the tensor was built from the AlphaFold *monomer*
+(P9WI55). `_check_biological_assembly` only runs for RCSB structures, so
+nothing warned. The tumbling rate had to be rescaled by 0.275 to absorb
+the size difference, and a monomer's tensor shape is not a hexamer's; the
+fit still reached r=0.953, which isn't evidence the structure was right.
+Experimental hexamers exist (e.g. 1SXV, 1WCF), but assembly handling for
+them was not attempted.
 
 **Multi-field, undetectable from BMRB's own metadata (1 entry).** 5154
 (N-TIMP-1, free) — the original study used multiple spectrometer

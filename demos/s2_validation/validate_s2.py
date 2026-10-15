@@ -30,7 +30,7 @@ prefilter -- it turned out true for the *whole* previously-diagnosed
 "unresolved" bucket, and for the majority of what were originally
 low-hanging "OK" entries too (13 of the first 41).
 
-23 single-field entries pass (ENTRIES below); EXCLUDED lists the
+22 single-field entries pass (ENTRIES below); EXCLUDED lists the
 single-field entries that still didn't, grouped by root cause:
 
   Data/parsing gaps (technical, not a modeling problem):
@@ -65,6 +65,10 @@ single-field entries that still didn't, grouped by root cause:
         profile's single-entity sequence, which a real bound-complex
         structure never passes even when correctly identified --
         needs entity-aware matching to fix properly.
+    50212 -- Mtb inorganic pyrophosphatase, a homohexamer (116 kDa): no
+        PDB entry is cited, so the AlphaFold monomer was used. The
+        assembly check only covers RCSB structures, so nothing warned.
+        Same principle as the Trp repressor entries below.
     17010, 17012, 17013 -- Trp repressor (WT, L75F, A77V): a constitutive
         homodimer, but all three resolve to 3WRP, which RCSB's own
         metadata says is dimeric while the file contains only one chain
@@ -116,7 +120,7 @@ PAIRS_CSV = Path(__file__).parent / "validate_s2_pairs.csv"
 
 ENTRIES = [4364, 4365, 4366, 4390, 4689, 5549, 5550, 5991, 6470,
            6577, 15451, 17041, 17046, 17047, 17069,
-           17306, 18388, 18389, 18758, 19388, 26513, 27890, 50212]
+           17306, 18388, 18389, 18758, 19388, 26513, 27890]
 
 # entry_id -> number of distinct 1H spectrometer fields deposited (checked
 # via RelaxationProfile._list_fields_mhz across T1/T2/NOE); excluded before
@@ -177,6 +181,17 @@ EXCLUDED = {
            "correlation isn't proof the structure was right.",
     17013: "wrong structure resolved -- same issue as 17010/17012 (Trp "
            "repressor dimer modeled from 3WRP, a monomer-only file).",
+    50212: "wrong structure resolved -- the deposition describes a "
+           "homohexamer (116 kDa; assembly Details: 'homohexameric "
+           "inorganic pyrophosphatase'), cites no PDB entry, so the "
+           "tensor was built from the AlphaFold *monomer* (P9WI55). "
+           "_check_biological_assembly only runs for RCSB structures, so "
+           "nothing warned. The tumbling rate had to be rescaled by 0.275 "
+           "to compensate for size, and a monomer's tensor shape is not a "
+           "hexamer's; the fit still reached r=0.953, which isn't evidence "
+           "the structure was right. Experimental hexamers exist (e.g. "
+           "1SXV, 1WCF), but their chain/assembly handling was not "
+           "attempted here.",
 }
 
 
