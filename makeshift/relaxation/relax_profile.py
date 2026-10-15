@@ -313,9 +313,15 @@ class RelaxationProfile:
             value_col, err_col = err_col, value_col
         val, err = cls._series_by_seqid(df, n, value_col=value_col, err_col=err_col)
         rate = _to_rate(val.values, units, kind)
-        # convert a time error into a rate error: d(1/T) = dT / T^2
+        # convert a time error into a rate error: d(1/T) = dT / T^2, with T and
+        # dT in seconds so the result is in s^-1 (a ms-tagged list otherwise
+        # comes out 1000x too small)
         is_time = not (rate.size and np.allclose(rate, val.values, equal_nan=True))
-        rate_err = (err.values / val.values ** 2) if is_time else err.values
+        if is_time:
+            t_scale = 1e-3 if (units or "").strip().lower() in ("ms", "msec") else 1.0
+            rate_err = (err.values * t_scale) / (val.values * t_scale) ** 2
+        else:
+            rate_err = err.values
 
         if fixes.err_reciprocal(entry_id, kind):
             rate_err = 1.0 / rate_err
