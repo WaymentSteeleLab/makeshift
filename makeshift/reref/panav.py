@@ -8,8 +8,9 @@ change offsets).
 
 As in PANAV.jar (not described in the papers), N reference distributions
 for SS assignment and offsets depend on residue i and i-1
-(panav_n_prev.csv). N on residues with unknown/missing i-1 is skipped there.
-CONA scoring keeps the per-residue N distributions.
+(panav_n_prev.csv); the deviant and suspicious flags use them too. N on
+residues with unknown/missing i-1 is skipped there. CONA fragment scoring
+keeps the per-residue N distributions.
 """
 
 import numpy as np
@@ -301,9 +302,9 @@ def reref_panav(df, cona=True):
         if ssi is None:
             continue
         for atom, val in sh.items():
-            if not _ok(aa, atom):
+            if not _ok_atom(aa, prev_aa[s], atom):
                 continue
-            mu, sig = _REF[aa][ssi][atom]
+            mu, sig = _dist(aa, prev_aa[s], ssi, atom)
             if abs(val - mu) > 4 * sig:
                 suspicious.append(
                     {"seq_id": int(s), "aa": aa, "atom": atom, "val": val}
