@@ -10,14 +10,14 @@ bmrb_id,title,field_mhz,n_dep,r_dep,rmse_dep,n_rci_wishart,r_rci_wishart,rmse_rc
 6470,Rotational Diffusion Anisotropy of Human Ubiquitin from 15N NMR Relaxation,600,63,0.9706,0.0888,0,nan,nan,0,nan,nan,0,nan,nan,0,nan,nan
 6577,Solution structure of the C1-subdomain of Bacillus stearothermophilus translation initiation factor IF2,600,67,0.9738,0.0890,70,0.7830,0.1626,70,0.7787,0.1437,67,0.9188,0.0963,67,0.9112,0.0853
 15451,GABPa OST domain,500,77,0.9489,0.0352,78,0.8271,0.0711,78,0.7844,0.0842,77,0.8594,0.0582,77,0.8125,0.0722
-17041,Backbone dynamics of Tryptophan repressor protein in holo-form,600,65,0.8841,0.0968,68,0.8234,0.1430,68,0.7505,0.1084,65,0.8006,0.0848,65,0.7127,0.1258
-17046,Backbone dynamics of Tryptophan repressor L75F mutant protein in holo-form,600,73,0.9707,0.0514,74,0.7742,0.1662,74,0.6996,0.1282,73,0.7647,0.1667,73,0.6912,0.1451
-17047,Backbone dynamics of Tryptophan repressor A77V mutant protein in holo-form,600,72,0.9405,0.0536,75,0.8913,0.0998,75,0.8456,0.1025,72,0.8820,0.1115,72,0.8278,0.1015
-17069,Backbone dynamics of E73 from SSV-RH,600,51,0.9211,0.0681,0,nan,nan,0,nan,nan,0,nan,nan,0,nan,nan
+17041,Backbone dynamics of Tryptophan repressor protein in holo-form,600,65,0.8688,0.0873,68,0.8240,0.1280,68,0.7435,0.1108,65,0.8006,0.0848,65,0.7127,0.1258
+17046,Backbone dynamics of Tryptophan repressor L75F mutant protein in holo-form,600,73,0.9444,0.0662,74,0.7011,0.1551,74,0.6587,0.1214,73,0.7647,0.1667,73,0.6912,0.1451
+17047,Backbone dynamics of Tryptophan repressor A77V mutant protein in holo-form,600,72,0.8524,0.0824,75,0.7702,0.0919,75,0.7510,0.0999,72,0.8820,0.1115,72,0.8278,0.1015
+17069,Backbone dynamics of E73 from SSV-RH,600,51,0.9282,0.0640,0,nan,nan,0,nan,nan,0,nan,nan,0,nan,nan
 17306,NRC consensus ankyrin repeat protein backbone and sidechain assignments,600,85,0.9356,0.0933,94,0.8079,0.0835,94,0.8043,0.0808,85,0.7985,0.1373,85,0.7845,0.1220
 18388,Solution structure; dynamics and binding studies of CtCBM11,600,156,0.5719,0.0984,156,0.0859,0.1516,156,0.1011,0.1409,156,0.1426,0.1387,156,0.1763,0.1252
 18389,Solution structure; dynamics and binding studies of CtCBM11,600,148,0.5125,0.0938,149,0.2178,0.1129,149,0.1953,0.1045,148,0.3409,0.1172,148,0.3212,0.1027
 18758,Refined solution structure and dynamics of First Catalytic Cysteine Half-domain from mouse E1 enzyme,400,71,0.9162,0.0964,98,0.8196,0.1621,98,0.8196,0.1509,71,-0.0056,0.2123,71,0.0141,0.2112
-19388,The Apo-structure of the Low Molecular Weight Protein-tyrosine Phosphatase A (MptpA) from Mycobacterium tuberculosis Allows for Better Target-specific Drug Development,600,113,0.8408,0.0884,0,nan,nan,0,nan,nan,0,nan,nan,0,nan,nan
-26513,The Apo-structure of the Low Molecular Weight Protein-tyrosine Phosphatase A (MptpA) from Mycobacterium tuberculosis Allows for Better Target-specific Drug Development,600,111,0.8558,0.0888,0,nan,nan,0,nan,nan,0,nan,nan,0,nan,nan
+19388,The Apo-structure of the Low Molecular Weight Protein-tyrosine Phosphatase A (MptpA) from Mycobacterium tuberculosis Allows for Better Target-specific Drug Development,600,113,0.8417,0.0840,0,nan,nan,0,nan,nan,0,nan,nan,0,nan,nan
+26513,The Apo-structure of the Low Molecular Weight Protein-tyrosine Phosphatase A (MptpA) from Mycobacterium tuberculosis Allows for Better Target-specific Drug Development,600,111,0.8531,0.0843,0,nan,nan,0,nan,nan,0,nan,nan,0,nan,nan
 27890,BlaC in bound to clavulanic acid,850,174,0.8053,0.0973,222,0.0756,0.1217,220,-0.0244,0.1662,174,0.0383,0.1172,173,0.0346,0.2129

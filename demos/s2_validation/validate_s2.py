@@ -110,8 +110,8 @@ from makeshift.entry import NMRStarEntry
 from makeshift.relaxation import RelaxationProfile
 from makeshift.rci import RCI
 
-OUTPUT_FILE = Path(__file__).parent / "validate_s2.png"
-OUTPUT_FILE_NO_AMBIGUOUS = Path(__file__).parent / "validate_s2_no_ambiguous.png"
+OUTPUT_FILE = Path(__file__).parent / "validate_s2.pdf"
+OUTPUT_FILE_NO_AMBIGUOUS = Path(__file__).parent / "validate_s2_no_ambiguous.pdf"
 GRID_FILE = Path(__file__).parent / "validate_s2_grid.png"
 SEQID_FILE = Path(__file__).parent / "validate_s2_by_seqid.png"
 RCI_FILE = Path(__file__).parent / "validate_s2_vs_rci.png"
