@@ -169,18 +169,65 @@ def nmrcalcul(g: "HydronmrState"):
           f"NOE = {g.noe:.4f}")
 
 
-def per_residue_t1t2(g: "HydronmrState", nh_unit_vector_pdb_frame: np.ndarray):
-    """Per-residue T1/T2/NOE using the full 5-term anisotropic
-    spectral density (Woessner 1962), instead of the single
-    isotropic harmonic-mean tau used by nmrcalcul().
+def diffusion_tensor_taus(dx: float, dy: float, dz: float):
+    """The 5 Woessner (1962) rotational-diffusion correlation times from
+    the 3 principal diffusion rates alone -- no bond orientation needed
+    (see `mode_amplitudes_raw` for the orientation-dependent amplitudes
+    paired with these). A pure function of (dx,dy,dz) so a calibration
+    can recompute it for a *trial* tensor without touching rotani()'s
+    hydrodynamic calculation.
 
-    `nh_unit_vector_pdb_frame` is the N-H bond unit vector in the
-    same (PDB) coordinate frame as g.bead_positions. It is projected
-    onto the principal axes of g.dt_rot (g.rot_eigvecs, set by
-    rotani()) to get direction cosines (l1,l2,l3) along (Dx,Dy,Dz).
+    Returns (taus, dav, aniso_delta): taus is an array of 5 correlation
+    times; dav/aniso_delta are returned since `mode_amplitudes_raw` also
+    needs them and they're already computed here.
+    """
+    dav = (dx + dy + dz) / 3.0
+    aniso_delta = np.sqrt(dx**2 + dy**2 + dz**2 - dx*dy - dy*dz - dz*dx)
+    taus = np.array([
+        1.0 / (6*dav - 2*aniso_delta),
+        1.0 / (4*dy + dx + dz),
+        1.0 / (4*dx + dy + dz),
+        1.0 / (4*dz + dx + dy),
+        1.0 / (6*dav + 2*aniso_delta),
+    ])
+    return taus, dav, aniso_delta
 
-    Amplitudes (Woessner), exact formulas ported from nmrela_
-    (hex-rays.txt:18221+, the cn_5[]/an_6[] computation):
+
+def direction_cosines(g: "HydronmrState", nh_unit_vector_pdb_frame: np.ndarray):
+    """(l1,l2,l3): an N-H bond's direction cosines along the diffusion
+    tensor's principal axes (Dx,Dy,Dz), given its unit vector in the same
+    (PDB) coordinate frame as g.bead_positions. Depends only on the
+    tensor's *orientation* (g.rot_eigvecs), not its eigenvalues -- so
+    these stay valid for a rescaled/reshaped trial tensor as long as its
+    principal axes are kept fixed (see makeshift/relaxation/model_free.py
+    calibrate_tensor).
+    """
+    vecs = g.rot_eigvecs  # columns = eigenvectors, descending eigenvalue order
+    # rotani() assigned dz=vals[0], dx=vals[1], dy=vals[2]
+    ez, ex, ey = vecs[:, 0], vecs[:, 1], vecs[:, 2]
+
+    v = nh_unit_vector_pdb_frame
+    l1 = float(np.dot(v, ex))
+    l2 = float(np.dot(v, ey))
+    l3 = float(np.dot(v, ez))
+    norm = (l1*l1 + l2*l2 + l3*l3) ** 0.5
+    return l1/norm, l2/norm, l3/norm
+
+
+def mode_amplitudes_raw(l1: float, l2: float, l3: float,
+                        dx: float, dy: float, dz: float,
+                        dav: float, aniso_delta: float):
+    """Woessner (1962) mode amplitudes A0..A4 for one bond, given its
+    direction cosines (l1,l2,l3) and the 3 principal diffusion rates
+    (plus their mean/anisotropy, from `diffusion_tensor_taus`). A pure
+    function of these numbers, not of a HydronmrState -- lets a
+    calibration recompute amplitudes for a *trial* tensor (dx,dy,dz
+    rescaled/reshaped) while reusing an already-computed direction
+    cosine, since the projection itself doesn't depend on the tensor's
+    eigenvalues.
+
+    Exact formulas ported from nmrela_ (hex-rays.txt:18221+, the
+    cn_5[]/an_6[] computation):
         A1 = 3 l1^2 l3^2     paired with tau index 1 (1/(4Dy+Dx+Dz))
         A2 = 3 l2^2 l3^2     paired with tau index 2 (1/(4Dx+Dy+Dz))
         A3 = 3 l1^2 l2^2     paired with tau index 3 (1/(4Dz+Dx+Dy))
@@ -192,33 +239,42 @@ def per_residue_t1t2(g: "HydronmrState", nh_unit_vector_pdb_frame: np.ndarray):
         A4 = (3/4)(fp - gp)  paired with tau index 4 (1/(6Dav+2Delta))
     A0..A4 sum to 1 (validated against nmrela_'s `scn_19` sanity check).
     """
-    vecs = g.rot_eigvecs  # columns = eigenvectors, descending eigenvalue order
-    # rotani() assigned dz=vals[0], dx=vals[1], dy=vals[2]
-    ez, ex, ey = vecs[:, 0], vecs[:, 1], vecs[:, 2]
-
-    v = nh_unit_vector_pdb_frame
-    l1 = float(np.dot(v, ex))
-    l2 = float(np.dot(v, ey))
-    l3 = float(np.dot(v, ez))
-    norm = (l1*l1 + l2*l2 + l3*l3) ** 0.5
-    l1, l2, l3 = l1/norm, l2/norm, l3/norm
-
     A2_ = 3*l2*l2*l3*l3   # pairs with tau index 2 (1/(4Dx+Dy+Dz))
     A1_ = 3*l1*l1*l3*l3   # pairs with tau index 1 (1/(4Dy+Dx+Dz))
     A3_ = 3*l1*l1*l2*l2   # pairs with tau index 3 (1/(4Dz+Dx+Dy))
 
     fp = l1**4 + l2**4 + l3**4 - 1.0/3.0
-    dx, dy, dz = g.dx, g.dy, g.dz
     gdel = ((l1**4 + 2*l2*l2*l3*l3) * dx
             + (l2**4 + 2*l1*l1*l3*l3) * dy
             + (2*l1*l1*l2*l2 + l3**4) * dz)
-    gp = (gdel - g.dav) / g.aniso_delta
+    gp = (gdel - dav) / aniso_delta
 
     A0_ = 0.75 * (fp + gp)  # tau index 0 (1/(6Dav-2Delta))
     A4_ = 0.75 * (fp - gp)  # tau index 4 (1/(6Dav+2Delta))
 
-    amplitudes = [A0_, A1_, A2_, A3_, A4_]
-    taus = g.rot_tau
+    return [A0_, A1_, A2_, A3_, A4_]
+
+
+def mode_amplitudes(g: "HydronmrState", nh_unit_vector_pdb_frame: np.ndarray):
+    """Woessner (1962) mode amplitudes A0..A4 and the matching correlation
+    times g.rot_tau for one N-H bond, given the diffusion tensor already
+    diagonalized by rotani() (g.rot_eigvecs, g.dx/dy/dz, g.dav, g.aniso_delta).
+    Thin wrapper around `direction_cosines`/`mode_amplitudes_raw` -- see
+    those for the derivation. Returns (amplitudes, taus): amplitudes is a
+    list of 5 floats, taus is g.rot_tau (5 correlation times, same order).
+    """
+    l1, l2, l3 = direction_cosines(g, nh_unit_vector_pdb_frame)
+    amplitudes = mode_amplitudes_raw(l1, l2, l3, g.dx, g.dy, g.dz, g.dav, g.aniso_delta)
+    return amplitudes, g.rot_tau
+
+
+def per_residue_t1t2(g: "HydronmrState", nh_unit_vector_pdb_frame: np.ndarray):
+    """Per-residue T1/T2/NOE using the full 5-term anisotropic
+    spectral density (Woessner 1962), instead of the single
+    isotropic harmonic-mean tau used by nmrcalcul(). See
+    `mode_amplitudes` for the amplitude/direction-cosine derivation.
+    """
+    amplitudes, taus = mode_amplitudes(g, nh_unit_vector_pdb_frame)
 
     wh, wx = g.omega_h, g.omega_x
 

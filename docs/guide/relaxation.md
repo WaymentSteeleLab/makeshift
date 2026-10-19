@@ -107,6 +107,21 @@ profile) before plotting.
 prof.plot("R2_R1")   # any observable column, along the sequence
 ```
 
+## Model-free order parameters
+
+`fit_order_parameters()` goes further than the rigid-body comparison
+above: it fits a per-residue S² (and, where the data support it, an
+internal correlation time or exchange term) from R1/R2/NOE, reusing the
+same anisotropic diffusion tensor `add_rigid_prediction()` computes.
+
+```python
+prof.fit_order_parameters()
+prof.table[["Seq_ID", "S2", "mf_model"]]
+```
+
+See [Model-free order parameters](order-parameters.md) for the physics,
+why it's scoped to single-field data, and the full column reference.
+
 ## Full API
 
 See the [Relaxation reference](../api/relaxation.md). The CPMG

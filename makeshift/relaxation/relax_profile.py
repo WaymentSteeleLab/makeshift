@@ -71,32 +71,67 @@ class RelaxationProfile:
     sequence : str
         One-letter sequence the data is aligned to.
     entry_id, entity_id : identifiers carried for reference.
+    tau_scale, tau_shape : the calibrated diffusion tensor's overall rate
+        and anisotropy shape (see `add_rigid_prediction`/
+        `fit_order_parameters`, `model_free.calibrate_tensor`), None
+        until one of those has run. tau_shape=1.0 reproduces the
+        hydrodynamic model's own anisotropy unchanged.
+    calibration_diagnostics : dict from `model_free.assess_calibration`
+        (median_s2_from_r1, median_s2_from_r2, gap, n, unreliable), set
+        alongside tau_scale. `unreliable=True` means R1 and R2 imply
+        substantially different order parameters for the calibration set
+        -- no single tumbling timescale reconciles them, usually because
+        residues with real dynamics contaminated the calibration set, not
+        a data or code bug. `add_rigid_prediction` only warns and
+        proceeds on `unreliable=True` (its rigid baseline is a
+        qualitative comparison, not a reported number); `fit_order_parameters`
+        raises `model_free.FittingError` instead -- no S2 fit attempted
+        -- since its S2 values are numbers meant to be reported.
     """
  
-    def __init__(self, table, sequence, entry_id=None, entity_id=None, entry=None):
+    def __init__(self, table, sequence, entry_id=None, entity_id=None, entry=None,
+                 field_mhz=None):
         self.table = table
         self.sequence = sequence
         self.entry_id = entry_id
         self.entity_id = entity_id
         self.entry = entry
         self.scale_factor = None
+        self.tau_scale = None
+        self.tau_shape = None
+        self.calibration_diagnostics = None
+        self.field_mhz = field_mhz
  
     # construction
  
     @classmethod
     def from_bmrb(cls, bmrb_id, entity_id=None, sequence=None, peaklist=None,
-                  **fetch_kw):
+                  field_mhz=None, **fetch_kw):
         """Fetch a BMRB entry and build a profile from its deposited relaxation."""
         entry = NMRStarEntry.from_bmrb(bmrb_id, **fetch_kw)
         return cls.from_entry(entry, entity_id=entity_id, sequence=sequence,
-                              peaklist=peaklist)
+                              peaklist=peaklist, field_mhz=field_mhz)
  
     @classmethod
-    def from_entry(cls, entry, entity_id=None, sequence=None, peaklist=None):
+    def from_entry(cls, entry, entity_id=None, sequence=None, peaklist=None,
+                   field_mhz=None):
         """
         Build from an already-parsed NMRStarEntry.
         Pulls R1 (from T1), R2 (from T2), and hetNOE, converting times to rates
         using each list's units tag.
+
+        Some entries deposit relaxation at more than one spectrometer field
+        (separate lists within the T1/T2/NOE loops). Mixing lists from
+        different fields into one R1/R2/NOE triple per residue would be
+        physically wrong, so a single target field is resolved first:
+        `field_mhz` if given, else whichever 1H frequency is tagged
+        consistently across T1/T2/NOE (raises if that's ambiguous — pass
+        `field_mhz` explicitly, found via e.g.
+        `entry.saveframe('heteronucl_T1_relaxation')`). Lists with no field
+        tag at all are used unfiltered (old behavior). The resolved field
+        is stored as `self.field_mhz`, reused by
+        `add_rigid_prediction`/`fit_order_parameters` so the data and the
+        physics predictions are always at the same field.
 
         `peaklist` (a PeakList, a DataFrame with a Seq_ID column, or an iterable
         of Seq_IDs) marks which residues have an assigned amide peak; if None,
@@ -121,14 +156,18 @@ class RelaxationProfile:
             "Seq_ID": np.arange(1, n + 1),
             "residue": list(sequence),
         })
+
+        field_mhz, list_filter = cls._resolve_field(entry, field_mhz)
  
         for kind, col in (("T1", "R1"), ("T2", "R2")):
             df = entry.relaxation(kind)
+            df = cls._filter_by_list(df, list_filter.get(kind))
             units = cls._list_units(entry, kind)
             table[col], table[f"{col}_err"] = cls._align_rate(
                 df, n, units, kind, entry_id=entry.entry_id)
  
         noe = entry.relaxation("NOE")
+        noe = cls._filter_by_list(noe, list_filter.get("NOE"))
         table["NOE"], table["NOE_err"] = cls._align_plain(noe, n)
  
         table["R2_R1"] = table["R2"] / table["R1"]
@@ -144,10 +183,91 @@ class RelaxationProfile:
  
         return cls(table, sequence,
                    entry_id=getattr(entry, "entry_id", None),
+                   field_mhz=field_mhz,
                    entity_id=entity_id, entry=entry)
  
     # alignment helpers
  
+    _RELAX_CATEGORY = {"T1": "heteronucl_T1_relaxation",
+                       "T2": "heteronucl_T2_relaxation",
+                       "NOE": "heteronucl_NOEs"}
+
+    @classmethod
+    def _list_fields_mhz(cls, entry, kind):
+        """{list framecode -> 1H spectrometer frequency (MHz)} for every
+        list of the given relaxation kind that carries the tag."""
+        out = {}
+        try:
+            sfs = entry.saveframe(cls._RELAX_CATEGORY[kind])
+        except Exception:
+            return out
+        for name, sf in sfs.items():
+            val = sf.get("Spectrometer_frequency_1H")
+            if val not in (None, ".", "?"):
+                try:
+                    out[name] = float(val)
+                except (TypeError, ValueError):
+                    continue
+        return out
+
+    @classmethod
+    def _resolve_field(cls, entry, field_mhz=None, tol_mhz=1.0):
+        """
+        Resolve a single target 1H field (MHz) and, for each of T1/T2/NOE,
+        which list framecodes belong to it. Returns (field_mhz,
+        {kind: set_of_list_names_or_None}) -- None means that kind has no
+        field tags at all, so it's used unfiltered.
+
+        If `field_mhz` isn't given: a field present (within `tol_mhz`)
+        across every kind that has any field tags is preferred; if none is
+        common to all of them, the most frequently tagged field is used.
+        Raises if no field tag is found anywhere and more than one list
+        exists for any kind (genuinely ambiguous -- pass `field_mhz`).
+        """
+        per_kind = {k: cls._list_fields_mhz(entry, k) for k in ("T1", "T2", "NOE")}
+        tagged = {k: f for k, f in per_kind.items() if f}
+
+        if field_mhz is None and tagged:
+            value_sets = [set(round(v) for v in f.values()) for f in tagged.values()]
+            common = set.intersection(*value_sets) if len(value_sets) > 1 else value_sets[0]
+            if common:
+                field_mhz = sorted(common)[0]
+            else:
+                from collections import Counter
+                counts = Counter(round(v) for f in tagged.values() for v in f.values())
+                field_mhz = counts.most_common(1)[0][0]
+
+        if field_mhz is None:
+            unfiltered = {k: None for k in ("T1", "T2", "NOE")}
+            for kind in ("T1", "T2", "NOE"):
+                df = entry.relaxation(kind)
+                n_lists = df["list"].nunique() if "list" in df.columns else 0
+                if n_lists > 1:
+                    raise ValueError(
+                        f"{entry.entry_id}: {kind} has {n_lists} lists and no "
+                        "Spectrometer_frequency_1H tag to disambiguate them; "
+                        "pass field_mhz=<1H frequency in MHz> explicitly"
+                    )
+            return None, unfiltered
+
+        list_filter = {}
+        for kind, fields in per_kind.items():
+            if not fields:
+                list_filter[kind] = None
+            else:
+                list_filter[kind] = {name for name, f in fields.items()
+                                     if abs(f - field_mhz) < tol_mhz}
+        return field_mhz, list_filter
+
+    @staticmethod
+    def _filter_by_list(df, list_names):
+        """Restrict a relaxation DataFrame to rows from `list_names`
+        (a set of framecodes); no-op if `list_names` is None or the
+        DataFrame has no `list` column."""
+        if list_names is None or "list" not in df.columns:
+            return df
+        return df[df["list"].isin(list_names)]
+
     @staticmethod
     def _list_units(entry, kind):
         override = fixes.unit_override(entry.entry_id, kind)
@@ -193,9 +313,15 @@ class RelaxationProfile:
             value_col, err_col = err_col, value_col
         val, err = cls._series_by_seqid(df, n, value_col=value_col, err_col=err_col)
         rate = _to_rate(val.values, units, kind)
-        # convert a time error into a rate error: d(1/T) = dT / T^2
+        # convert a time error into a rate error: d(1/T) = dT / T^2, with T and
+        # dT in seconds so the result is in s^-1 (a ms-tagged list otherwise
+        # comes out 1000x too small)
         is_time = not (rate.size and np.allclose(rate, val.values, equal_nan=True))
-        rate_err = (err.values / val.values ** 2) if is_time else err.values
+        if is_time:
+            t_scale = 1e-3 if (units or "").strip().lower() in ("ms", "msec") else 1.0
+            rate_err = (err.values * t_scale) / (val.values * t_scale) ** 2
+        else:
+            rate_err = err.values
 
         if fixes.err_reciprocal(entry_id, kind):
             rate_err = 1.0 / rate_err
@@ -250,32 +376,81 @@ class RelaxationProfile:
                 continue
         return out
  
-    # rigid-body prediction
- 
-    def add_rigid_prediction(self, pdb=None, source="auto", config=None,
-                             chain=None, noe_cut=0.65, **fetch_kw):
+    # structure resolution (shared by add_rigid_prediction and
+    # fit_order_parameters)
+
+    def _best_pdb_by_length(self, pdb_ids, max_check=15, tol=5):
         """
-        Run HYDRONMR on a structure and scale its rigid R2/R1 (T1_over_T2) to the
-        observed data, so elevated R2/R1 stands out as exchange.
- 
-        `pdb` may be a local file, a 4-character PDB id (fetched from RCSB), or a
-        UniProt accession (fetched from AlphaFold DB) — pass `source=` to force
-        one. 
-        
-        If `pdb` is None, the entry's own deposited PDB code is used when it
-        cites one; otherwise this raises (makeshift does not predict structure).
- 
-        The scale factor is fit by least squares on ordered residues (hetNOE
-        above `noe_cut` where available), mirroring classify.fit_R2_rigid. Adds
-        `scaled_R2_R1_pred` and `NOE_pred`; residues outside the modeled region
-        keep NaN.
+        `get_pdb_ids()` can return a long, unordered list for widely-studied
+        proteins (e.g. ubiquitin: hundreds of fusion/complex structures
+        sharing its sequence via entity-level cross-references, when the
+        entry has no depositor-curated `_Related_entries` link) — picking
+        [0] blindly can land on a fusion or oligomeric complex with a very
+        different diffusion tensor than this entry's own construct.
+
+        Checks up to `max_check` candidates' polymer size via RCSB's entry
+        API (one lightweight request each) and returns the first whose
+        polymer monomer count is within `tol` residues of this profile's
+        own sequence length, preferring an NMR structure among ties.
+        Returns None if nothing in range or all requests fail (caller
+        should fall back to pdb_ids[0]).
         """
-        from ..hydronmr import run as run_hydronmr
+        import json
+        import urllib.request
+
+        target = len(self.sequence)
+        best, best_key = None, None
+        for pid in pdb_ids[:max_check]:
+            try:
+                url = f"https://data.rcsb.org/rest/v1/core/entry/{pid}"
+                with urllib.request.urlopen(url, timeout=10) as resp:
+                    info = json.load(resp).get("rcsb_entry_info", {})
+            except Exception:
+                continue
+            n = (info.get("deposited_polymer_monomer_count")
+                 or info.get("polymer_monomer_count_maximum"))
+            if n is None or abs(n - target) > tol:
+                continue
+            is_nmr = "NMR" in (info.get("experimental_method") or "").upper()
+            key = (0 if is_nmr else 1, abs(n - target))
+            if best_key is None or key < best_key:
+                best, best_key = pid, key
+        return best
+
+    def _resolve_pdb(self, pdb, source, **fetch_kw):
+        """
+        Resolve `pdb` to a local structure file path. `pdb` may be a local
+        file, a 4-character PDB id (fetched from RCSB), or a UniProt
+        accession (fetched from AlphaFold DB) — pass `source=` to force
+        one. If `pdb` is None, the entry's own deposited PDB code is used
+        when it cites one; otherwise this raises (makeshift does not
+        predict structure).
+
+        When multiple PDB ids are cited, the first is normally used (see
+        `NMRStarEntry.get_pdb_ids`, which prefers a depositor-curated
+        related-entry link when one exists) — but if there are more than a
+        few candidates, `_best_pdb_by_length` tries to pick one whose
+        polymer size actually matches this entry's sequence, since a long
+        candidate list usually means no curated link and a size mismatch
+        indicates a fusion/complex structure rather than this construct.
+
+        For an `source="rcsb"` structure, `_check_biological_assembly`
+        also warns if the fetched file is missing chains RCSB's own
+        metadata says the biological assembly needs (e.g. a homodimer
+        deposited as a single-chain asymmetric unit) -- see that
+        method's docstring for why this matters for the diffusion tensor.
+        """
         from ..utils.structures import fetch_structure
- 
+
         if pdb is None:
             pdb_ids = self.entry.get_pdb_ids() if self.entry is not None else []
             af_ids = self.entry.get_alphafold_ids() if self.entry is not None else []
+            if len(pdb_ids) > 3:
+                better = self._best_pdb_by_length(pdb_ids)
+                if better is not None and better != pdb_ids[0]:
+                    print(f"  {len(pdb_ids)} PDB ids cited; {pdb_ids[0]} size "
+                          f"doesn't match the sequence, using {better} instead")
+                    pdb_ids = [better] + [p for p in pdb_ids if p != better]
             if source == "rcsb":
                 if not pdb_ids:
                     raise ValueError("entry cites no PDB; pass pdb=<PDB id | path>")
@@ -293,39 +468,531 @@ class RelaxationProfile:
                 raise ValueError(
                     "no structure given and the entry cites no PDB or "
                     "AlphaFold/UniProt accession; pass pdb=<path | PDB id | "
-                    "UniProt accession> (experimental or predicted) to enable "
-                    "exchange labeling"
+                    "UniProt accession> (experimental or predicted)"
                 )
             print(f"  no pdb given; using {source} structure {pdb}")
+
+        structure_path = fetch_structure(pdb, source=source, **fetch_kw)
+        if source == "rcsb":
+            self._check_biological_assembly(pdb, structure_path)
+        return structure_path
+
+    @staticmethod
+    def _check_biological_assembly(pdb_id, structure_path):
+        """
+        Warn if `pdb_id`'s biological assembly (RCSB's own
+        `pdbx_struct_assembly.oligomeric_count`) needs more protein chains
+        than `structure_path` actually contains -- e.g. a homodimer
+        deposited with only the crystallographic asymmetric unit (one
+        protomer) in the downloaded file, the rest of the complex only
+        implied by a BIOMT symmetry transform this code never applies.
+
+        This matters because modeling a real oligomer as its lone
+        protomer gives HYDRONMR the wrong diffusion tensor *size and
+        shape* -- not something `model_free.calibrate_tensor`'s rate-only
+        calibration (shape_bounds defaults to (1.0, 1.0), see that
+        function's docstring) can correct, since it deliberately doesn't
+        reshape the tensor. Found by hand on BMRB 17012 (Trp repressor,
+        a constitutive homodimer): the resolved structure 3WRP has
+        `oligomeric_count=2` but only chain A in the file, and every
+        other Trp-repressor validation entry (a well-known dimer) shows
+        the same elevated, spurious Model-3/Rex rate this causes (see
+        docs/order_parameters_validation.md) -- the tensor calibration
+        silently absorbs the size/shape error into a persistent
+        R1-vs-R2 tension that then contaminates the per-residue Rex test.
+
+        Silently no-ops if the RCSB lookup fails (e.g. `pdb_id` isn't a
+        real RCSB entry) or the structure file can't be read -- this is
+        advisory, not required for the fit to proceed.
+        """
+        import json
+        import urllib.request
+
+        try:
+            url = f"https://data.rcsb.org/rest/v1/core/assembly/{pdb_id}/1"
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                info = json.load(resp)
+            assembly = info.get("pdbx_struct_assembly", {})
+            oligomeric_count = assembly.get("oligomeric_count")
+            oligomeric_details = assembly.get("oligomeric_details")
+        except Exception:
+            return
+        if not oligomeric_count or oligomeric_count <= 1:
+            return
+
+        try:
+            chains = set()
+            with open(structure_path) as f:
+                for line in f:
+                    if line.startswith(("ATOM", "HETATM")):
+                        chains.add(line[21])
+        except Exception:
+            return
+
+        if len(chains) < oligomeric_count:
+            warnings.warn(
+                f"{pdb_id}'s biological assembly is {oligomeric_details} "
+                f"({oligomeric_count} chains), but the fetched structure "
+                f"only has {len(chains)} ({sorted(chains)}) -- likely just "
+                "the crystallographic asymmetric unit, with the rest of "
+                "the complex only implied by a symmetry transform this "
+                "code doesn't apply. Modeling this as a "
+                f"{len(chains)}-chain structure gives HYDRONMR the wrong "
+                "diffusion tensor size/shape for a real oligomer, which "
+                "the model-free fit's rate-only calibration can't "
+                "correct -- consider passing pdb=<a structure that "
+                "already includes the full assembly>.",
+                UserWarning,
+            )
+
+    def _detect_field_mhz(self):
+        """
+        The 1H spectrometer frequency (MHz) this profile's R1/R2/NOE were
+        actually built at. Prefers `self.field_mhz` (set by `from_entry`'s
+        own field resolution, so it's guaranteed to match the data);
+        falls back to scanning the entry's heteronucl_T1_relaxation
+        saveframe directly for profiles built another way. Returns None
+        if unavailable.
+        """
+        if self.field_mhz is not None:
+            return self.field_mhz
+        if self.entry is None:
+            return None
+        try:
+            sfs = self.entry.saveframe("heteronucl_T1_relaxation")
+        except Exception:
+            return None
+        for sf in sfs.values():
+            val = sf.get("Spectrometer_frequency_1H")
+            if val not in (None, ".", "?"):
+                try:
+                    return float(val)
+                except (TypeError, ValueError):
+                    continue
+        return None
+
+    def _residue_cosines(self, g, pdb_path, chain=None):
+        """
+        For every residue with data and a matched N-H bond vector: its
+        direction cosines (`direction_cosines`) along the diffusion
+        tensor's principal axes, and its table row. Returns {position ->
+        (l1, l2, l3, row)}, shared by `add_rigid_prediction` and
+        `fit_order_parameters` so both work from identical per-residue
+        tumbling geometry. Cosines only depend on the tensor's
+        *orientation* (g.rot_eigvecs), which `_calibrate_tensor` never
+        changes, so these stay valid before and after tensor calibration.
+        """
+        from ..hydronmr.physics.nmr import direction_cosines
+        from ..hydronmr.physics.pdb import nh_bond_vectors, parse_pdb_atoms
+
+        nh_vectors = nh_bond_vectors(parse_pdb_atoms(pdb_path))
+        if chain is not None:
+            nh_vectors = {k: v for k, v in nh_vectors.items() if k[0] == chain}
+        vec_by_seqid = {}
+        for (c, resseq), v in nh_vectors.items():
+            vec_by_seqid.setdefault(resseq, v)
+
+        cosines = {}
+        for pos, (_, row) in enumerate(self.table.iterrows()):
+            if not row.get("has_data", False):
+                continue
+            v = vec_by_seqid.get(int(row["Seq_ID"]))
+            if v is None:
+                continue
+            cosines[pos] = (*direction_cosines(g, v), row)
+        return cosines
+
+    def _calibration_subset(self, cosines, noe_cut):
+        """
+        (l1, l2, l3, R1, R1_err, R2, R2_err, NOE, NOE_err) tuples for the
+        presumed-rigid residues (NOE > `noe_cut`) used to calibrate
+        `model_free.calibrate_tensor` -- NOE is included (not just R1/R2)
+        so the calibrated rigid prediction doesn't carry a systematic NOE
+        offset into the per-residue Model 2 (tau_e) diagnostic, which
+        compares raw NOE_pred_rigid to observed NOE. Falls back to every
+        residue with R1/R2 data (with a warning) if fewer than 3 qualify.
+        """
+        def usable(row):
+            return (row.get("R1") is not None and np.isfinite(row.get("R1"))
+                    and row.get("R2") is not None and np.isfinite(row.get("R2")))
+
+        def tup(l1, l2, l3, row):
+            return (l1, l2, l3, row.get("R1"), row.get("R1_err"),
+                    row.get("R2"), row.get("R2_err"),
+                    row.get("NOE"), row.get("NOE_err"))
+
+        calibration = [
+            tup(l1, l2, l3, row)
+            for l1, l2, l3, row in cosines.values()
+            if usable(row) and row.get("NOE") is not None
+            and np.isfinite(row.get("NOE")) and row.get("NOE") > noe_cut
+        ]
+        if len(calibration) < 3:
+            calibration = [
+                tup(l1, l2, l3, row)
+                for l1, l2, l3, row in cosines.values() if usable(row)
+            ]
+            warnings.warn(
+                f"fewer than 3 residues with NOE > {noe_cut}; calibrating "
+                "the diffusion tensor against all residues with R1/R2 "
+                "data instead (less reliable if many are flexible).",
+                UserWarning,
+            )
+        return calibration
+
+    def _calibrate_tensor(self, calibration, g, on_unreliable="warn"):
+        """
+        Jointly refit the diffusion tensor's overall rate and anisotropy
+        shape against `calibration` (`model_free.calibrate_tensor`) and
+        check the result with `model_free.assess_calibration` -- flags if
+        R1 and R2 imply substantially different order parameters for the
+        calibration set, which means no single tumbling tensor reconciles
+        them (usually because residues with real dynamics contaminated
+        the "presumed rigid" calibration set), not a data or code bug.
+
+        Mutates `g.dx, g.dy, g.dz, g.dav, g.aniso_delta, g.rot_tau` in
+        place to the calibrated tensor (orientation, g.rot_eigvecs, is
+        left untouched), so downstream code can keep using `g` exactly as
+        before -- callers just need to build any amplitudes *after* this
+        runs, not before. Sets `self.tau_scale` (the calibrated rate) and
+        `self.tau_shape` (the calibrated anisotropy shape; 1.0
+        reproduces the hydrodynamic model's own anisotropy unchanged),
+        plus `self.calibration_diagnostics`. Shared by
+        `add_rigid_prediction` and `fit_order_parameters`, which want
+        different responses to an unreliable calibration -- pass
+        `on_unreliable="warn"` (default; used by `add_rigid_prediction`,
+        whose rigid baseline is only a qualitative comparison, not a
+        number meant to be reported) or `on_unreliable="raise"` (used by
+        `fit_order_parameters`, whose S2 values ARE numbers meant to be
+        reported, so an untrustworthy calibration should stop the fit
+        rather than silently produce untrustworthy S2s).
+        """
+        from . import model_free
+
+        dx0, dy0, dz0 = g.dx, g.dy, g.dz
+        rate, shape = model_free.calibrate_tensor(
+            calibration, dx0, dy0, dz0,
+            g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x)
+        self.calibration_diagnostics = model_free.assess_calibration(
+            calibration, rate, shape, dx0, dy0, dz0,
+            g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x)
+
+        g.dx, g.dy, g.dz, g.dav, g.aniso_delta, g.rot_tau = \
+            model_free.calibrated_tensor(dx0, dy0, dz0, rate, shape)
+        self.tau_scale = rate
+        self.tau_shape = shape
+
+        if self.calibration_diagnostics["unreliable"]:
+            d = self.calibration_diagnostics
+            message = (
+                f"tensor calibration may be unreliable: R1 and R2 imply "
+                f"substantially different order parameters for the "
+                f"presumed-rigid calibration set (median S2 from R1="
+                f"{d['median_s2_from_r1']:.2f}, from R2={d['median_s2_from_r2']:.2f}, "
+                f"gap={d['gap']:+.2f}, n={d['n']}). This usually means no "
+                "single overall tumbling tensor explains both -- often "
+                "because residues with real dynamics (e.g. widespread "
+                "conformational exchange) contaminated the calibration set, "
+                "not a data or code bug."
+            )
+            if on_unreliable == "raise":
+                raise model_free.FittingError(message)
+            warnings.warn(
+                message + " S2 fits from this profile, especially Models "
+                "1/3, should be treated with caution.",
+                UserWarning,
+            )
+
+    @staticmethod
+    def _geometry_from_cosines(cosines, g):
+        """{position -> (amplitudes, taus, row)} built from cached
+        direction cosines plus the (now tensor-calibrated) `g` --
+        call after `_calibrate_tensor` so the amplitudes/taus reflect
+        the calibrated tensor, not the raw hydrodynamic one."""
+        from ..hydronmr.physics.nmr import mode_amplitudes_raw
+
+        geometry = {}
+        for pos, (l1, l2, l3, row) in cosines.items():
+            amplitudes = mode_amplitudes_raw(l1, l2, l3, g.dx, g.dy, g.dz,
+                                             g.dav, g.aniso_delta)
+            geometry[pos] = (amplitudes, g.rot_tau, row)
+        return geometry
+
+    # rigid-body prediction
  
-        pdb_path = fetch_structure(pdb, source=source, **fetch_kw)
+    def add_rigid_prediction(self, pdb=None, source="auto", config=None,
+                             chain=None, noe_cut=0.65, field_mhz=None,
+                             **fetch_kw):
+        """
+        Run HYDRONMR on a structure to get a rigid-body R2/R1 (T1_over_T2)
+        and NOE prediction per residue, so elevated R2/R1 stands out as
+        exchange.
+
+        `pdb` may be a local file, a 4-character PDB id (fetched from RCSB), or a
+        UniProt accession (fetched from AlphaFold DB) — pass `source=` to force
+        one.
+
+        If `pdb` is None, the entry's own deposited PDB code is used when it
+        cites one; otherwise this raises (makeshift does not predict structure).
+
+        Before predicting, the diffusion tensor's overall rate and
+        anisotropy shape are jointly refit against the presumed-rigid
+        subset (NOE > `noe_cut`) via `model_free.calibrate_tensor` — the
+        same calibration `fit_order_parameters` uses, so both methods
+        agree on one rigid-body baseline rather than each fitting an
+        independent correction. (The bead model's hydrodynamic tensor is
+        validated elsewhere, demos/hydronmr_validation, to have roughly
+        the right shape and axes; its absolute magnitude is a known
+        approximation — see makeshift/hydronmr/physics/structure.py —
+        and this calibration lets the data itself refine the shape too,
+        in the spirit of modelfree4's own tensor optimization.) A small
+        residual multiplicative correction on the ratio specifically
+        (`self.scale_factor`, expected close to 1.0 now that the tensor
+        itself is calibrated) is still fit on top, mirroring the previous
+        behavior and absorbing whatever the tensor calibration doesn't
+        reach.
+
+        `field_mhz` is the 1H spectrometer frequency to predict at; if not
+        given, it's read from the entry's own heteronucl_T1_relaxation
+        saveframe when available, else the structure's rigid prediction
+        falls back to HYDRONMR's own default config field.
+
+        Adds `scaled_R2_R1_pred` and `NOE_pred`; residues outside the
+        modeled region keep NaN. Sets `self.tau_scale` and
+        `self.scale_factor`.
+        """
+        from ..hydronmr import run as run_hydronmr
+        from ..hydronmr.physics.nmr import dipolesnmr
+        from . import model_free
+
+        pdb_path = self._resolve_pdb(pdb, source, **fetch_kw)
         result = run_hydronmr(pdb_path, config_path=config) if config \
             else run_hydronmr(pdb_path)
-        hydro = result.to_dataframe()
-        if chain is not None:
-            hydro = hydro[hydro["chain"] == chain]
-        hydro = hydro.rename(columns={"seqpos": "Seq_ID"})
- 
-        t = self.table.merge(
-            hydro[["Seq_ID", "T1_over_T2", "NOE"]].rename(
-                columns={"T1_over_T2": "_pred_ratio", "NOE": "NOE_pred"}),
-            on="Seq_ID", how="left")
- 
+        g = result.state
+
+        if field_mhz is None:
+            field_mhz = self._detect_field_mhz()
+        if field_mhz is not None:
+            b0_tesla = 2.0 * np.pi * field_mhz * 1.0e6 / abs(g.gamma_h)
+            dipolesnmr(g, b0_tesla=b0_tesla, gamma_h=g.gamma_h, gamma_x=g.gamma_x,
+                      r_nh_angstrom=g.r_nh * 1.0e10, csa_ppm=g.csa * 1.0e6)
+
+        cosines = self._residue_cosines(g, pdb_path, chain=chain)
+        calibration = self._calibration_subset(cosines, noe_cut)
+        self._calibrate_tensor(calibration, g)
+        geometry = self._geometry_from_cosines(cosines, g)
+
+        n = len(self.table)
+        ratio_pred = np.full(n, np.nan)
+        noe_pred = np.full(n, np.nan)
+        for pos, (amplitudes, taus, row) in geometry.items():
+            r1p, r2p, noep = model_free.relaxation_rates(
+                g.d2, g.c2, g.gamma_h, g.gamma_x, g.omega_h, g.omega_x,
+                amplitudes, taus, S2=1.0, tau_e=0.0)
+            ratio_pred[pos] = r2p / r1p
+            noe_pred[pos] = noep
+
+        t = self.table.copy()
+        t["_pred_ratio"] = ratio_pred
+        t["NOE_pred"] = noe_pred
+
         ordered = (t["_pred_ratio"].notna() & t["R2_R1"].notna()
                    & ((t["NOE"] > noe_cut) | t["NOE"].isna()))
         n_match = int((t["_pred_ratio"].notna() & t["R2_R1"].notna()).sum())
         pred = t.loc[ordered, "_pred_ratio"]
         obs = t.loc[ordered, "R2_R1"]
         self.scale_factor = float((obs * pred).sum() / (pred ** 2).sum())
- 
+
         t["scaled_R2_R1_pred"] = self.scale_factor * t["_pred_ratio"]
         t = t.drop(columns="_pred_ratio")
         self.table = t
         print(f"  HYDRONMR: {n_match} residues matched structure to data, "
-              f"scale factor {self.scale_factor:.3f} "
+              f"tau_scale {self.tau_scale:.3f}, tau_shape {self.tau_shape:.3f}, "
+              f"residual ratio scale {self.scale_factor:.3f} "
               f"({int(ordered.sum())} ordered residues used)")
         return self
- 
+
+    # model-free order parameters
+
+    def fit_order_parameters(self, pdb=None, source="auto", chain=None,
+                             field_mhz=None, config=None, sigma_flag=2.0,
+                             noe_cut=0.65, **fetch_kw):
+        """
+        Fit per-residue S^2 (Models 1-3: S2 alone, S2+tau_e, S2+Rex) from
+        this profile's R1/R2/NOE, reusing the same anisotropic rotational
+        diffusion tensor and per-residue Woessner mode decomposition
+        already used for the HYDRONMR rigid-body prediction (see
+        `add_rigid_prediction`) -- internal motion is layered on top of
+        that existing per-residue anisotropic-tumbling spectral density
+        rather than assuming isotropic tumbling.
+
+        Before fitting, the diffusion tensor's overall rate and anisotropy
+        shape are jointly refit against the presumed-rigid subset (NOE >
+        `noe_cut`) via `model_free.calibrate_tensor` -- in the spirit of
+        modelfree4's own tensor optimization step, simplified to the two
+        parameters a single-field calibration set can actually constrain.
+        The bead model's hydrodynamic tensor is validated elsewhere
+        (demos/hydronmr_validation) to have roughly the right shape and
+        axes, but its absolute magnitude is a known approximation (see
+        makeshift/hydronmr/physics/structure.py) -- `add_rigid_prediction`
+        already corrects the analogous offset for its R2/R1 ratio; this
+        calibration corrects R1 and NOE too, which the ratio-only
+        correction doesn't reach, and lets the anisotropy itself flex,
+        before any residue's S2 is fit.
+
+        Raises `model_free.FittingError` -- no S2 fit attempted at all --
+        if that calibration turns out unreliable (R1 and R2 imply
+        substantially different order parameters for the calibration set,
+        see `model_free.assess_calibration`): unlike `add_rigid_prediction`,
+        which only produces a qualitative comparison and so warns and
+        proceeds on the same condition, S2 here is a number meant to be
+        reported, and this usually means real per-residue dynamics
+        (e.g. conformational exchange) contaminated the "presumed rigid"
+        calibration set, not a data or code bug -- the fix is choosing a
+        better calibration subset (e.g. a lower `noe_cut`, or excluding
+        specific residues), not trusting numbers produced anyway.
+
+        Models 4/5 (S2+tau_e+Rex, or S2f+S2s+tau_e) are not fit: against
+        only R1/R2/NOE at a single field they are exactly- or
+        over-parameterized and, in practice, ill-conditioned. Model
+        selection among 1/2/3 follows from which residual each extra
+        parameter physically explains, not a nested F-test/SSE cascade:
+        a NOE deficit relative to the parameter-free rigid-tumbling
+        prediction implicates tau_e (-> Model 2, since NOE is exactly
+        independent of S2 when tau_e=0); an R2 excess beyond what the
+        R1-derived S2 already explains implicates exchange (-> Model 3).
+        Residues showing both signals are outside this two-parameter
+        scope and are labeled "ambiguous" rather than forced into either
+        model.
+
+        The R2-excess test (and Model 3's reported S2/Rex) correct their
+        S2-from-R1 baseline by this profile's own calibration gap
+        (`self.calibration_diagnostics["gap"]`) before comparing against
+        R2 -- checked directly (see
+        docs/order_parameters_validation.md, "Bugs found during
+        validation" #6), without this even a mild R1-vs-R2 calibration
+        tension (well under `assess_calibration`'s 0.3 "unreliable"
+        threshold) makes most of a protein's residues look falsely
+        R2-excess, since every one of them inherits the same systematic,
+        not per-residue, offset.
+
+        Model 2's tau_e search is capped at this protein's own calibrated
+        overall tumbling time divided by `model_free.TAU_E_SEPARATION_FACTOR`
+        (in addition to the fixed `model_free.TAU_E_MAX_S`) -- checked
+        directly (see that constant's docstring), an absolute cap alone
+        lets the fit wander into a real second, unphysical minimum where
+        S2 collapses toward 0 as tau_e approaches tau_m, for any protein
+        whose own tau_m isn't safely larger than the fixed cap. A fixed
+        fraction alone isn't fully trustworthy either -- some residues'
+        true chi2(tau_e) minimum legitimately sits close to that cap
+        without being the tau_e~tau_m degeneracy -- so `model_free._fit_model2`
+        re-checks any residue landing at the cap against a much wider one
+        before accepting or rejecting it; residues where tau_e/S2 still
+        can't be pinned down even then fall back to Model 1's S2 with
+        `tau_e_degenerate=True` rather than reporting a boundary artifact.
+
+        `pdb`/`source` are as in `add_rigid_prediction`. `field_mhz` is
+        the 1H spectrometer frequency the relaxation data were recorded
+        at; if not given, it's read from the entry's own
+        heteronucl_T1_relaxation saveframe and this raises if that isn't
+        available (pass it explicitly for data not sourced from
+        `from_entry`/`from_bmrb`, or for entries lacking that tag).
+        `sigma_flag` sets how many (error-propagated) standard deviations
+        a NOE/R2 residual must exceed to flag tau_e/Rex.
+
+        Adds columns: S2, S2_err, mf_model ("1"/"2"/"3"/"ambiguous"),
+        tau_e_ps, Rex, NOE_pred_rigid, noe_flag, r2_flag, tau_e_degenerate.
+        Residues with no
+        R1 or no matched structural N-H vector keep mf_model=None / S2=NaN.
+        Sets `self.tau_scale`/`self.tau_shape` to the calibrated tensor's
+        overall rate and anisotropy shape.
+        """
+        from ..hydronmr import run as run_hydronmr
+        from ..hydronmr.physics.nmr import dipolesnmr
+        from . import model_free
+
+        pdb_path = self._resolve_pdb(pdb, source, **fetch_kw)
+        result = run_hydronmr(pdb_path, config_path=config) if config \
+            else run_hydronmr(pdb_path)
+        g = result.state
+
+        if field_mhz is None:
+            field_mhz = self._detect_field_mhz()
+            if field_mhz is None:
+                raise ValueError(
+                    "could not determine the spectrometer field from the "
+                    "entry; pass field_mhz=<1H frequency in MHz> explicitly"
+                )
+        b0_tesla = 2.0 * np.pi * field_mhz * 1.0e6 / abs(g.gamma_h)
+        dipolesnmr(g, b0_tesla=b0_tesla, gamma_h=g.gamma_h, gamma_x=g.gamma_x,
+                  r_nh_angstrom=g.r_nh * 1.0e10, csa_ppm=g.csa * 1.0e6)
+
+        cosines = self._residue_cosines(g, pdb_path, chain=chain)
+        calibration = self._calibration_subset(cosines, noe_cut)
+        self._calibrate_tensor(calibration, g, on_unreliable="raise")
+        geometry = self._geometry_from_cosines(cosines, g)
+        tau_m = 1.0 / (6.0 * g.dav)  # this protein's own overall tumbling
+        # time, post-calibration -- keeps Model 2's tau_e search safely
+        # separated from it (see model_free.TAU_E_SEPARATION_FACTOR)
+        calibration_gap = self.calibration_diagnostics["gap"]  # corrects
+        # the Rex test's S2-from-R1 baseline for the same R1-vs-R2
+        # tension assess_calibration measures (see model_free.fit_residue)
+        if not np.isfinite(calibration_gap):
+            calibration_gap = 0.0
+
+        t = self.table.copy()
+        n = len(t)
+        S2 = np.full(n, np.nan)
+        S2_err = np.full(n, np.nan)
+        mf_model = np.array([None] * n, dtype=object)
+        tau_e_ps = np.full(n, np.nan)
+        Rex = np.full(n, np.nan)
+        noe_pred_rigid = np.full(n, np.nan)
+        noe_flag = np.zeros(n, dtype=bool)
+        r2_flag = np.zeros(n, dtype=bool)
+        tau_e_degenerate = np.zeros(n, dtype=bool)
+
+        for pos, (amplitudes, taus, row) in geometry.items():
+            fit = model_free.fit_residue(
+                row.get("R1"), row.get("R1_err"),
+                row.get("R2"), row.get("R2_err"),
+                row.get("NOE"), row.get("NOE_err"),
+                amplitudes, taus, g.d2, g.c2, g.gamma_h, g.gamma_x,
+                g.omega_h, g.omega_x, sigma_flag=sigma_flag, tau_m=tau_m,
+                calibration_gap=calibration_gap)
+            if fit.model is None:
+                continue
+            S2[pos] = fit.S2
+            S2_err[pos] = fit.S2_err
+            mf_model[pos] = fit.model
+            tau_e_ps[pos] = fit.tau_e_ps
+            Rex[pos] = fit.Rex
+            noe_pred_rigid[pos] = fit.NOE_pred_rigid
+            noe_flag[pos] = fit.noe_flag
+            r2_flag[pos] = fit.r2_flag
+            tau_e_degenerate[pos] = fit.tau_e_degenerate
+
+        t["S2"] = S2
+        t["S2_err"] = S2_err
+        t["mf_model"] = mf_model
+        t["tau_e_ps"] = tau_e_ps
+        t["Rex"] = Rex
+        t["NOE_pred_rigid"] = noe_pred_rigid
+        t["noe_flag"] = noe_flag
+        t["r2_flag"] = r2_flag
+        t["tau_e_degenerate"] = tau_e_degenerate
+        self.table = t
+
+        counts = pd.Series([m for m in mf_model if m is not None]).value_counts().to_dict()
+        n_degenerate = int(tau_e_degenerate.sum())
+        degenerate_note = f", {n_degenerate} tau_e-degenerate (fell back to Model 1)" \
+            if n_degenerate else ""
+        print(f"  order-parameter fit at {field_mhz:.1f} MHz "
+              f"(tau_scale={self.tau_scale:.3f}, tau_shape={self.tau_shape:.3f}, "
+              f"{len(calibration)} calibration residues): "
+              f"{sum(counts.values())} residues fit {counts}{degenerate_note}")
+        return self
+
     # labeling
  
     def label(self, rex_n_std=1.0, noe_cut=0.65):

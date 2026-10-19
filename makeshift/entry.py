@@ -576,6 +576,11 @@ class NMRStarEntry:
         for _, row in df.iterrows():
             code = (row.get("Database_code") or "").strip()
             acc = (row.get("Accession_code") or "").strip()
+            # some depositions wrap the accession in quotes and/or append a
+            # domain-range annotation, e.g. "'P9WKD3[43 - 307]'" -- strip
+            # both so the bare accession is usable as a UniProt id/URL.
+            acc = acc.strip("'\"")
+            acc = re.sub(r"\[.*\]\s*$", "", acc).strip()
             if not acc or acc in (".", "?"):
                 continue
             if code.upper() in ("ALPHAFOLD", "ALPHAFOLDDB", "AFDB"):

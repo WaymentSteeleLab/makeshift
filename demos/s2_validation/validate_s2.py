@@ -1,0 +1,496 @@
+"""
+makeshift's home-grown model-free S2 fit (`RelaxationProfile.fit_order_parameters`,
+Models 1-3, anisotropic tumbling from HYDRONMR) vs. deposited BMRB model-free S2
+values, across every BMRB entry (as of a full-database query for entries
+carrying the `_Order_param.Order_param_val` tag) that also has raw T1/T2/NOE
+relaxation and a linkable PDB/AlphaFold structure.
+
+This is a sanity check, not a reproduction target: `fit_order_parameters`
+deliberately uses a different, simpler model-selection rule than whatever
+software produced each entry's deposited fit (usually modelfree4/
+FastModelFree, sometimes an older in-house tool), so per-residue model
+*assignments* are not expected to match -- only the S2 *magnitudes* should
+track reasonably well for residues both approaches call ordered.
+
+Screening (see demos/s2_validation/screen.py) ran every candidate for real
+(fetch -> build profile -> fit -> compare to deposited backbone S2) rather
+than guessing exclusions from metadata, then classified failures by what
+actually broke.
+
+Entries deposited at more than one spectrometer field are excluded
+up front (MULTI_FIELD below), not fit at all: their deposited S2 was very
+likely obtained from a joint multi-field fit, which is a better-constrained
+problem than the single-field refit this code does (see
+makeshift/relaxation/model_free.py) -- a mismatch there isn't evidence of
+anything wrong, it's a different, easier problem on our side and a harder,
+better-posed one on theirs. This was found by hand for a handful of
+initially-puzzling low-correlation entries (11080, 6243, 5841, 26507 were
+ALL multi-field, 2-4 fields each) before being applied as a blanket
+prefilter -- it turned out true for the *whole* previously-diagnosed
+"unresolved" bucket, and for the majority of what were originally
+low-hanging "OK" entries too (13 of the first 41).
+
+22 single-field entries pass (ENTRIES below); EXCLUDED lists the
+single-field entries that still didn't, grouped by root cause:
+
+  Data/parsing gaps (technical, not a modeling problem):
+    16917, 16918, 26779 -- NMRStarEntry.relaxation('T1') returns zero
+        rows for these depositions despite BMRB's own metadata reporting
+        T1 counts > 0 (nonstandard saveframe/tag layout not covered by the
+        current parser); a pre-existing gap in makeshift.entry, not in the
+        S2-fitting code added here.
+
+  Physical scope mismatches (the model here assumes one rigid, monomeric,
+  solution-tumbling domain; these systems violate that assumption):
+    15097, 25852 -- villin C-terminal domains / calmodulin+eNOS peptide:
+        multi-domain constructs connected by a flexible linker, so no
+        single rigid-body diffusion tensor describes the whole chain.
+
+  Unreliable calibration (fit_order_parameters raises model_free.FittingError,
+  see makeshift/relaxation/model_free.py's assess_calibration -- R1 and R2
+  imply substantially different order parameters for the presumed-rigid
+  calibration set, so no S2 fit is attempted rather than reporting numbers
+  that shouldn't be trusted):
+    50001 -- only 8 calibration residues, gap +0.42.
+
+  Wrong structure resolved (_resolve_pdb/_best_pdb_by_length landed on a
+  structure that doesn't represent the entity the relaxation data was
+  measured on):
+    5153 -- N-TIMP-1 bound to MMP-3: all cited PDB ids in the first ~20
+        (of 40) are MMP-3-only structures (the binding partner);
+        _best_pdb_by_length only checks the first 15 and picked one of
+        those (1B3D, no TIMP-1 at all) over the actual complex (1UEA,
+        cited at position 25). More fundamentally, the size check
+        compares a candidate's total residue count against this
+        profile's single-entity sequence, which a real bound-complex
+        structure never passes even when correctly identified --
+        needs entity-aware matching to fix properly.
+    50212 -- Mtb inorganic pyrophosphatase, a homohexamer (116 kDa): no
+        PDB entry is cited, so the AlphaFold monomer was used. The
+        assembly check only covers RCSB structures, so nothing warned.
+        Same principle as the Trp repressor entries below.
+    17010, 17012, 17013 -- Trp repressor (WT, L75F, A77V): a constitutive
+        homodimer, but all three resolve to 3WRP, which RCSB's own
+        metadata says is dimeric while the file contains only one chain
+        (the crystallographic asymmetric unit; the second protomer is
+        only implied by a BIOMT symmetry transform this code never
+        applies). A monomer has a different diffusion tensor size AND
+        shape than the real dimer -- not something the rate-only
+        calibration can correct by design.
+        `RelaxationProfile._check_biological_assembly` warns on this
+        but doesn't change which structure gets used, so all three stay
+        excluded regardless of how well any of them happens to
+        correlate (17012 reached r=0.979, the best in the set, purely
+        from the calibration-gap fix -- a good number built on a
+        known-wrong structure isn't evidence the structure was fine). The
+        other three Trp-repressor entries (17041, 17046, 17047) resolve
+        to 2XDI instead, which correctly includes both chains, so they
+        stay in the validation set.
+
+  Multi-field, not detectable from BMRB's own metadata:
+    5154 -- N-TIMP-1, free: the original study used multiple fields
+        despite BMRB tagging only one (confirmed against the paper
+        itself). Unlike MULTI_FIELD above (caught automatically from
+        field tags actually present in the deposit), this one slips
+        past that check entirely since the metadata itself is
+        incomplete -- there is no way to detect it without independent
+        knowledge of the source paper.
+
+  Unresolved:
+    27929 -- BlaC + avibactam: r=0.02, no specific cause confirmed.
+"""
+
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import pearsonr
+
+from makeshift.entry import NMRStarEntry
+from makeshift.relaxation import RelaxationProfile
+from makeshift.rci import RCI
+
+OUTPUT_FILE = Path(__file__).parent / "validate_s2.pdf"
+OUTPUT_FILE_NO_AMBIGUOUS = Path(__file__).parent / "validate_s2_no_ambiguous.pdf"
+GRID_FILE = Path(__file__).parent / "validate_s2_grid.png"
+SEQID_FILE = Path(__file__).parent / "validate_s2_by_seqid.png"
+RCI_FILE = Path(__file__).parent / "validate_s2_vs_rci.png"
+RESULTS_CSV = Path(__file__).parent / "validate_s2_results.csv"
+PAIRS_CSV = Path(__file__).parent / "validate_s2_pairs.csv"
+
+ENTRIES = [4364, 4365, 4366, 4390, 4689, 5549, 5550, 5991, 6470,
+           6577, 15451, 17041, 17046, 17047, 17069,
+           17306, 18388, 18389, 18758, 19388, 26513, 27890]
+
+# entry_id -> number of distinct 1H spectrometer fields deposited (checked
+# via RelaxationProfile._list_fields_mhz across T1/T2/NOE); excluded before
+# any fetch/fit is attempted.
+MULTI_FIELD = {
+    4245: 4, 4267: 3, 4970: 3, 5330: 2, 5331: 2, 5548: 2, 5841: 2,
+    6243: 4, 6474: 2, 6838: 3, 11080: 2, 15445: 2, 15562: 2, 16392: 3,
+    17226: 3, 17246: 2, 18971: 3, 26507: 3, 26511: 2, 27011: 3,
+    27447: 2, 27448: 2, 27888: 2,
+}
+
+EXCLUDED = {
+    16917: "relaxation() parser gap (zero T1 rows despite metadata)",
+    16918: "relaxation() parser gap (zero T1 rows despite metadata)",
+    26779: "relaxation() parser gap (zero T1 rows despite metadata)",
+    15097: "multi-domain construct with flexible linker",
+    25852: "multi-domain construct (CaM) with flexible linker",
+    27929: "unresolved -- r=0.02, no specific cause confirmed",
+    50001: "fit_order_parameters raises model_free.FittingError -- only 8 "
+           "presumed-rigid calibration residues, tau_scale pinned at the "
+           "search boundary, calibration gap +0.42 (> the 0.3 unreliable "
+           "threshold)",
+    5153: "wrong structure resolved -- entry cites 40 PDB ids for its "
+          "binding partner MMP-3, none of which include TIMP-1 itself, "
+          "within the first ~20; _best_pdb_by_length only checks the "
+          "first 15, so it landed on 1B3D (MMP-3 alone, no TIMP-1) "
+          "instead of 1UEA (the actual MMP-3/TIMP-1 complex, cited at "
+          "position 25). More fundamentally, _best_pdb_by_length's size "
+          "check compares a candidate's *total* residue count against "
+          "this profile's single-entity sequence (126 residues, "
+          "N-TIMP-1 alone) -- for a bound-complex study the physically "
+          "correct structure is the whole complex (~300+ residues), "
+          "which never passes that check even when found. Needs "
+          "entity-aware structure matching (match one polymer entity "
+          "within a candidate, not the whole structure's size) to fix "
+          "properly; not attempted here.",
+    5154: "multi-field in the original study despite BMRB tagging only one "
+          "field -- confirmed against the paper itself (not detectable from "
+          "BMRB's own metadata, unlike MULTI_FIELD above, which is caught "
+          "automatically from field tags actually present in the deposit).",
+    17010: "wrong structure resolved -- Trp repressor is a constitutive "
+           "homodimer (RCSB: 'AUTHOR DETERMINED BIOLOGICAL UNIT: DIMERIC' "
+           "for 3WRP), but the resolved structure (3WRP) is only the "
+           "crystallographic asymmetric unit -- one chain, with the "
+           "second protomer only implied by a BIOMT symmetry transform "
+           "this code never applies. A monomer has a different diffusion "
+           "tensor size AND shape than the real dimer, which the "
+           "rate-only calibration can't correct by design. "
+           "_check_biological_assembly warns on this but doesn't fix "
+           "which structure gets used -- same category as 5153, "
+           "excluded on the same principle regardless of how the "
+           "resulting fit correlates.",
+    17012: "wrong structure resolved -- same issue as 17010 (Trp "
+           "repressor dimer modeled from 3WRP, a monomer-only file). "
+           "Despite reaching r=0.979 (the best in the set) after the "
+           "calibration-gap fix, the underlying structural assumption "
+           "was never corrected, only warned about -- a plausible-looking "
+           "correlation isn't proof the structure was right.",
+    17013: "wrong structure resolved -- same issue as 17010/17012 (Trp "
+           "repressor dimer modeled from 3WRP, a monomer-only file).",
+    50212: "wrong structure resolved -- the deposition describes a "
+           "homohexamer (116 kDa; assembly Details: 'homohexameric "
+           "inorganic pyrophosphatase'), cites no PDB entry, so the "
+           "tensor was built from the AlphaFold *monomer* (P9WI55). "
+           "_check_biological_assembly only runs for RCSB structures, so "
+           "nothing warned. The tumbling rate had to be rescaled by 0.275 "
+           "to compensate for size, and a monomer's tensor shape is not a "
+           "hexamer's; the fit still reached r=0.953, which isn't evidence "
+           "the structure was right. Experimental hexamers exist (e.g. "
+           "1SXV, 1WCF), but their chain/assembly handling was not "
+           "attempted here.",
+}
+
+
+def _rci_s2_by_seqid(entry, algorithm):
+    """{Seq_ID: S2} from RCI(algorithm=...) on this entry's own deposited
+    chemical shifts, or {} if it has none (many dynamics-focused entries
+    don't redeposit shifts, relying on a companion assignment entry this
+    code doesn't try to resolve) or the calculation otherwise fails. The
+    talosn backend's 9999.0 no-data sentinel rows are dropped."""
+    try:
+        res = RCI.from_entry(entry, algorithm=algorithm).run().results
+    except Exception:
+        return {}
+    res = res[res["RCI"] < 9999]
+    return dict(zip(res["Seq_ID"].astype(int), res["S2"]))
+
+
+def compare_entry(bmrb_id):
+    entry = NMRStarEntry.from_bmrb(bmrb_id)
+    prof = RelaxationProfile.from_entry(entry)
+    prof.fit_order_parameters()
+
+    deposited = entry.order_parameters()
+    if "Atom_ID" in deposited.columns:
+        atom = deposited["Atom_ID"].astype(str).str.strip().str.upper()
+        deposited = deposited[atom.isin(["N", "H", "", "NAN", "."])]
+    deposited = deposited.dropna(subset=["S2"])
+    dep_by_seqid = dict(zip(deposited["Seq_ID"].astype(int), deposited["S2"]))
+
+    rci_w_by_seqid = _rci_s2_by_seqid(entry, "wishart")
+    rci_t_by_seqid = _rci_s2_by_seqid(entry, "talosn")
+
+    t = prof.table.dropna(subset=["S2"])
+    seq_id, fit_s2, dep_s2, rci_w_s2, rci_t_s2, models = [], [], [], [], [], []
+    for _, row in t.iterrows():
+        sid = int(row["Seq_ID"])
+        seq_id.append(sid)
+        fit_s2.append(row["S2"])
+        dep_s2.append(dep_by_seqid.get(sid, np.nan))
+        rci_w_s2.append(rci_w_by_seqid.get(sid, np.nan))
+        rci_t_s2.append(rci_t_by_seqid.get(sid, np.nan))
+        models.append(row["mf_model"])
+
+    title = None
+    try:
+        title = entry.get_entry_title()
+        if title:
+            title = " ".join(title.split())
+    except Exception:
+        pass
+
+    return dict(bmrb_id=bmrb_id, entry_id=entry.entry_id, title=title,
+                field_mhz=prof.field_mhz, seq_id=np.array(seq_id),
+                fit_s2=np.array(fit_s2), dep_s2=np.array(dep_s2),
+                rci_w_s2=np.array(rci_w_s2), rci_t_s2=np.array(rci_t_s2),
+                models=models, has_shifts=bool(rci_w_by_seqid or rci_t_by_seqid))
+
+
+def _corr(fit, other):
+    """(r, rmse, n) for finite (fit, other) pairs; (nan, nan, 0) if fewer
+    than 2 usable pairs."""
+    mask = np.isfinite(fit) & np.isfinite(other)
+    n = int(mask.sum())
+    if n < 2:
+        return float("nan"), float("nan"), n
+    r, _ = pearsonr(fit[mask], other[mask])
+    rmse = float(np.sqrt(np.mean((fit[mask] - other[mask]) ** 2)))
+    return r, rmse, n
+
+
+def main():
+    results = []
+    for bid in ENTRIES:
+        try:
+            res = compare_entry(bid)
+        except Exception as e:
+            print(f"BMRB {bid}: FAILED ({type(e).__name__}: {e})")
+            continue
+        res["r_dep"], res["rmse_dep"], res["n_dep"] = _corr(res["fit_s2"], res["dep_s2"])
+        res["r_rci_w"], res["rmse_rci_w"], res["n_rci_w"] = _corr(res["fit_s2"], res["rci_w_s2"])
+        res["r_rci_t"], res["rmse_rci_t"], res["n_rci_t"] = _corr(res["fit_s2"], res["rci_t_s2"])
+        # deposited BMRB S2 vs. RCI, independent of our own fit -- tells
+        # you whether RCI's weaker correlation above is RCI being a noisier
+        # proxy in general, or something specific to the relaxation fit.
+        res["r_dep_rci_w"], res["rmse_dep_rci_w"], res["n_dep_rci_w"] = \
+            _corr(res["dep_s2"], res["rci_w_s2"])
+        res["r_dep_rci_t"], res["rmse_dep_rci_t"], res["n_dep_rci_t"] = \
+            _corr(res["dep_s2"], res["rci_t_s2"])
+        results.append(res)
+        print(f"BMRB {bid}: fit vs dep N={res['n_dep']} r={res['r_dep']:.3f} "
+              f"rmse={res['rmse_dep']:.3f}  |  fit vs RCI(wishart) N={res['n_rci_w']} "
+              f"r={res['r_rci_w']:.3f}  |  fit vs RCI(talosn) N={res['n_rci_t']} "
+              f"r={res['r_rci_t']:.3f}  |  dep vs RCI(wishart) N={res['n_dep_rci_w']} "
+              f"r={res['r_dep_rci_w']:.3f}  |  dep vs RCI(talosn) N={res['n_dep_rci_t']} "
+              f"r={res['r_dep_rci_t']:.3f}")
+
+    all_fit = np.concatenate([r["fit_s2"] for r in results])
+    all_dep = np.concatenate([r["dep_s2"] for r in results])
+    all_rci_w = np.concatenate([r["rci_w_s2"] for r in results])
+    all_rci_t = np.concatenate([r["rci_t_s2"] for r in results])
+
+    overall_r, overall_rmse, overall_n = _corr(all_fit, all_dep)
+    overall_r_w, overall_rmse_w, overall_n_w = _corr(all_fit, all_rci_w)
+    overall_r_t, overall_rmse_t, overall_n_t = _corr(all_fit, all_rci_t)
+    overall_r_dep_w, overall_rmse_dep_w, overall_n_dep_w = _corr(all_dep, all_rci_w)
+    overall_r_dep_t, overall_rmse_dep_t, overall_n_dep_t = _corr(all_dep, all_rci_t)
+    n_with_shifts = sum(1 for r in results if r["has_shifts"])
+    print(f"\nOverall fit vs deposited BMRB S2: N={overall_n} entries={len(results)} "
+          f"Pearson r={overall_r:.3f} RMSE={overall_rmse:.3f}")
+    print(f"Overall fit vs RCI(wishart) S2:   N={overall_n_w} entries_with_shifts="
+          f"{n_with_shifts} Pearson r={overall_r_w:.3f} RMSE={overall_rmse_w:.3f}")
+    print(f"Overall fit vs RCI(talosn) S2:    N={overall_n_t} entries_with_shifts="
+          f"{n_with_shifts} Pearson r={overall_r_t:.3f} RMSE={overall_rmse_t:.3f}")
+    print(f"Overall dep vs RCI(wishart) S2:   N={overall_n_dep_w} entries_with_shifts="
+          f"{n_with_shifts} Pearson r={overall_r_dep_w:.3f} RMSE={overall_rmse_dep_w:.3f}")
+    print(f"Overall dep vs RCI(talosn) S2:    N={overall_n_dep_t} entries_with_shifts="
+          f"{n_with_shifts} Pearson r={overall_r_dep_t:.3f} RMSE={overall_rmse_dep_t:.3f}")
+
+    with open(RESULTS_CSV, "w") as fh:
+        fh.write("bmrb_id,title,field_mhz,n_dep,r_dep,rmse_dep,"
+                 "n_rci_wishart,r_rci_wishart,rmse_rci_wishart,"
+                 "n_rci_talosn,r_rci_talosn,rmse_rci_talosn,"
+                 "n_dep_rci_wishart,r_dep_rci_wishart,rmse_dep_rci_wishart,"
+                 "n_dep_rci_talosn,r_dep_rci_talosn,rmse_dep_rci_talosn\n")
+        for res in results:
+            title = (res["title"] or "").replace(",", ";")
+            fh.write(f"{res['bmrb_id']},{title},{res['field_mhz']},"
+                     f"{res['n_dep']},{res['r_dep']:.4f},{res['rmse_dep']:.4f},"
+                     f"{res['n_rci_w']},{res['r_rci_w']:.4f},{res['rmse_rci_w']:.4f},"
+                     f"{res['n_rci_t']},{res['r_rci_t']:.4f},{res['rmse_rci_t']:.4f},"
+                     f"{res['n_dep_rci_w']},{res['r_dep_rci_w']:.4f},{res['rmse_dep_rci_w']:.4f},"
+                     f"{res['n_dep_rci_t']},{res['r_dep_rci_t']:.4f},{res['rmse_dep_rci_t']:.4f}\n")
+    print(f"saved {RESULTS_CSV}")
+
+    with open(PAIRS_CSV, "w") as fh:
+        fh.write("bmrb_id,seq_id,fit_s2,dep_s2,rci_wishart_s2,rci_talosn_s2,mf_model\n")
+        for res in results:
+            for sid, f, d, w, t, m in zip(res["seq_id"], res["fit_s2"], res["dep_s2"],
+                                          res["rci_w_s2"], res["rci_t_s2"], res["models"]):
+                fh.write(f"{res['bmrb_id']},{sid},{f:.4f},"
+                         f"{'' if np.isnan(d) else f'{d:.4f}'},"
+                         f"{'' if np.isnan(w) else f'{w:.4f}'},"
+                         f"{'' if np.isnan(t) else f'{t:.4f}'},{m}\n")
+    print(f"saved {PAIRS_CSV}")
+
+    colors = {"1": "black", "2": "tab:blue", "3": "tab:orange", "ambiguous": "tab:red"}
+
+    def _make_pooled_plot(path, exclude_ambiguous):
+        """Pooled scatter (fit vs. deposited S2, colored by model) + per-entry
+        correlation bar chart -- optionally dropping "ambiguous"-model
+        residues (both signals present, S2 falls back to the Model-1 point
+        estimate, not confidently attributed to Model 2 or 3) from every
+        stat and panel, to see how much they're dragging down agreement
+        with the deposited fit vs. genuinely explaining it."""
+        def keep(r):
+            models = np.asarray(r["models"])
+            mask = models != "ambiguous" if exclude_ambiguous else np.ones(len(models), dtype=bool)
+            return mask
+
+        masks = {id(r): keep(r) for r in results}
+        pooled_fit = np.concatenate([r["fit_s2"][masks[id(r)]] for r in results])
+        pooled_dep = np.concatenate([r["dep_s2"][masks[id(r)]] for r in results])
+        pooled_models = np.concatenate([np.asarray(r["models"])[masks[id(r)]] for r in results])
+        pooled_r, pooled_rmse, pooled_n = _corr(pooled_fit, pooled_dep)
+
+        per_entry_r = {}
+        for r in results:
+            m = masks[id(r)]
+            per_entry_r[r["bmrb_id"]], _, _ = _corr(r["fit_s2"][m], r["dep_s2"][m])
+
+        fig, (ax_scatter, ax_bar) = plt.subplots(
+            1, 2, figsize=(13, 6), gridspec_kw={"width_ratios": [1, 1.3]})
+
+        for model in sorted(set(pooled_models)):
+            mask = pooled_models == model
+            ax_scatter.scatter(pooled_dep[mask], pooled_fit[mask], s=8, alpha=0.35,
+                               color=colors.get(model, "grey"), label=f"Model {model}")
+        ax_scatter.plot([0, 1], [0, 1], color="0.5", lw=1, ls="--", zorder=0)
+        ax_scatter.set_xlim(0, 1.05)
+        ax_scatter.set_ylim(0, 1.05)
+        ax_scatter.set_xlabel("deposited S2 (BMRB)")
+        ax_scatter.set_ylabel("makeshift fit S2")
+        subtitle = "excluding ambiguous" if exclude_ambiguous else "all models"
+        ax_scatter.set_title(f"All {len(results)} entries pooled, {subtitle} "
+                             f"(N={pooled_n}, r={pooled_r:.3f}, RMSE={pooled_rmse:.3f})")
+        ax_scatter.legend(frameon=False, fontsize=8, loc="lower right")
+
+        ordered = sorted(results, key=lambda r: per_entry_r[r["bmrb_id"]])
+        ax_bar.barh([str(r["bmrb_id"]) for r in ordered],
+                   [per_entry_r[r["bmrb_id"]] for r in ordered],
+                   color="steelblue", height=0.7)
+        ax_bar.axvline(0, color="0.3", lw=0.8)
+        ax_bar.set_xlabel("Pearson r (fit S2 vs. deposited S2)")
+        ax_bar.set_title("Per-entry correlation" + (" (excluding ambiguous)" if exclude_ambiguous else ""))
+        ax_bar.tick_params(axis="y", labelsize=7)
+
+        fig.tight_layout()
+        fig.savefig(path, dpi=150)
+        print(f"saved {path}")
+
+    _make_pooled_plot(OUTPUT_FILE, exclude_ambiguous=False)
+    _make_pooled_plot(OUTPUT_FILE_NO_AMBIGUOUS, exclude_ambiguous=True)
+
+    # one small scatter panel per protein, sorted best-to-worst by r
+    ordered = sorted(results, key=lambda r: -r["r_dep"])
+    ncols = 6
+    nrows = -(-len(ordered) // ncols)
+    fig2, axes2 = plt.subplots(nrows, ncols, figsize=(2.15 * ncols, 2.15 * nrows))
+    for ax, res in zip(axes2.flat, ordered):
+        model_arr = np.array(res["models"])
+        for model in sorted(set(model_arr)):
+            mask = model_arr == model
+            ax.scatter(res["dep_s2"][mask], res["fit_s2"][mask], s=6, alpha=0.5,
+                      color=colors.get(model, "grey"))
+        ax.plot([0, 1], [0, 1], color="0.6", lw=0.8, ls="--", zorder=0)
+        ax.set_xlim(0, 1.05)
+        ax.set_ylim(0, 1.05)
+        ax.set_xticks([0, 0.5, 1]); ax.set_yticks([0, 0.5, 1])
+        ax.tick_params(labelsize=6)
+        title = (res["title"] or "")[:28]
+        ax.set_title(f'{res["bmrb_id"]}  r={res["r_dep"]:.2f}\n{title}', fontsize=6.5)
+    for ax in axes2.flat[len(ordered):]:
+        ax.axis("off")
+    fig2.suptitle("Fit S2 (y) vs. deposited S2 (x), per protein -- sorted by r",
+                  fontsize=11)
+    fig2.tight_layout(rect=[0, 0, 1, 0.98])
+    fig2.savefig(GRID_FILE, dpi=150)
+    print(f"saved {GRID_FILE}")
+
+    # deposited and fit S2 along the sequence, one panel per protein --
+    # complements the scatter grid above by showing *where* along the
+    # chain fit and deposited disagree, not just by how much.
+    fig4, axes4 = plt.subplots(nrows, ncols, figsize=(2.6 * ncols, 1.9 * nrows))
+    for ax, res in zip(axes4.flat, ordered):
+        model_arr = np.array(res["models"])
+        order = np.argsort(res["seq_id"])
+        seq_id = res["seq_id"][order]
+        dep = res["dep_s2"][order]
+        fit = res["fit_s2"][order]
+        models_sorted = model_arr[order]
+        dep_mask = np.isfinite(dep)
+        ax.plot(seq_id[dep_mask], dep[dep_mask], color="0.5", lw=1,
+               label="deposited", zorder=1)
+        for model in sorted(set(models_sorted)):
+            mask = models_sorted == model
+            ax.scatter(seq_id[mask], fit[mask], s=5, alpha=0.7,
+                      color=colors.get(model, "grey"), zorder=2)
+        ax.set_ylim(0, 1.05)
+        ax.tick_params(labelsize=6)
+        ax.set_yticks([0, 0.5, 1])
+        title = (res["title"] or "")[:28]
+        ax.set_title(f'{res["bmrb_id"]}  r={res["r_dep"]:.2f}\n{title}', fontsize=6.5)
+    for ax in axes4.flat[len(ordered):]:
+        ax.axis("off")
+    handles = [plt.Line2D([0], [0], color="0.5", lw=1, label="deposited")] + [
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=c, markersize=5,
+                  label=f"fit, Model {m}")
+        for m, c in colors.items()
+    ]
+    fig4.legend(handles=handles, loc="lower center", ncol=5, fontsize=8,
+               bbox_to_anchor=(0.5, 0))
+    fig4.suptitle("S2 vs. residue number, deposited (grey line) vs. fit "
+                  "(colored by model) -- sorted by r", fontsize=11)
+    fig4.tight_layout(rect=[0, 0.03, 1, 0.97])
+    fig4.savefig(SEQID_FILE, dpi=150)
+    print(f"saved {SEQID_FILE}")
+
+    # fit S2 vs. RCI-derived S2 (independent, chemical-shift-only signal),
+    # both backends pooled across every entry with its own deposited shifts
+    fig3, axes3 = plt.subplots(2, 2, figsize=(11, 10))
+    panels = (
+        (axes3[0, 0], all_rci_w, all_fit, overall_r_w, overall_rmse_w, overall_n_w,
+         "wishart", "makeshift fit S2 (relaxation)", "vs. fit"),
+        (axes3[0, 1], all_rci_t, all_fit, overall_r_t, overall_rmse_t, overall_n_t,
+         "talosn", "makeshift fit S2 (relaxation)", "vs. fit"),
+        (axes3[1, 0], all_rci_w, all_dep, overall_r_dep_w, overall_rmse_dep_w, overall_n_dep_w,
+         "wishart", "deposited S2 (BMRB)", "vs. deposited"),
+        (axes3[1, 1], all_rci_t, all_dep, overall_r_dep_t, overall_rmse_dep_t, overall_n_dep_t,
+         "talosn", "deposited S2 (BMRB)", "vs. deposited"),
+    )
+    for ax, x_arr, y_arr, r, rmse, n, label, ylabel, title_prefix in panels:
+        mask = np.isfinite(x_arr) & np.isfinite(y_arr)
+        color = "teal" if "fit" in ylabel else "darkorange"
+        ax.scatter(x_arr[mask], y_arr[mask], s=8, alpha=0.35, color=color)
+        ax.plot([0, 1], [0, 1], color="0.5", lw=1, ls="--", zorder=0)
+        ax.set_xlim(0, 1.05)
+        ax.set_ylim(0, 1.05)
+        ax.set_xlabel(f"RCI(algorithm='{label}') S2")
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"{title_prefix} RCI '{label}'\nN={n}, {n_with_shifts} entries, "
+                     f"r={r:.3f}, RMSE={rmse:.3f}", fontsize=10)
+    fig3.suptitle("Chemical-shift-only RCI S2 vs. relaxation-fit S2 (top) and "
+                  "vs. deposited BMRB S2 (bottom) -- same entries, same residues",
+                  fontsize=11)
+    fig3.tight_layout(rect=[0, 0, 1, 0.96])
+    fig3.subplots_adjust(wspace=0.28, hspace=0.4)
+    fig3.savefig(RCI_FILE, dpi=150)
+    print(f"saved {RCI_FILE}")
+
+
+if __name__ == "__main__":
+    main()

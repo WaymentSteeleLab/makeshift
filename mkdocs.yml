@@ -49,6 +49,7 @@ nav:
       - Peak lists: guide/peaklists.md
       - Spectra: guide/spectra.md
       - Relaxation & dynamics: guide/relaxation.md
+      - Model-free order parameters: guide/order-parameters.md
       - CPMG processing: guide/cpmg.md
       - HYDRONMR prediction: guide/hydronmr.md
       - TALOS-N prediction: guide/talosn.md
@@ -69,6 +70,7 @@ nav:
       - Utilities: api/utils.md
   - Validation:
       - RCI: rci_validation.md
+      - Order parameters: order_parameters_validation.md
 
 plugins:
   - search
