@@ -4,6 +4,7 @@ Per-residue peak assignments as an object.
 By default this is the backbone amide (H, N) pair used for 2D HSQC-type
 peak lists, but ``dims`` lets you build peak lists over any set of atoms
 """
+import re
 import pandas as pd
 import warnings
 
@@ -176,6 +177,97 @@ class PeakList:
                 "share a residue — no peaks with all dims present.",
                 UserWarning,
             )
+        print(f"  {len(out)} peaks from {path}")
+        return cls(out[out_cols], source=str(path))
+
+    # Sparky peak list  (Assignment  w1  w2 ...)
+
+    _SPARKY_RES_RE = re.compile(r"^([A-Za-z]+?)(-?\d+)([A-Za-z][A-Za-z0-9'\"#*]*)$")
+
+    @classmethod
+    def _parse_sparky_assignment(cls, assn):
+        """
+        Split a Sparky assignment like ``Y4N-H`` or ``Y4N-Y4H`` into
+        ``[(res_name, res_num, atom), ...]``, one per dimension. Components
+        without a group inherit the previous one (Sparky shorthand).
+        Returns None for unassigned / unparseable peaks (e.g. ``?-?``).
+        """
+        parts = assn.split("-")
+        out = []
+        prev = None
+        for p in parts:
+            if not p or "?" in p:
+                return None
+            m = cls._SPARKY_RES_RE.match(p)
+            if m:
+                prev = (m.group(1), int(m.group(2)))
+                out.append((*prev, m.group(3)))
+            elif prev is not None and re.match(r"^[A-Za-z][A-Za-z0-9'\"#*]*$", p):
+                out.append((*prev, p))
+            else:
+                return None
+        return out
+
+    @classmethod
+    def from_list(cls, path, seq_offset=0, dims=None):
+        """
+        Read a Sparky peak list (e.g. from ``lt``) with an ``Assignment``
+        column followed by one ppm column per dimension (``w1``, ``w2``, ...).
+        Each dimension's atom is taken from the matching component of the
+        assignment, so ``Y4N-H  118.384  7.508`` gives N=118.384, H=7.508.
+        Extra trailing columns (heights, volumes, notes) are ignored, and
+        unassigned peaks (``?-?``) are skipped.
+        """
+        dims = cls._normalize_dims(dims or _DEFAULT_DIMS)
+        n_w = None
+        rows = []
+        n_skipped = 0
+        with open(path) as fh:
+            for line in fh:
+                toks = line.split()
+                if not toks:
+                    continue
+                if toks[0].lower() == "assignment":
+                    n_w = sum(1 for t in toks[1:] if re.fullmatch(r"w\d+", t, re.I))
+                    continue
+                assn = cls._parse_sparky_assignment(toks[0])
+                if assn is None:
+                    n_skipped += 1
+                    continue
+                nd = n_w or len(assn)
+                try:
+                    shifts = [float(t) for t in toks[1:1 + nd]]
+                except ValueError:
+                    n_skipped += 1
+                    continue
+                if len(shifts) != nd or len(assn) != nd:
+                    n_skipped += 1
+                    continue
+                for (resname, resnum, atom), shift in zip(assn, shifts):
+                    rows.append({"res_name": resname, "Auth_seq_ID": resnum,
+                                 "atom": atom, "shift": shift})
+        if n_skipped:
+            print(f"  skipped {n_skipped} unassigned/unparseable peaks in {path}")
+
+        out_cols = cls._out_cols(dims)
+        df = pd.DataFrame(rows, columns=["res_name", "Auth_seq_ID", "atom", "shift"])
+        df["Comp_ID"] = [_AA_1TO3.get(r.upper()) if len(r) == 1 else r.upper()
+                         for r in df["res_name"]]
+        # if a residue/atom appears in several peaks, keep the first
+        df = df.drop_duplicates(subset=["Auth_seq_ID", "atom"], keep="first")
+
+        out, missing = cls._merge_dims(df, dims, id_col="Auth_seq_ID", atom_col="atom",
+                                        val_col="shift", base_cols=("Comp_ID",))
+        if missing:
+            warnings.warn(
+                f"{path}: no {' or '.join(missing)} shifts found — can't build a peak "
+                f"list for dims {[label for label, _ in dims]}. Returning an empty PeakList.",
+                UserWarning,
+            )
+            return cls(pd.DataFrame(columns=out_cols), source=str(path))
+
+        out["Seq_ID"] = out["Auth_seq_ID"] + seq_offset
+        out = cls._label(out)
         print(f"  {len(out)} peaks from {path}")
         return cls(out[out_cols], source=str(path))
 
