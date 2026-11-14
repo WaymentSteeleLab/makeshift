@@ -15,6 +15,7 @@ task-focused walkthroughs, start with the [User guide](../guide/entries.md).
 - [Re-referencing](reref.md) — LACS and PANAV routines.
 - [Relaxation](relaxation.md) — `RelaxationProfile`.
 - [CPMG](cpmg.md) — `CPMGExperiment`.
+- [ChemEx](chemex.md) — fit CPMG dispersion to exchange models by running ChemEx.
 - [HYDRONMR](hydronmr.md) — structure-based T1/T2/NOE prediction.
 - [TALOS-N](talosn.md) — shift-based torsion / S² / secondary-structure prediction.
 - [RCI](rci.md) — shift-based per-residue flexibility (Random Coil Index).

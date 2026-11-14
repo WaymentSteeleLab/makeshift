@@ -51,6 +51,7 @@ nav:
       - Relaxation & dynamics: guide/relaxation.md
       - Model-free order parameters: guide/order-parameters.md
       - CPMG processing: guide/cpmg.md
+      - ChemEx exchange fitting: guide/chemex.md
       - HYDRONMR prediction: guide/hydronmr.md
       - TALOS-N prediction: guide/talosn.md
       - RCI flexibility: guide/rci.md
@@ -64,6 +65,7 @@ nav:
       - Re-referencing: api/reref.md
       - Relaxation: api/relaxation.md
       - CPMG: api/cpmg.md
+      - ChemEx: api/chemex.md
       - HYDRONMR: api/hydronmr.md
       - TALOS-N: api/talosn.md
       - RCI: api/rci.md

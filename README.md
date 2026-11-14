@@ -132,6 +132,7 @@ govern the downloaded software, not this wrapper.
 
 - The [Biological Magnetic Resonance Bank (BMRB)](https://bmrb.io/) for maintaining and sharing NMR data.
 - The Bax lab at NIH for [TALOS-N](https://spin.niddk.nih.gov/bax-apps/software/TALOS-N/).
+- Guillaume Bouvignies for [ChemEx](https://github.com/gbouvignies/ChemEx).
 
 ---
 

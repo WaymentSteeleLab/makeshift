@@ -17,6 +17,7 @@ from pathlib import Path
 from .config import load_config, load_planes
 from .lineshape import fit_peaks
 from .r2eff import compute_r2eff
+from ..chemex.utils import save_chemex
 from .classify import classify_peaks, validate_sequence, _parse_seqpos
 from ..spectra.matching import map_peaklists
 
@@ -199,6 +200,24 @@ class CPMGExperiment:
                          fit_results=fit_results, missing_df=missing_df)
 
         return self
+
+    def save_chemex(self, out_dir, **kwargs):
+        """Write the fitted intensities as ChemEx CPMG profiles (one ``.out``
+        file per assigned peak). Call after :meth:`run`; see
+        :func:`makeshift.chemex.save_chemex` for options. To run ChemEx from
+        Python instead, use :meth:`to_chemex`."""
+        if self.fit_results is None:
+            raise RuntimeError("No fit results yet; call run() first.")
+        return save_chemex(self.fit_results, self.vcpmg_values, self.time_T2,
+                           out_dir, ref_df=self.ref_df, **kwargs)
+
+    def to_chemex(self, *, pw90, temperature, **kwargs):
+        """Build a :class:`makeshift.chemex.ChemEx` fit from this experiment
+        (call after :meth:`run`, then call ``.run()`` on the result). The 1H
+        field and 15N carrier are read from the reference spectrum unless
+        given; see :meth:`ChemEx.from_cpmg` for options."""
+        from ..chemex import ChemEx
+        return ChemEx.from_cpmg(self, pw90=pw90, temperature=temperature, **kwargs)
 
     def _render_plots(self, stem, out_dir, picked_df, peaks_shifted,
                       color_map, sequence, xlim, ylim, zoom_xlim, zoom_ylim):

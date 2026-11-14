@@ -27,6 +27,7 @@ dependency stack.
 | [`makeshift.reref`](api/reref.md) | LACS and PANAV chemical-shift re-referencing (via `ChemicalShifts.reref`). |
 | [`makeshift.spectra`](api/spectra.md) | Read Sparky `.ucsf` spectra ([`Spectrum`](api/spectra.md)), pick peaks, and align peak lists (`map_peaklists`). |
 | [`makeshift.relaxation`](api/relaxation.md) | CPMG dispersion pipeline ([`CPMGExperiment`](api/cpmg.md)) and [`RelaxationProfile`](api/relaxation.md) — RelaxDB-style per-residue dynamics from deposited R1/R2/NOE, plus model-free S² fitting under anisotropic tumbling. |
+| [`makeshift.chemex`](api/chemex.md) | Fit CPMG dispersion profiles to chemical-exchange models (k<sub>ex</sub>, p<sub>B</sub>, Δω) by running [ChemEx](https://github.com/gbouvignies/ChemEx). |
 | [`makeshift.hydronmr`](api/hydronmr.md) | Predict per-residue T1/T2/NOE from a PDB structure. |
 | [`makeshift.talosn`](api/talosn.md) | Predict backbone torsion angles, S² order parameters, and secondary structure from chemical shifts via the NIH TALOS-N binary. |
 | [`makeshift.rci`](api/rci.md) | Predict per-residue backbone flexibility (Random Coil Index) from chemical shifts, in pure Python. |
@@ -57,6 +58,7 @@ govern the downloaded software, not this wrapper.
 
 - The [Biological Magnetic Resonance Bank (BMRB)](https://bmrb.io/) for maintaining and sharing NMR data.
 - The Bax lab at NIH for [TALOS-N](https://spin.niddk.nih.gov/bax-apps/software/TALOS-N/).
+- Guillaume Bouvignies for [ChemEx](https://github.com/gbouvignies/ChemEx).
 
 ## Citation
 

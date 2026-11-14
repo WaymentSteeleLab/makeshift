@@ -87,6 +87,19 @@ limits, and a `color_map` for the classification plots. See the
 exchange classification to `out_dir`. With `make_plots=True` it also produces
 per-peak dispersion curves, a grid overview, and a sequence waterfall.
 
+## Fitting exchange parameters
+
+To fit the dispersion profiles to an exchange model (k<sub>ex</sub>,
+p<sub>B</sub>, per-residue Δω), pass the experiment to ChemEx:
+
+```python
+cx = exp.to_chemex(pw90=35e-6, temperature=25.0).run()
+cx.global_parameters
+cx.residue_parameters
+```
+
+See [ChemEx exchange fitting](chemex.md).
+
 ## Full API
 
 See the [CPMG reference](../api/cpmg.md).

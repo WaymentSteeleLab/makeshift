@@ -44,10 +44,13 @@ pip install "makeshift[demos]"   # adds jupyter
 
 ## Component-specific downloads
 
-Two subsystems fetch external assets on demand rather than bundling them:
+Some subsystems rely on external software or assets rather than bundling them:
 
 - **TALOS-N** — the NIH binary and its database are downloaded into a specified 
   directory. See [TALOS-N prediction](guide/talosn.md).
+- **ChemEx** — CPMG exchange fitting runs the separately installed
+  [ChemEx](https://github.com/gbouvignies/ChemEx) program; install it with
+  `pip install chemex`. See [ChemEx exchange fitting](guide/chemex.md).
 - **Structures & datasets** — Use PDB or AlphaFoldDB structure and example datasets are
   fetched and cached under `~/.makeshift/`. See
   [Datasets & structures](guide/datasets.md).
