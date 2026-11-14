@@ -1,3 +1,4 @@
+import io
 import zipfile
 import numpy as np
 import pandas as pd
@@ -20,7 +21,8 @@ def _cache_save(fit_results: pd.DataFrame, cache_path: Path) -> None:
 def _cache_load(cache_path: Path) -> pd.DataFrame:
     with zipfile.ZipFile(cache_path, "r") as zf:
         json_str = zf.read("fit_lineshapes.json").decode()
-    df = pd.read_json(json_str, orient="records")
+    # newer pandas treats a bare string as a file path; wrap it as a buffer
+    df = pd.read_json(io.StringIO(json_str), orient="records")
     for col in ("ref_index", "plane"):
         if col in df.columns:
             df[col] = df[col].astype(int)
