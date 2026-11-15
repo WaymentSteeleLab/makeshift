@@ -28,6 +28,78 @@ PROFILE_HEADER = "#    ncyc_cp        Intensity      Esd(Int.)\n"
 
 
 # --------------------------------------------------------------------------
+# settings (the ``chemex:`` section of a CPMG config YAML)
+# --------------------------------------------------------------------------
+
+_NUMERIC_SETTINGS = {
+    "h_larmor_frq": "1H Larmor frequency, MHz",
+    "carrier": "15N carrier, ppm",
+    "temperature": "temperature, °C",
+    "pw90": "15N 90° pulse width, s",
+}
+_SETTINGS_DEFAULTS = {"experiment": "cpmg_15n_ip", "model": "2st"}
+_DICT_SETTINGS = ("experiment_settings", "conditions", "parameters")
+SETTINGS_KEYS = (*_SETTINGS_DEFAULTS, *_NUMERIC_SETTINGS, *_DICT_SETTINGS, "method")
+REQUIRED_SETTINGS = ("temperature", "pw90")
+
+
+def normalize_settings(settings, source="chemex settings"):
+    """
+    Validate a ``chemex:`` settings dict and fill in defaults.
+
+    Keys (all flat; see the ChemEx guide for the YAML form):
+
+    ``experiment`` (ChemEx experiment name, default ``cpmg_15n_ip``),
+    ``h_larmor_frq`` (MHz), ``carrier`` (15N, ppm), ``temperature`` (°C),
+    ``pw90`` (s), ``model`` (default ``2st``), and optional
+    ``experiment_settings`` (extra ``[experiment]`` keys),
+    ``conditions`` (extra ``[conditions]`` keys), ``parameters`` and
+    ``method``. ``temperature`` and ``pw90`` are required;
+    ``h_larmor_frq`` and ``carrier`` may be left out when they can be read
+    from the reference spectrum's header.
+
+    Raises ValueError naming ``source`` for unknown keys, missing required
+    keys, or non-numeric values.
+    """
+    if settings is None:
+        settings = {}
+    if not isinstance(settings, dict):
+        raise ValueError(f"{source} must be a mapping, got {type(settings).__name__}")
+    unknown = sorted(set(settings) - set(SETTINGS_KEYS))
+    if unknown:
+        raise ValueError(f"{source}: unknown key(s) {unknown}; allowed keys are "
+                         f"{list(SETTINGS_KEYS)}")
+    missing = [k for k in REQUIRED_SETTINGS if settings.get(k) is None]
+    if missing:
+        raise ValueError(f"{source}: missing required key(s) " + ", ".join(
+            f"{k} ({_NUMERIC_SETTINGS[k]})" for k in missing)
+            + "; add them to the chemex section or give `acqus:` in the config")
+
+    out = {**_SETTINGS_DEFAULTS, **{k: v for k, v in settings.items() if v is not None}}
+    for key, meaning in _NUMERIC_SETTINGS.items():
+        if key in out:
+            try:
+                out[key] = float(out[key])
+            except (TypeError, ValueError):
+                raise ValueError(f"{source}: {key} ({meaning}) must be a number, "
+                                 f"got {out[key]!r}") from None
+    for key in _DICT_SETTINGS:
+        if key in out and not isinstance(out[key], dict):
+            raise ValueError(f"{source}: {key} must be a mapping")
+    for section, values in (out.get("parameters") or {}).items():
+        if str(section).upper() == "GLOBAL" and isinstance(values, dict):
+            clash = [k for k in values if str(k).upper() in ("KEX_AB", "PB")]
+            if clash:
+                raise ValueError(f"{source}: set {clash} with ChemEx.run(kex=..., "
+                                 "kex_bounds=..., pb=..., pb_bounds=...), not in "
+                                 "parameters")
+    if "method" in out and not isinstance(out["method"], (list, dict, str)):
+        raise ValueError(f"{source}: method must be a list of parameters, "
+                         "a mapping of steps, or a method-file path")
+    return out
+
+
+# --------------------------------------------------------------------------
 # profiles
 # --------------------------------------------------------------------------
 
@@ -67,9 +139,15 @@ def cpmg_profiles(fit_results, vcpmg_values, time_T2, ref_df=None,
     ``ncyc, intensity, error, ref_index``.
     """
     ncyc = np.asarray(vcpmg_values, float) * float(time_T2)
-    if not np.allclose(ncyc, np.round(ncyc), atol=1e-3):
-        warnings.warn(f"vcpmg * time_T2 is not integer for some planes: {ncyc}. "
-                      "Check vcpmg (Hz) and time_T2 (s).", UserWarning)
+    bad = ~np.isclose(ncyc, np.round(ncyc), atol=1e-3)
+    if bad.any():
+        pairs = ", ".join(f"{v:g} Hz -> {n:g}" for v, n in
+                          zip(np.asarray(vcpmg_values, float)[bad], ncyc[bad]))
+        raise ValueError(
+            f"νCPMG × time_T2 must be a whole number of CPMG cycles, but with "
+            f"time_T2 = {time_T2:g} s: {pairs}. time_T2 (the CPMG constant-time "
+            "period) or the planes' vcpmg values are wrong.")
+    ncyc = np.round(ncyc)
     plane_ncyc = {0: 0.0, **{i + 1: n for i, n in enumerate(ncyc)}}
 
     n_planes = fit_results["plane"].max()
@@ -170,8 +248,10 @@ def _toml_value(value):
     if isinstance(value, (int, np.integer)):
         return str(int(value))
     if isinstance(value, (float, np.floating)):
-        if not math.isfinite(value):
-            raise ValueError(f"cannot write non-finite value {value} to TOML")
+        if math.isnan(value):
+            raise ValueError("cannot write NaN to TOML")
+        if math.isinf(value):
+            return "inf" if value > 0 else "-inf"
         return repr(float(value))
     if isinstance(value, (str, Path)):
         return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"') + '"'

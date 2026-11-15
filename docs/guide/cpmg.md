@@ -57,7 +57,8 @@ hydronmr_r2_cache: ../examples/SHP2_NSH2_CPMG_hydronmr_r2.csv
 
 | Key | Meaning |
 |---|---|
-| `time_T2` | Constant-time CPMG delay (s) |
+| `time_T2` | Constant-time CPMG period T (s); always required, never read from `acqus` |
+| `acqus` | Optional Bruker `acqus` file (relative to `data_dir`): supplies the [ChemEx settings](chemex.md#settings-in-the-cpmg-config) (field, carrier, temperature, pw90, time_equil) |
 | `data_dir` | Directory holding the `.ucsf` planes |
 | `reference` | Reference plane filename |
 | `peaklist` | BMRB id (or file) providing assignments |
@@ -66,6 +67,7 @@ hydronmr_r2_cache: ../examples/SHP2_NSH2_CPMG_hydronmr_r2.csv
 | `planes` | List of `{file, vcpmg}` for each dispersion point |
 | `fit_lineshapes_cache` | Cache path for fitted lineshapes (speeds re-runs) |
 | `hydronmr_r2_cache` | Cached HYDRONMR rigid R₂ |
+| `chemex` | Optional [ChemEx settings](chemex.md#the-optional-chemex-section): experiment, model, and overrides of the acqus values |
 
 The example dataset is downloadable — see [Datasets & structures](datasets.md):
 
@@ -90,10 +92,21 @@ per-peak dispersion curves, a grid overview, and a sequence waterfall.
 ## Fitting exchange parameters
 
 To fit the dispersion profiles to an exchange model (k<sub>ex</sub>,
-p<sub>B</sub>, per-residue Δω), pass the experiment to ChemEx:
+p<sub>B</sub>, per-residue Δω), point the config at the Bruker `acqus` file,
+which supplies the field, carrier, temperature, pulse width and equilibration
+delay (`time_T2` still comes from the config):
+
+```yaml
+acqus: acqus
+time_T2: 0.04               # still required
+chemex:                     # optional
+  experiment: cpmg_15n_tr   # only if not cpmg_15n_ip (the default)
+```
+
+then pass the experiment to ChemEx:
 
 ```python
-cx = exp.to_chemex(pw90=35e-6, temperature=25.0).run()
+cx = exp.to_chemex().run(residues=["Y4", "G10", "L22"], fit="global")
 cx.global_parameters
 cx.residue_parameters
 ```

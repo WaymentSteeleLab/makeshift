@@ -4,7 +4,13 @@
 
 ::: makeshift.chemex.engine.ChemEx
 
+## Settings
+
+::: makeshift.chemex.utils.normalize_settings
+
 ## Helpers
+
+::: makeshift.chemex.engine.exchange_start
 
 ::: makeshift.chemex.engine.chemex_command
 

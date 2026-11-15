@@ -211,13 +211,14 @@ class CPMGExperiment:
         return save_chemex(self.fit_results, self.vcpmg_values, self.time_T2,
                            out_dir, ref_df=self.ref_df, **kwargs)
 
-    def to_chemex(self, *, pw90, temperature, **kwargs):
+    def to_chemex(self, **overrides):
         """Build a :class:`makeshift.chemex.ChemEx` fit from this experiment
-        (call after :meth:`run`, then call ``.run()`` on the result). The 1H
-        field and 15N carrier are read from the reference spectrum unless
-        given; see :meth:`ChemEx.from_cpmg` for options."""
+        (call after :meth:`run`, then call ``.run()`` on the result), using
+        the ``chemex:`` section of the config YAML. Keyword ``overrides``
+        (e.g. ``model="1st"``) replace individual settings; see
+        :meth:`ChemEx.from_cpmg`."""
         from ..chemex import ChemEx
-        return ChemEx.from_cpmg(self, pw90=pw90, temperature=temperature, **kwargs)
+        return ChemEx.from_cpmg(self, **overrides)
 
     def _render_plots(self, stem, out_dir, picked_df, peaks_shifted,
                       color_map, sequence, xlim, ylim, zoom_xlim, zoom_ylim):
