@@ -47,7 +47,6 @@ DEFAULT_PB_BOUNDS = (0.0, 0.2)
 # ±DEFAULT_CS_WINDOW ppm: CPMG barely constrains it, and unbounded fits fail
 # to converge.
 DEFAULT_CS_WINDOW = 0.5
-_RUN_ARG_PARAMS = {"KEX_AB": "kex / kex_bounds", "PB": "pb / pb_bounds"}
 DEFAULT_DW = 1.0  # ppm; ChemEx's own default of 0 sits on a flat gradient
 
 
@@ -64,30 +63,27 @@ def chemex_command():
     )
 
 
-def _run_chemex(experiment_file, parameters_file, method_file, output_dir,
-                model="2st", plot="nothing", include=None, exclude=None,
-                workers=None, extra_args=None, cwd=None):
+def _run_chemex(experiment_file, parameters_file, method_file, output_dir, model, cwd):
     cmd = [*chemex_command(), "fit",
            "-e", str(experiment_file),
            "-p", str(parameters_file),
+           "-m", str(method_file),
            "-o", str(output_dir),
            "-d", model,
-           "--plot", plot]
-    if method_file is not None:
-        cmd.extend(["-m", str(method_file)])
-    if include:
-        cmd.extend(["--include", *map(str, include)])
-    if exclude:
-        cmd.extend(["--exclude", *map(str, exclude)])
-    if workers is not None:
-        cmd.extend(["--workers", str(workers)])
-    if extra_args:
-        cmd.extend(extra_args)
-
-    env = os.environ.copy()
-    env.setdefault("NO_COLOR", "1")
-    env.setdefault("COLUMNS", "120")
+           "--plot", "nothing"]
+    env = {"NO_COLOR": "1", "COLUMNS": "120", **os.environ}
     return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
+
+
+def _spin(profile):
+    """'Y4N-H' -> 'Y4N'."""
+    return str(profile).split("-")[0]
+
+
+def _number_key(name):
+    """Sort key on the first integer in a name: 'Y92N-H' -> 92, 'STEP10' -> 10."""
+    m = re.search(r"\d+", str(name))
+    return (int(m.group()) if m else math.inf, str(name))
 
 
 def _collect_step(step_dir, time_t2):
@@ -116,11 +112,12 @@ def _collect_step(step_dir, time_t2):
 def _collect_outputs(output_dir, time_t2):
     """Parse a ``chemex fit`` output directory; the last step is the result."""
     output_dir = Path(output_dir)
-    step_dirs = sorted(p for p in output_dir.iterdir()
-                       if p.is_dir() and (p / "Parameters").is_dir())
     if (output_dir / "Parameters").is_dir():
         steps = {"": _collect_step(output_dir, time_t2)}
     else:
+        step_dirs = sorted((p for p in output_dir.iterdir()
+                            if p.is_dir() and (p / "Parameters").is_dir()),
+                           key=lambda p: _number_key(p.name))
         steps = {p.name: _collect_step(p, time_t2) for p in step_dirs}
     if not steps:
         return {"output_dir": str(output_dir), "steps": {}}
@@ -129,52 +126,41 @@ def _collect_outputs(output_dir, time_t2):
 
 
 
-def _fit_line(parameters):
-    """'kex 812 ± 95 s⁻¹, pB 0.048 ± 0.006, dw 1.95 ± 0.15 ppm' from one fit."""
-    fitted = parameters[parameters["kind"] == "fitted"]
-
-    def fmt(param, digits, unit=""):
-        row = fitted[fitted["param"] == param]
-        if row.empty:
-            return None
-        value, err = row["value"].iloc[0], row["error"].iloc[0]
-        err_txt = f" ± {err:.{digits}f}" if np.isfinite(err) else ""
-        return f"{value:.{digits}f}{err_txt}{unit}"
-
-    parts = [(label, fmt(param, digits, unit)) for label, param, digits, unit in (
-        ("kex", "KEX_AB", 0, " s⁻¹"), ("pB", "PB", 3, ""), ("dw", "DW_AB", 2, " ppm"),
-        ("R2B", "R2_B", 1, " s⁻¹"))]
-    return ", ".join(f"{label} {text}" for label, text in parts if text)
+# label, decimals and unit for each parameter in progress lines and plot titles
+_DISPLAY = {"KEX_AB": ("kex", 0, " s⁻¹"), "PB": ("pB", 3, ""),
+            "DW_AB": ("Δω", 2, " ppm"), "R2_A": ("R₂A", 1, " s⁻¹"),
+            "R2_B": ("R₂B", 1, " s⁻¹")}
 
 
-def _pm(value, err, digits):
-    err_txt = f" ± {err:.{digits}f}" if np.isfinite(err) else ""
-    return f"{value:.{digits}f}{err_txt}"
-
-
-def _panel_values(params, spin, individual):
-    """Short per-residue fit summary for a plot panel title."""
-    if params is None or spin not in params.index:
-        return ""
-    r = params.loc[spin]
-    def txt(items):
-        return ", ".join(f"{label} {_pm(r[col], r.get(col + '_err', np.nan), d)}"
-                         for label, col, d in items if col in r and np.isfinite(r[col]))
-    lines = [txt([("kex", "KEX_AB", 0), ("pB", "PB", 3)])] if individual else []
-    if "R2_B" in r and np.isfinite(r["R2_B"]):
-        lines.append(txt([("Δω", "DW_AB", 2)]))
-        lines.append(txt([("R₂A", "R2_A", 1), ("R₂B", "R2_B", 1)]))
-    else:
-        lines.append(txt([("Δω", "DW_AB", 2), ("R₂", "R2_A", 1)]))
-    return "\n".join(line for line in lines if line)
-
-
-def _global_values(g):
+def _summary(values, params):
+    """'kex 812 ± 95 s⁻¹, pB 0.048 ± 0.006' for the ``params`` present in
+    ``values`` (param -> (value, error)); non-finite values are skipped."""
     parts = []
-    for label, param, digits, unit in (("kex", "KEX_AB", 0, " s⁻¹"), ("pB", "PB", 3, "")):
-        if param in g.index:
-            parts.append(f"{label} {_pm(g.loc[param, 'value'], g.loc[param, 'error'], digits)}{unit}")
+    for param in params:
+        value, err = values.get(param, (np.nan, np.nan))
+        if not np.isfinite(value):
+            continue
+        label, digits, unit = _DISPLAY[param]
+        err_txt = f" ± {err:.{digits}f}" if np.isfinite(err) else ""
+        parts.append(f"{label} {value:.{digits}f}{err_txt}{unit}")
     return ", ".join(parts)
+
+
+def _fitted_values(parameters):
+    """param -> (value, error) for the fitted rows of one run's parameters."""
+    fitted = parameters[parameters["kind"] == "fitted"]
+    return {r.param: (r.value, r.error) for r in fitted.itertuples()}
+
+
+def _panel_title(params, spin, individual):
+    """Spin name plus its fitted values, for a plot panel."""
+    if params is None or spin not in params.index:
+        return spin
+    r = params.loc[spin]
+    values = {p: (r[p], r.get(f"{p}_err", np.nan)) for p in _DISPLAY if p in r}
+    groups = ([["KEX_AB", "PB"]] if individual else []) + [["DW_AB"], ["R2_A", "R2_B"]]
+    lines = [spin] + [_summary(values, g) for g in groups]
+    return "\n".join(line for line in lines if line)
 
 
 def _combine_individual(per):
@@ -190,7 +176,6 @@ def _combine_individual(per):
     }
 
 
-
 def exchange_start(kex=DEFAULT_KEX, kex_bounds=DEFAULT_KEX_BOUNDS,
                    pb=DEFAULT_PB, pb_bounds=DEFAULT_PB_BOUNDS):
     """
@@ -200,23 +185,27 @@ def exchange_start(kex=DEFAULT_KEX, kex_bounds=DEFAULT_KEX_BOUNDS,
     that side unbounded. Raises ValueError for a start outside its bounds or
     pB bounds outside [0, 1].
     """
-    def entry(name, value, bounds, lo_floor=None, hi_ceiling=None):
-        value = float(value)
-        lo, hi = (None, None) if bounds is None else bounds
-        lo = lo_floor if lo is None else float(lo)
-        hi = hi_ceiling if hi is None else float(hi)
-        if lo is not None and hi is not None and lo >= hi:
-            raise ValueError(f"{name} bounds must have min < max, got ({lo}, {hi})")
-        if (lo is not None and value < lo) or (hi is not None and value > hi):
-            raise ValueError(f"{name} start {value} is outside its bounds ({lo}, {hi})")
-        if lo is None and hi is None:
-            return value
-        return [value, -math.inf if lo is None else lo, math.inf if hi is None else hi]
+    if pb_bounds is not None and any(b is not None and not 0 <= b <= 1
+                                     for b in pb_bounds):
+        raise ValueError(f"pb bounds must lie within [0, 1], got {tuple(pb_bounds)}")
+    return {"PB": _bounded("pb", pb, pb_bounds, 0.0, 1.0),
+            "KEX_AB": _bounded("kex", kex, kex_bounds)}
 
-    pb_entry = entry("pb", pb, pb_bounds, lo_floor=0.0, hi_ceiling=1.0)
-    if isinstance(pb_entry, list) and (pb_entry[1] < 0 or pb_entry[2] > 1):
-        raise ValueError(f"pb bounds must lie within [0, 1], got {tuple(pb_entry[1:])}")
-    return {"PB": pb_entry, "KEX_AB": entry("kex", kex, kex_bounds)}
+
+def _bounded(name, value, bounds, lo=-math.inf, hi=math.inf):
+    """ChemEx ``[value, min, max]``, or the bare value when unbounded. A None
+    bound (or bounds) falls back to ``lo`` / ``hi``."""
+    value = float(value)
+    b_lo, b_hi = (None, None) if bounds is None else bounds
+    b_lo = lo if b_lo is None else float(b_lo)
+    b_hi = hi if b_hi is None else float(b_hi)
+    if not b_lo < b_hi:
+        raise ValueError(f"{name} bounds must have min < max, got ({b_lo}, {b_hi})")
+    if not b_lo <= value <= b_hi:
+        raise ValueError(f"{name} start {value} is outside its bounds ({b_lo}, {b_hi})")
+    if (b_lo, b_hi) == (-math.inf, math.inf):
+        return value
+    return [value, b_lo, b_hi]
 
 
 class ChemEx:
@@ -274,7 +263,8 @@ class ChemEx:
 
     def __init__(self, profiles, experiment, conditions, shifts=None,
                  model="2st", parameters=None, method=None, name="cpmg"):
-        self.profiles = dict(profiles)
+        # residue-number order, which select(), the tables and plot() follow
+        self.profiles = dict(sorted(profiles.items(), key=lambda kv: _number_key(kv[0])))
         self.experiment = dict(experiment)
         self.conditions = dict(conditions)
         self.shifts = dict(shifts or {})
@@ -286,14 +276,7 @@ class ChemEx:
 
         if not self.profiles:
             raise ValueError("no profiles to fit (were any peaks assigned?)")
-        for section, values in self.parameters.items():
-            if section.upper() == "GLOBAL" and isinstance(values, dict):
-                clash = [k for k in values if k.upper() in _RUN_ARG_PARAMS]
-                if clash:
-                    raise ValueError(
-                        f"set {clash} with ChemEx.run("
-                        + ", ".join(_RUN_ARG_PARAMS[k.upper()] for k in clash)
-                        + "), not in parameters / the yaml")
+        utils.check_parameters(self.parameters, source="parameters")
         if "name" not in self.experiment:
             raise ValueError("experiment must include a ChemEx experiment 'name'")
 
@@ -383,7 +366,7 @@ class ChemEx:
     @property
     def spins(self):
         """Spin names (``Y4N``) of the profiles, in order."""
-        return [name.split("-")[0] for name in self.profiles]
+        return [_spin(name) for name in self.profiles]
 
     def select(self, residues=None):
         """
@@ -400,7 +383,7 @@ class ChemEx:
             residues = [residues]
         lookup = {}
         for name in names:
-            spin = name.split("-")[0]
+            spin = _spin(name)
             m = re.match(r"^([A-Za-z]*)(\d+)", spin)
             keys = {name.upper(), spin.upper()}
             if m:
@@ -418,7 +401,7 @@ class ChemEx:
                 missing.append(r)
         if missing:
             raise ValueError(f"no assigned profile for residue(s) {missing}; "
-                             f"available: {[n.split('-')[0] for n in names]}")
+                             f"available: {self.spins}")
         return [n for n in names if n in chosen]
 
     def build_parameters(self, names=None, exchange=None, cs_window=DEFAULT_CS_WINDOW):
@@ -428,7 +411,7 @@ class ChemEx:
         ``CS_A`` starts at each peak's 15N shift, bounded to ±``cs_window``
         ppm (None: unbounded)."""
         names = list(self.profiles) if names is None else names
-        spins = [n.split("-")[0] for n in names]
+        spins = [_spin(n) for n in names]
         if self.model == "1st":
             sections = {"GLOBAL": {}}
         else:
@@ -543,7 +526,8 @@ class ChemEx:
             (per-residue Δω and R₂). ``"individual"``: each residue is fitted
             on its own, with its own kex and pB.
         kex : float
-            Starting kex (s⁻¹). Default 500.
+            Starting kex (s⁻¹). Default 500. For individual fits every
+            residue starts from the same kex and pB.
         kex_bounds : (min, max)
             Bounds on kex; None on either side (or for both) leaves it open.
             Default ``(10, 1e4)``.
@@ -557,8 +541,6 @@ class ChemEx:
             it fixed at each peak's 15N shift): it then floats within ± this
             many ppm of the shift. Default 0.5. None removes the bounds, which
             CPMG data usually can't support (the fit may not converge).
-
-            For individual fits every residue starts from the same kex and pB.
         separate_r2 : bool
             Fit the minor state's intrinsic R₂ (``R2_B``) separately from the
             major state's (``R2_A``). By default ChemEx holds R2_B = R2_A.
@@ -600,13 +582,14 @@ class ChemEx:
         else:
             per = {}
             for i, name in enumerate(names, 1):
-                spin = name.split("-")[0]
+                spin = _spin(name)
                 print(f"  ChemEx: fitting {spin} ({i}/{len(names)})", end="", flush=True)
                 per[spin] = self._run_once([name], output_dir / spin, exchange,
                                            cs_window, separate_r2)
-                print(f"  {_fit_line(per[spin]['parameters'])}")
+                values = _fitted_values(per[spin]["parameters"])
+                print("  " + _summary(values, ["KEX_AB", "PB", "DW_AB", "R2_B"]))
             results = _combine_individual(per)
-        results.update(fit=fit, residues=[n.split("-")[0] for n in names],
+        results.update(fit=fit, spins=[_spin(n) for n in names],
                        initial={**(exchange if self.model != "1st" else {}),
                                 "cs_window": cs_window},
                        separate_r2=separate_r2,
@@ -626,11 +609,9 @@ class ChemEx:
         input_dir = output_dir / "inputs"
         files = self.write_inputs(input_dir, names, exchange, cs_window, separate_r2)
         chemex_dir = output_dir / "chemex"
-        proc = _run_chemex(
-            files["experiment"].name, files["parameters"].name,
-            files["method"], chemex_dir.resolve(), model=self.model,
-            plot="nothing", cwd=input_dir,
-        )
+        proc = _run_chemex(files["experiment"].name, files["parameters"].name,
+                           files["method"], chemex_dir.resolve(), self.model,
+                           cwd=input_dir)
         if proc.returncode != 0 or not chemex_dir.is_dir():
             raise RuntimeError(
                 f"ChemEx failed with return code {proc.returncode}.\n"
@@ -686,7 +667,7 @@ class ChemEx:
                                sort=False, dropna=False).add_suffix("_err")
         wide = values.join(errors)
         wide = wide[[c for p in values.columns for c in (p, f"{p}_err")]]
-        ref_index = {name.split("-")[0]: int(p["ref_index"].iloc[0])
+        ref_index = {_spin(name): int(p["ref_index"].iloc[0])
                      for name, p in self.profiles.items() if "ref_index" in p}
         if ref_index:
             wide.insert(0, "ref_index", [ref_index.get(s) for s in wide.index])
@@ -706,7 +687,8 @@ class ChemEx:
         Parameters
         ----------
         residues : list, optional
-            Subset to plot (same forms as :meth:`run`); default all fitted.
+            Subset of the last run's residues to plot (same forms as
+            :meth:`run`); default all of them.
         ncols : int
             Panels per row.
         show : bool
@@ -718,37 +700,26 @@ class ChemEx:
         prof = self.fit_profiles
         if prof is None or prof.empty:
             raise RuntimeError("nothing to plot; call run() first")
-        def key(name):
-            return str(name).split("-")[0].strip().upper()
-
-        fitted = {key(p): p for p in prof["profile"].unique()}
-        wanted = (self.select(residues) if residues is not None
-                  else self.results.get("residues") or list(self.profiles))
-        # plot under the names ChemEx wrote, matched on the spin (Y92N)
-        names = [fitted[key(n)] for n in wanted if key(n) in fitted]
-
-        def resnum(name):
-            m = re.search(r"\d+", str(name))
-            return (int(m.group()) if m else float("inf"), str(name))
-
-        names = sorted(dict.fromkeys(names), key=resnum)
-        if not names:
-            raise ValueError(
-                f"none of the requested residues {[key(n) for n in wanted]} are in the "
-                f"last run's fitted profiles {sorted(fitted)}")
+        prof = prof.assign(spin=prof["profile"].map(_spin))
+        spins = (self.results["spins"] if residues is None
+                 else [_spin(n) for n in self.select(residues)])
+        missing = [s for s in spins if s not in set(prof["spin"])]
+        if missing:
+            raise ValueError(f"{missing} were not in the last run "
+                             f"(fitted: {self.results['spins']})")
         params = self.residue_parameters
         individual = self.results.get("fit") == "individual"
 
-        ncols = max(1, min(ncols, len(names)))
-        nrows = -(-len(names) // ncols)
+        ncols = max(1, min(ncols, len(spins)))
+        nrows = -(-len(spins) // ncols)
         fig = plt.figure(figsize=(3.8 * ncols, 3.9 * nrows), layout="constrained")
         outer = fig.add_gridspec(nrows, ncols)
-        for i, name in enumerate(names):
+        for i, spin in enumerate(spins):
             row, col = divmod(i, ncols)
             cell = outer[row, col].subgridspec(2, 1, height_ratios=[1, 3], hspace=0.05)
             ax_res = fig.add_subplot(cell[0])
             ax = fig.add_subplot(cell[1], sharex=ax_res)
-            d = prof[(prof["profile"] == name) & (prof["ncyc"] > 0)].sort_values("vcpmg")
+            d = prof[(prof["spin"] == spin) & (prof["ncyc"] > 0)].sort_values("vcpmg")
             fit = d.drop_duplicates("vcpmg")
             ax.errorbar(d["vcpmg"], d["r2eff"], yerr=d["r2eff_err"], fmt="o", ms=4,
                         color="C3", ecolor="C3", elinewidth=1, capsize=0, zorder=3)
@@ -758,16 +729,16 @@ class ChemEx:
             ax_res.axhline(0, color="k", lw=0.8)
             ax_res.tick_params(labelbottom=False)
             ax.set_xlim(left=0)
-            if row == nrows - 1 or i + ncols >= len(names):
+            if i + ncols >= len(spins):
                 ax.set_xlabel("νCPMG (Hz)")
             if col == 0:
                 ax.set_ylabel("R₂,eff (s⁻¹)")
                 ax_res.set_ylabel("resid.")
-            spin = name.split("-")[0]
-            ax_res.set_title(f"{spin}\n{_panel_values(params, spin, individual)}",
-                             fontsize=8.5)
+            ax_res.set_title(_panel_title(params, spin, individual), fontsize=8.5)
         if not individual and self.global_parameters is not None:
-            fig.suptitle(f"global fit: {_global_values(self.global_parameters)}")
+            g = self.global_parameters
+            values = {p: (g.loc[p, "value"], g.loc[p, "error"]) for p in g.index}
+            fig.suptitle(f"global fit: {_summary(values, ['KEX_AB', 'PB'])}")
         if show:
             plt.show()
             return None

@@ -232,7 +232,7 @@ layout as ChemEx's own plots:
   around zero; a systematic trend means the model or the inputs (time_T2,
   pw90, carrier) are wrong.
 - **Panel titles:** the residue's fitted values. Individual fits show
-  k<sub>ex</sub>, p<sub>B</sub>, Δω and R₂. Global fits show Δω and R₂, with
+  k<sub>ex</sub>, p<sub>B</sub>, Δω and R₂A. Global fits show Δω and R₂A, with
   the shared k<sub>ex</sub> and p<sub>B</sub> in the figure title.
 
 ```python
@@ -332,7 +332,7 @@ cx.residue_parameters[["R2_A", "R2_A_err", "R2_B", "R2_B_err"]]
 ```
 
 `separate_r2=True` adds `R2_B` to the method's `FIT` list (the last step of
-a multi-step method). Panel titles then show R₂A and R₂B.
+a multi-step method). Panel titles then show R₂B next to R₂A.
 
 CPMG data constrain `R2_B` weakly, because the minor state contributes only
 about p<sub>B</sub> of the signal. Expect large errors on `R2_B`, or none at
@@ -398,7 +398,10 @@ To prepare files for a ChemEx run of your own instead, write the profiles with
 `[data.profiles]` snippet to paste into an experiment file:
 
 ```python
-exp.save_chemex("chemex_profiles/")
+from makeshift.chemex import save_chemex
+
+save_chemex(exp.fit_results, exp.vcpmg_values, exp.time_T2, "chemex_profiles/",
+            ref_df=exp.ref_df)
 ```
 
 ## Full API

@@ -41,6 +41,20 @@ _SETTINGS_DEFAULTS = {"experiment": "cpmg_15n_ip", "model": "2st"}
 _DICT_SETTINGS = ("experiment_settings", "conditions", "parameters")
 SETTINGS_KEYS = (*_SETTINGS_DEFAULTS, *_NUMERIC_SETTINGS, *_DICT_SETTINGS, "method")
 REQUIRED_SETTINGS = ("temperature", "pw90")
+# set through ChemEx.run() arguments, not parameters / the yaml
+RUN_ARG_PARAMS = {"KEX_AB": "kex / kex_bounds", "PB": "pb / pb_bounds"}
+
+
+def check_parameters(parameters, source):
+    """Raise ValueError if ``parameters`` sets kex or pB under GLOBAL; those
+    come from :meth:`ChemEx.run`'s ``kex`` / ``pb`` arguments."""
+    for section, values in (parameters or {}).items():
+        if str(section).upper() == "GLOBAL" and isinstance(values, dict):
+            clash = [k for k in values if str(k).upper() in RUN_ARG_PARAMS]
+            if clash:
+                args = ", ".join(RUN_ARG_PARAMS[str(k).upper()] for k in clash)
+                raise ValueError(f"{source}: set {clash} with ChemEx.run({args}), "
+                                 "not in parameters")
 
 
 def normalize_settings(settings, source="chemex settings"):
@@ -86,13 +100,7 @@ def normalize_settings(settings, source="chemex settings"):
     for key in _DICT_SETTINGS:
         if key in out and not isinstance(out[key], dict):
             raise ValueError(f"{source}: {key} must be a mapping")
-    for section, values in (out.get("parameters") or {}).items():
-        if str(section).upper() == "GLOBAL" and isinstance(values, dict):
-            clash = [k for k in values if str(k).upper() in ("KEX_AB", "PB")]
-            if clash:
-                raise ValueError(f"{source}: set {clash} with ChemEx.run(kex=..., "
-                                 "kex_bounds=..., pb=..., pb_bounds=...), not in "
-                                 "parameters")
+    check_parameters(out.get("parameters"), source)
     if "method" in out and not isinstance(out["method"], (list, dict, str)):
         raise ValueError(f"{source}: method must be a list of parameters, "
                          "a mapping of steps, or a method-file path")
@@ -114,8 +122,7 @@ def spin_name(label, atoms=("N", "H")):
 
 
 def cpmg_profiles(fit_results, vcpmg_values, time_T2, ref_df=None,
-                  label_col="assn_label", atoms=("N", "H"),
-                  include_unassigned=False):
+                  label_col="assn_label", atoms=("N", "H")):
     """
     Turn :func:`~makeshift.relaxation.fit_peaks` output into ChemEx profiles.
 
@@ -130,8 +137,7 @@ def cpmg_profiles(fit_results, vcpmg_values, time_T2, ref_df=None,
         Constant-time CPMG delay in seconds.
     ref_df : DataFrame, optional
         Peak table with ``ref_index`` and ``label_col`` (e.g. ``Y4``). Peaks
-        without a label are skipped unless ``include_unassigned=True`` (then
-        named ``peak<ref_index>``, which ChemEx cannot parse as a residue).
+        without a label are skipped.
 
     Returns
     -------
@@ -163,13 +169,10 @@ def cpmg_profiles(fit_results, vcpmg_values, time_T2, ref_df=None,
     n_skipped = 0
     for ref_index, grp in fit_results.groupby("ref_index"):
         label = labels.get(ref_index)
-        if label is None or (isinstance(label, float) and np.isnan(label)):
-            if not include_unassigned:
-                n_skipped += 1
-                continue
-            name = f"peak{ref_index}"
-        else:
-            name = profile_name(str(label), atoms)
+        if label is None:
+            n_skipped += 1
+            continue
+        name = profile_name(str(label), atoms)
         if name in profiles:
             warnings.warn(f"duplicate profile name {name} (ref_index {ref_index}); "
                           "keeping the first.", UserWarning)
@@ -206,8 +209,7 @@ def write_profiles(profiles, out_dir):
 
 
 def save_chemex(fit_results, vcpmg_values, time_T2, out_dir, ref_df=None,
-                label_col="assn_label", atoms=("N", "H"),
-                include_unassigned=False, profiles_file="profiles.toml"):
+                label_col="assn_label", atoms=("N", "H"), profiles_file="profiles.toml"):
     """
     Write fit_peaks output as ChemEx CPMG ``.out`` files, one per peak, for
     running ChemEx by hand. To run ChemEx from Python use
@@ -219,8 +221,7 @@ def save_chemex(fit_results, vcpmg_values, time_T2, out_dir, ref_df=None,
     Returns a dict mapping profile name -> written Path.
     """
     profiles = cpmg_profiles(fit_results, vcpmg_values, time_T2, ref_df=ref_df,
-                             label_col=label_col, atoms=atoms,
-                             include_unassigned=include_unassigned)
+                             label_col=label_col, atoms=atoms)
     written = write_profiles(profiles, out_dir)
     if profiles_file and written:
         snippet = "[data.profiles]\n" + "".join(

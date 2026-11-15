@@ -206,7 +206,7 @@ def test_select_residues():
 def test_global_fit_of_selected_residues(tmp_path):
     cx = _simulated_chemex(tmp_path)
     cx.run(residues=["G2"], fit="global", output_dir=tmp_path / "g")
-    assert cx.results["residues"] == ["G2N"]
+    assert cx.results["spins"] == ["G2N"]
     assert list(cx.residue_parameters.index) == ["G2N"]
     assert set(cx.fit_profiles["profile"]) == {"G2N-H"}
     assert {"KEX_AB", "PB"} <= set(cx.global_parameters.index)
@@ -330,10 +330,11 @@ def test_non_whole_ncyc_is_an_error():
     """T = 0.03 s with 50 Hz steps gives 1.5 cycles: refuse rather than fit."""
     fit_results = pd.DataFrame({"ref_index": 0, "plane": [0, 1, 2],
                                 "vol": [1.0, 0.8, 0.9], "vol_err": 0.01})
+    ref_df = pd.DataFrame({"ref_index": [0], "assn_label": ["G2"]})
     with pytest.raises(ValueError, match="50 Hz -> 1.5"):
-        utils.cpmg_profiles(fit_results, [50.0, 100.0], 0.03, include_unassigned=True)
-    prof = utils.cpmg_profiles(fit_results, [50.0, 100.0], 0.04, include_unassigned=True)
-    assert list(prof["peak0"]["ncyc"]) == [0.0, 2.0, 4.0]
+        utils.cpmg_profiles(fit_results, [50.0, 100.0], 0.03, ref_df=ref_df)
+    prof = utils.cpmg_profiles(fit_results, [50.0, 100.0], 0.04, ref_df=ref_df)
+    assert list(prof["G2N-H"]["ncyc"]) == [0.0, 2.0, 4.0]
 
 
 def test_plot_individual_and_global(tmp_path):
@@ -376,8 +377,10 @@ def test_plot_orders_panels_by_residue_number(tmp_path):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    cx = _simulated_chemex(tmp_path)
-    cx.profiles = dict(reversed(list(cx.profiles.items())))   # A3 before G2
+    sim = _simulated_chemex(tmp_path)
+    cx = ChemEx(dict(reversed(list(sim.profiles.items()))),   # A3 before G2
+                EXPERIMENT, CONDITIONS, shifts=SHIFTS)
+    assert cx.spins == ["G2N", "A3N"]
     cx.run(residues=["A3", "G2"], fit="global", output_dir=tmp_path / "glob")
     titles = [ax.get_title().split("\n")[0] for ax in cx.plot(show=False).axes
               if ax.get_title()]
