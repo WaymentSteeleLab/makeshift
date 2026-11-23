@@ -239,9 +239,22 @@ layout as ChemEx's own plots:
 cx.run(residues=residues, fit="individual", plot=True)
 
 cx.plot(residues=["Y92", "N87"])      # a subset
-fig = cx.plot(show=False)             # get the figure instead, e.g. to save it
-fig.savefig("fits.png", dpi=150)
+cx.plot(save="fits.pdf")              # save it as well as showing it
+fig = cx.plot(show=False)             # get the figure instead
 ```
+
+`plot=True` also saves the figures as PDFs in `output_dir` (or the current
+directory if you don't give one; `plot_dir=` picks another folder), replacing
+files of the same name:
+
+| File | Contents |
+|---|---|
+| `chemex_individual.pdf` | Individual fits, one panel per residue |
+| `chemex_global.pdf` | Global fit, one panel per residue |
+| `chemex_global_overlay.pdf` | Global fit, all residues on one plot, each with its own color and marker |
+
+After a global fit, `cx.plot_overlay()` draws the all-residue plot again and
+takes the same `residues=`, `show=` and `save=` arguments as `cx.plot()`.
 
 `ncols=` sets the panels per row (default 4). ChemEx's own PDF plots are
 switched off.
@@ -385,7 +398,8 @@ than `2st` and `1st`).
 | `separate_r2` | Fit the minor state's R₂ (`R2_B`) separately from `R2_A` instead of holding them equal (see [above](#separate-r2-for-the-minor-state)). Default False. |
 | `kex`, `kex_bounds`, `pb`, `pb_bounds` | Starting values and `(min, max)` bounds for k<sub>ex</sub> and p<sub>B</sub> (see [above](#kex-and-pb-starting-values-and-bounds)). |
 | `output_dir` | Where to write ChemEx's `inputs/` and `chemex/` output (one sub-folder per residue for individual fits). Omit for a temporary directory. |
-| `plot` | `True` to show the fitted profiles inline with matplotlib when the fit finishes (see [Checking the fits](#checking-the-fits)). Default `False`. |
+| `plot` | `True` to show the fitted profiles inline with matplotlib when the fit finishes and save them as PDFs (see [Checking the fits](#checking-the-fits)). Default `False`. |
+| `plot_dir` | Where `plot=True` saves the PDFs. Default: `output_dir`, or the current directory if that isn't given. |
 | `cleanup` | Delete the temporary directory after parsing. It is kept if ChemEx fails, so you can inspect the inputs. |
 
 If ChemEx exits with an error, `run()` raises a `RuntimeError` that includes

@@ -163,6 +163,39 @@ def _panel_title(params, spin, individual):
     return "\n".join(line for line in lines if line)
 
 
+# Series styles for plot_overlay: 8 colors x 9 markers. The lengths share no
+# factor, so stepping through both together gives 72 distinct pairs; the line
+# style changes after each 72.
+_OVERLAY_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100",
+                   "#e87ba4", "#008300", "#6250d6", "#e34948"]
+_OVERLAY_MARKERS = ["o", "s", "^", "D", "v", "P", "X", "<", ">"]
+
+
+def _overlay_style(i):
+    """Color, marker and line style of the ``i``-th residue."""
+    cycle = i // (len(_OVERLAY_COLORS) * len(_OVERLAY_MARKERS))
+    return {"color": _OVERLAY_COLORS[i % len(_OVERLAY_COLORS)],
+            "marker": _OVERLAY_MARKERS[i % len(_OVERLAY_MARKERS)],
+            "linestyle": ["-", "--", ":", "-."][cycle % 4]}
+
+
+def _finish_figure(fig, save, show):
+    """Save ``fig`` to ``save`` (if given), then show it or return it."""
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+
+    if save is not None:
+        path = Path(save).expanduser()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with mpl.rc_context({"pdf.fonttype": 42}):   # editable text in PDFs
+            fig.savefig(path)
+        print(f"  Saved plot → {path}")
+    if show:
+        plt.show()
+        return None
+    return fig
+
+
 def _combine_individual(per):
     """Merge per-residue run outputs into one results dict."""
     params = [o["parameters"].assign(group=spin) for spin, o in per.items()]
@@ -511,7 +544,7 @@ class ChemEx:
     def run(self, residues=None, fit="global", kex=DEFAULT_KEX,
             kex_bounds=DEFAULT_KEX_BOUNDS, pb=DEFAULT_PB, pb_bounds=DEFAULT_PB_BOUNDS,
             cs_window=DEFAULT_CS_WINDOW, separate_r2=False, output_dir=None,
-            plot=False, cleanup=False):
+            plot=False, plot_dir=None, cleanup=False):
         """
         Fit the selected residues with ChemEx and parse the results.
 
@@ -553,7 +586,14 @@ class ChemEx:
             path is in ``results["output_dir"]``.
         plot : bool
             Show the fitted dispersion profiles with matplotlib once the fit
-            is done (see :meth:`plot`). Default False.
+            is done and save them as PDFs: ``chemex_individual.pdf`` or
+            ``chemex_global.pdf`` (see :meth:`plot`), and for a global fit also
+            ``chemex_global_overlay.pdf`` with all residues on one plot (see
+            :meth:`plot_overlay`). Existing files are overwritten. Default
+            False.
+        plot_dir : str or Path, optional
+            Where ``plot=True`` saves the PDFs. Default: ``output_dir`` if
+            given, otherwise the current directory.
         cleanup : bool
             Delete the temporary directory once the results are parsed (it is
             kept if ChemEx fails, so the inputs can be inspected).
@@ -564,6 +604,10 @@ class ChemEx:
         exchange = exchange_start(kex, kex_bounds, pb, pb_bounds)
         if cs_window is not None and not cs_window > 0:
             raise ValueError(f"cs_window must be > 0 ppm or None, got {cs_window}")
+
+        if plot_dir is None:
+            plot_dir = "." if output_dir is None else output_dir
+        plot_dir = Path(plot_dir)
 
         temp_dir = None
         if output_dir is None:
@@ -599,7 +643,9 @@ class ChemEx:
             shutil.rmtree(temp_dir)
             self.results["output_dir"] = None
         if plot:
-            self.plot()
+            self.plot(save=plot_dir / f"chemex_{fit}.pdf")
+            if fit == "global":
+                self.plot_overlay(save=plot_dir / "chemex_global_overlay.pdf")
         return self
 
     def _run_once(self, names, output_dir, exchange=None,
@@ -676,7 +722,27 @@ class ChemEx:
         wide.columns.name = None
         return wide
 
-    def plot(self, residues=None, ncols=4, show=True):
+    def _plot_data(self, residues):
+        """(fitted profiles with a ``spin`` column, spins to plot)."""
+        prof = self.fit_profiles
+        if prof is None or prof.empty:
+            raise RuntimeError("nothing to plot; call run() first")
+        prof = prof.assign(spin=prof["profile"].map(_spin))
+        spins = (self.results["spins"] if residues is None
+                 else [_spin(n) for n in self.select(residues)])
+        missing = [s for s in spins if s not in set(prof["spin"])]
+        if missing:
+            raise ValueError(f"{missing} were not in the last run "
+                             f"(fitted: {self.results['spins']})")
+        return prof, spins
+
+    def _global_title(self):
+        """'global fit: kex ..., pB ...'."""
+        g = self.global_parameters
+        values = {p: (g.loc[p, "value"], g.loc[p, "error"]) for p in g.index}
+        return f"global fit: {_summary(values, ['KEX_AB', 'PB'])}"
+
+    def plot(self, residues=None, ncols=4, show=True, save=None):
         """
         Plot the fitted dispersion profiles with matplotlib, one panel per
         residue: R₂,eff vs νCPMG with error bars and the ChemEx fit, and the
@@ -693,20 +759,13 @@ class ChemEx:
             Panels per row.
         show : bool
             Display the figure (``plt.show()``) and return None. With False
-            the figure is returned instead, e.g. to save it.
+            the figure is returned instead.
+        save : str or Path, optional
+            File to save the figure to, e.g. ``"fits.pdf"``.
         """
         import matplotlib.pyplot as plt
 
-        prof = self.fit_profiles
-        if prof is None or prof.empty:
-            raise RuntimeError("nothing to plot; call run() first")
-        prof = prof.assign(spin=prof["profile"].map(_spin))
-        spins = (self.results["spins"] if residues is None
-                 else [_spin(n) for n in self.select(residues)])
-        missing = [s for s in spins if s not in set(prof["spin"])]
-        if missing:
-            raise ValueError(f"{missing} were not in the last run "
-                             f"(fitted: {self.results['spins']})")
+        prof, spins = self._plot_data(residues)
         params = self.residue_parameters
         individual = self.results.get("fit") == "individual"
 
@@ -735,14 +794,53 @@ class ChemEx:
                 ax.set_ylabel("R₂,eff (s⁻¹)")
                 ax_res.set_ylabel("resid.")
             ax_res.set_title(_panel_title(params, spin, individual), fontsize=8.5)
-        if not individual and self.global_parameters is not None:
-            g = self.global_parameters
-            values = {p: (g.loc[p, "value"], g.loc[p, "error"]) for p in g.index}
-            fig.suptitle(f"global fit: {_summary(values, ['KEX_AB', 'PB'])}")
-        if show:
-            plt.show()
-            return None
-        return fig
+        if not individual:
+            fig.suptitle(self._global_title())
+        return _finish_figure(fig, save, show)
+
+    def plot_overlay(self, residues=None, show=True, save=None):
+        """
+        Plot all residues of a global fit on one set of axes: R₂,eff vs νCPMG
+        with error bars, and the ChemEx fits as lines. Each residue has its
+        own color and marker, listed in the legend (the line style also changes
+        after every 72 residues); a residue keeps its style when only a subset
+        is plotted. Raises RuntimeError if the last run was not a global fit.
+
+        Parameters
+        ----------
+        residues, show, save
+            As in :meth:`plot`.
+        """
+        import matplotlib.pyplot as plt
+        from matplotlib.lines import Line2D
+
+        prof, spins = self._plot_data(residues)
+        if self.results.get("fit") != "global":
+            raise RuntimeError('plot_overlay() needs results from run(fit="global")')
+
+        legend_cols = -(-len(spins) // 22)          # at most 22 rows per column
+        fig, ax = plt.subplots(figsize=(6.5 + 0.9 * legend_cols, 5.5),
+                               layout="constrained")
+        handles = []
+        for spin in spins:
+            style = _overlay_style(self.results["spins"].index(spin))
+            color, marker = style["color"], style["marker"]
+            d = prof[(prof["spin"] == spin) & (prof["ncyc"] > 0)].sort_values("vcpmg")
+            fit = d.drop_duplicates("vcpmg")
+            ax.plot(fit["vcpmg"], fit["r2eff_calc"], color=color, lw=1.5,
+                    linestyle=style["linestyle"], zorder=2)
+            ax.errorbar(d["vcpmg"], d["r2eff"], yerr=d["r2eff_err"], fmt=marker,
+                        ms=6, color=color, ecolor=color, mec="white", mew=0.5,
+                        elinewidth=1, capsize=0, zorder=3)
+            handles.append(Line2D([], [], lw=1.5, ms=6, mec="white", mew=0.5,
+                                  label=spin, **style))
+        ax.set_xlim(left=0)
+        ax.set_xlabel("νCPMG (Hz)")
+        ax.set_ylabel("R₂,eff (s⁻¹)")
+        fig.legend(handles=handles, loc="outside right upper", ncols=legend_cols,
+                   fontsize=8.5, frameon=False)
+        fig.suptitle(self._global_title(), fontsize=11)
+        return _finish_figure(fig, save, show)
 
     def exchange_summary(self):
         """

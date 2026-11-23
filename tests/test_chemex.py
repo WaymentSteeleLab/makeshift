@@ -358,7 +358,37 @@ def test_plot_individual_and_global(tmp_path):
     cx.run(fit="global", output_dir=tmp_path / "glob", plot=True)   # shows, returns cx
     fig = cx.plot(show=False)
     assert fig._suptitle.get_text().startswith("global fit: kex ")
+    assert sorted(p.name for p in (tmp_path / "glob").glob("*.pdf")) == [
+        "chemex_global.pdf", "chemex_global_overlay.pdf"]
     plt.close("all")
+
+
+def test_plot_saves_pdfs_and_overlay(tmp_path, monkeypatch):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from makeshift.chemex.engine import _overlay_style
+    cx = _simulated_chemex(tmp_path)
+    (tmp_path / "cwd").mkdir()
+    monkeypatch.chdir(tmp_path / "cwd")
+    cx.run(fit="individual", plot=True, cleanup=True)      # no output_dir: current dir
+    assert [p.name for p in tmp_path.glob("cwd/*.pdf")] == ["chemex_individual.pdf"]
+    with pytest.raises(RuntimeError, match="global"):
+        cx.plot_overlay(show=False)
+
+    cx.run(fit="global", output_dir=tmp_path / "glob", plot=True, plot_dir=tmp_path / "pdfs")
+    assert (tmp_path / "pdfs" / "chemex_global_overlay.pdf").read_bytes().startswith(b"%PDF")
+    assert not list((tmp_path / "glob").glob("*.pdf"))
+    fig = cx.plot_overlay(show=False)
+    assert len(fig.axes) == 1
+    assert [t.get_text() for t in fig.legends[0].get_texts()] == ["G2N", "A3N"]
+    sub = cx.plot_overlay(residues=["A3"], show=False, save=tmp_path / "new" / "a3.pdf")
+    assert (tmp_path / "new" / "a3.pdf").is_file()
+    assert (sub.legends[0].legend_handles[0].get_color()        # subset keeps its style
+            == fig.legends[0].legend_handles[1].get_color())
+    plt.close("all")
+    styles = {tuple(_overlay_style(i).values()) for i in range(288)}
+    assert len(styles) == 288
 
 
 def test_plot_matches_last_run_residues(tmp_path):
